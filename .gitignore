@@ -1,0 +1,13 @@
+# Ignore everything
+*
+
+# Whitelist these specific files (keep them)
+!bot.go
+!.gitignore
+!go.mod
+!go.sum
+!README.md
+
+# Double-check safety for these
+bot.db
+target_cache.json
