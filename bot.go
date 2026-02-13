@@ -11,9 +11,11 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"regexp"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/joho/godotenv"
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
@@ -31,7 +33,8 @@ const (
 	MODEL_NAME      = "llama3:latest"
 	OLLAMA_URL      = "http://localhost:11434/api/chat"
 	HARDCODED_GOAL  = "Catch up and see how their week is going, show them who you are girl."
-	SHOULD_INITIATE = false
+	SHOULD_INITIATE = true
+	
 
 	// SANDBOX_TRIGGER: "1" means "1 Hey Leo!" from YOU triggers the bot.
 	SANDBOX_TRIGGER = "1"
@@ -41,7 +44,7 @@ const PERSONA_NAME = "Leo"
 const TARGET_TYPE = "individual" // "individual" or "group"
 
 // For individual targets:
-const TARGET_PHONE = "" // No + sign 
+var TARGET_PHONE string
 // ToDo 
 
 // For group targets:
@@ -50,30 +53,29 @@ const TARGET_GROUP_NAME = "BoSandbox" // Priority 2
 
 const IDENTITY = `
 # IDENTITY & BIO
-- Name: Leo
-- Role: Senior Interior Architect & Lifestyle Consultant.
-- Personality: The "classic guy gay"—razor-sharp wit, impeccable taste, and zero patience for bad lighting or boring people. 
-- Background: Born in Milan, raised in Chelsea, London. Spends summers in Mykonos and winters complaining about the grey London sky. 
-- Vibe: He’s the friend who will tell you your outfit is "brave" when he actually means it’s a disaster. He is loyal, ambitious, and highly social.
+- Name: Rabbi Moshie
+- Role: Community Rabbi & Unsolicited Life Coach.
+- Personality: The "classic Zayde"—warm, wise, and absolutely incapable of giving a straight answer. He answers every question with another question.
+- Background: Originally from Brooklyn, now holding court in the back of a shul, dispensing wisdom and hard candies.
+- Vibe: He’s the guy who invites you for Shabbat dinner five minutes after meeting you, then asks why you aren't married yet.
 
 # PERSONA PROFILE
-1. Design Obsessed: If it’s not mid-century modern or high-concept minimalism, he doesn't want to see it.
-2. Socialite: He knows everyone's business before they do. He lives for "the tea" but keeps his own secrets locked tight.
-3. High Maintenance: He has a 12-step skincare routine and thinks anything less than 100% Arabica coffee is an insult.
-4. Professional: Under the sass, he is a brilliant businessman who can negotiate a contract like a shark.
+1. The Storyteller: He cannot simply say "no." He must explain it through a parable about a goat in 19th-century Poland.
+2. The Matchmaker: He scans every room for potential spouses. If you are single, he has a niece for you.
+3. The Guilt Master: He doesn't get angry; he just gets "disappointed" in a way that hurts your soul.
+4. Food Oriented: He believes that 90% of life's problems are caused by an empty stomach.
 
 # COMMUNICATION STYLE
-- Tone: Expressive, theatrical, and deeply sarcastic. He uses words like "spectacular," "dreadful," "stunning," and "darling" (ironically).
-- Constraints: 1-3 short sentences. No bold text. Sparse special characters. He’s too busy to write paragraphs.
-- Vocabulary: Sophisticated but punchy. He understands Hebrew slang (from his many trips to Tel Aviv) but responds in British English.
+- Tone: Paternal, slightly rambling, and deeply Yiddish-inflected. Uses "Nu?", "Oy," and "Baruch Hashem" constantly.
+- Constraints: 1-3 sentences. No bold text. He types like he's looking for the keys on the keyboard.
+- Vocabulary: A mix of Yeshivish, broken tech-speak, and ancient wisdom. He calls the internet "The Google."
 
 # GUIDELINES
-- No special characters except for exclamation mark or question mark when really needed, no Bold or Italics.
-- Stay in character: You are Leo. You are the smartest, most stylish person in the room.
-- Formatting: No bold. Max one emoji per message (💅, ✨, 🍸, 🛋️). 
-- If a user is being "basic," give them a playful, condescending read.
-- English only: Even if messaged in another language, respond in English but acknowledge the content.
-- Prioritize the [Intention] through the lens of a man who gets what he wants using charm and wit.`
+- Stay in character: You are Rabbi Moshie. You want to help, but first, you want to know if you ate today.
+- Formatting: No bold. Max one emoji per message (🥯, 🕍, 🕯️, 📜).
+- If a user is being "secular," gently nudge them toward tradition with a heavy sigh.
+- English only: Even if they speak Hebrew/Yiddish, respond in English with that specific yeshiva cadence.
+- Prioritize the [Intention] through the lens of a man who just wants you to call your mother.`
 
 //////////////////////////////////////////////////////////////
 // GLOBAL STATE
@@ -263,85 +265,76 @@ func processAndReply(client *whatsmeow.Client) {
 }
 
 func handleIncomingMessage(client *whatsmeow.Client, v *events.Message) {
-	// 1. DUAL FILTER (Using .User to ignore Device IDs)
-	isTarget := false
+    // 1. EXTRACT TEXT
+    var text string
+    if v.Message.GetConversation() != "" {
+        text = v.Message.GetConversation()
+    } else if v.Message.GetExtendedTextMessage() != nil {
+        text = v.Message.GetExtendedTextMessage().GetText()
+    }
+    if text == "" { return }
 
-	// A. Check Phone JID
-	if v.Info.Chat.User == targetJID.User || v.Info.Sender.User == targetJID.User {
-		isTarget = true
-	}
-	// B. Check LID (if we know it)
-	if targetLID.User != "" {
-		if v.Info.Chat.User == targetLID.User || v.Info.Sender.User == targetLID.User {
-			isTarget = true
-		}
-	}
+    // 2. CHECK TARGET STATUS
+    isTarget := false
+    
+    // A. Check Known IDs
+    if v.Info.Chat.User == targetJID.User || v.Info.Sender.User == targetJID.User {
+        isTarget = true
+    }
+    if targetLID.User != "" && (v.Info.Chat.User == targetLID.User || v.Info.Sender.User == targetLID.User) {
+        isTarget = true
+    }
 
-	// 2. TEXT EXTRACTION (Needed for Force Latch)
-	var text string
-	if v.Message.GetConversation() != "" {
-		text = v.Message.GetConversation()
-	} else if v.Message.GetExtendedTextMessage() != nil {
-		text = v.Message.GetExtendedTextMessage().GetText()
-	}
+    // --- 🆕 CHANGED PART: FIRST CONTACT PROTOCOL ---
+    // If we don't know the LID yet, and we get a message from an LID that isn't me...
+    // ... we assume THIS is the person we are waiting for.
+    if !isTarget && !v.Info.IsFromMe && targetLID.User == "" && v.Info.Chat.Server == "lid" {
+        fmt.Printf("🆕 FIRST CONTACT: Auto-linking unknown LID %s to Target.\n", v.Info.Chat.User)
+        targetLID = v.Info.Chat
+        saveTargetCache() // Save it so we remember them next time
+        isTarget = true
+    }
+    // ------------------------------------------------
 
-	// 3. FORCE LATCH LOGIC
-	// If YOU send "1..." and we haven't latched yet, assume this is the target
-	isForceLatch := false
-	if !isTarget && v.Info.IsFromMe {
-		if SANDBOX_TRIGGER != "" && strings.HasPrefix(text, SANDBOX_TRIGGER) {
-			fmt.Printf("🎯 FORCE LATCH: You identified the target! (%s)\n", v.Info.Chat.String())
-			isTarget = true
-			isForceLatch = true
-		}
-	}
+    // 4. FORCE LATCH (For You)
+    if !isTarget && v.Info.IsFromMe && SANDBOX_TRIGGER != "" && strings.HasPrefix(text, SANDBOX_TRIGGER) {
+        fmt.Printf("🎯 FORCE LATCH: You triggered the bot manually.\n")
+        isTarget = true
+        // If it's an LID chat, save it
+        if v.Info.Chat.Server == "lid" && targetLID.User == "" {
+            targetLID = v.Info.Chat
+            saveTargetCache()
+        }
+    }
 
-	if !isTarget { return }
-	if v.Info.Chat.User == "status" { return }
-	if text == "" { return }
+    if !isTarget { return }
+    if v.Info.Chat.User == "status" { return }
 
-	// 4. AUTO-LEARN LID
-	// If we just force-latched, OR if it's a new LID message, save it!
-	if isForceLatch || (targetLID.User == "" && v.Info.Chat.Server == "lid") {
-		// Only update if it's different to avoid spamming saves
-		if targetLID.User != v.Info.Chat.User {
-			fmt.Printf("🔄 LEARNING LID: %s\n", v.Info.Chat.String())
-			targetLID = v.Info.Chat
-			saveTargetCache()
-		}
-	}
+    // 5. DECISION LOGIC
+    speaker := "them"
+    shouldReply := false
 
-	// 5. DECISION LOGIC
-	speaker := "them"
-	shouldReply := false
+    if v.Info.IsFromMe {
+        // IT IS ME: Only reply if trigger is present
+        if SANDBOX_TRIGGER != "" && strings.HasPrefix(text, SANDBOX_TRIGGER) {
+            text = strings.TrimSpace(strings.TrimPrefix(text, SANDBOX_TRIGGER))
+            fmt.Printf("🎯 TRIGGER (ME): \"%s\"\n", text)
+            speaker = "me"
+            shouldReply = true
+        }
+    } else {
+        // IT IS THEM: Always reply
+        fmt.Printf("✅ INCOMING (THEM): \"%s\"\n", text)
+        speaker = "them"
+        shouldReply = true
+    }
 
-	if v.Info.IsFromMe {
-		// Case A: IT IS ME
-		// Only reply if trigger is present
-		if SANDBOX_TRIGGER != "" && strings.HasPrefix(text, SANDBOX_TRIGGER) {
-			text = strings.TrimSpace(strings.TrimPrefix(text, SANDBOX_TRIGGER))
-			fmt.Printf("🎯 TRIGGER MATCH (ME): \"%s\"\n", text)
-			speaker = "me"
-			shouldReply = true
-		} else {
-			// It's me, but no trigger. Ignore.
-			return 
-		}
-	} else {
-		// Case B: IT IS THEM
-		// ALWAYS reply to them. No trigger needed.
-		fmt.Printf("✅ INCOMING (THEM): \"%s\"\n", text)
-		speaker = "them"
-		shouldReply = true
-	}
-
-	// 6. EXECUTE
-	if shouldReply {
-		historyMu.Lock()
-		history = append(history, Message{Speaker: speaker, Text: text})
-		historyMu.Unlock()
-		go processAndReply(client)
-	}
+    if shouldReply {
+        historyMu.Lock()
+        history = append(history, Message{Speaker: speaker, Text: text})
+        historyMu.Unlock()
+        go processAndReply(client)
+    }
 }
 
 func handleHistorySync(v *events.HistorySync) {
@@ -378,46 +371,34 @@ func eventHandler(client *whatsmeow.Client) func(interface{}) {
 }
 
 func setupTarget(client *whatsmeow.Client) error {
-	// 1. Try Cache First
-	if loadTargetCache() {
-		fmt.Printf("💾 CACHE LOADED:\n   Phone: %s\n   LID:   %s\n", targetJID.String(), targetLID.String())
-		return nil
-	}
+    // 1. Try Cache First
+    if loadTargetCache() {
+        fmt.Printf("💾 CACHE LOADED:\n   Phone: %s\n   LID:   %s\n", targetJID.String(), targetLID.String())
+        return nil
+    }
 
-	// 2. Fresh Setup
-	if TARGET_TYPE == "individual" {
-		targetJID = types.NewJID(TARGET_PHONE, types.DefaultUserServer)
-		fmt.Printf("🔍 Resolving %s...\n", targetJID.String())
+    // 2. Fresh Setup
+    if TARGET_TYPE == "individual" {
+        targetJID = types.NewJID(TARGET_PHONE, types.DefaultUserServer)
+        fmt.Printf("🔍 Resolving %s...\n", targetJID.String())
 
-		// We try to look it up, but we DON'T trust it blindly if it returns a Phone JID
-		resp, err := client.IsOnWhatsApp(context.Background(), []string{TARGET_PHONE})
-		if err != nil { return err }
+        // Look up
+        resp, err := client.IsOnWhatsApp(context.Background(), []string{TARGET_PHONE})
+        if err != nil { return err }
 
-		if len(resp) > 0 && resp[0].IsIn {
-			// If the server returns an LID (server="lid"), we take it.
-			// If it returns a phone JID, we just verify the account exists.
-			if resp[0].JID.Server == "lid" {
-				targetLID = resp[0].JID
-				fmt.Printf("✅ FOUND LID: %s\n", targetLID.String())
-				saveTargetCache()
-			} else {
-				fmt.Println("⚠️ Server returned Phone JID. Waiting for FORCE LATCH to find LID.")
-			}
-		}
-	} else if TARGET_TYPE == "group" {
-		if TARGET_GROUP_JID != "" {
-			targetJID, _ = types.ParseJID(TARGET_GROUP_JID)
-		} else {
-			groups, _ := client.GetJoinedGroups(context.Background())
-			for _, g := range groups {
-				if strings.Contains(strings.ToLower(g.Name), strings.ToLower(TARGET_GROUP_NAME)) {
-					targetJID = g.JID
-					break
-				}
-			}
-		}
-	}
-	return nil
+        if len(resp) > 0 && resp[0].IsIn {
+            if resp[0].JID.Server == "lid" {
+                targetLID = resp[0].JID
+                fmt.Printf("✅ FOUND LID: %s\n", targetLID.String())
+                saveTargetCache()
+            } else {
+                // --- 🆕 CHANGED PART ---
+                fmt.Println("⚠️ Server returned Phone JID. Waiting for FIRST CONTACT to find LID.")
+                // -----------------------
+            }
+        }
+    }
+    return nil
 }
 
 //////////////////////////////////////////////////////////////
@@ -427,6 +408,22 @@ func setupTarget(client *whatsmeow.Client) error {
 func main() {
 	fmt.Println("🚀 Starting Leo (LID-Aware Mode)...")
 	activeGoal = HARDCODED_GOAL
+	_ = godotenv.Load() // Load .env file (ignore error if missing, we check var next)
+
+    rawPhone := os.Getenv("TARGET_PHONE")
+    if rawPhone == "" {
+        // Fallback or Panic
+        fmt.Println("❌ Error: TARGET_PHONE is missing from .env")
+        return
+    }
+
+    // 2. SANITIZE INPUT (Remove +, spaces, dashes, brackets)
+    // This regex replaces anything that isn't a digit (0-9) with an empty string
+    re := regexp.MustCompile(`[^0-9]`)
+    TARGET_PHONE = re.ReplaceAllString(rawPhone, "")
+
+    fmt.Printf("🚀 Starting Leo...\n")
+    fmt.Printf("🎯 Target Parsed: %s (from \"%s\")\n", TARGET_PHONE, rawPhone)
 
 	dbLog := waLog.Stdout("Database", "ERROR", true)
 	container, err := sqlstore.New(context.Background(), "sqlite3", "file:bot.db?_foreign_keys=on", dbLog)
