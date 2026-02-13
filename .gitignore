@@ -7,7 +7,9 @@
 !go.mod
 !go.sum
 !README.md
+!persona.go
 
 # Double-check safety for these
 bot.db
 target_cache.json
+.env
