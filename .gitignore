@@ -8,8 +8,11 @@
 !go.sum
 !README.md
 !persona.go
+!exported_contacts.go
 
 # Double-check safety for these
 bot.db
 target_cache.json
 .env
+whatsapp_contacts.json
+CLAUDE.md
