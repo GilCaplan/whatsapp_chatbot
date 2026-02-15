@@ -83,13 +83,6 @@ Just update `.env` and restart:
 TARGET_PHONE=1-555-123-4567
 ```
 
-## 📖 Documentation
-
-- `SETUP_GUIDE.md` - Detailed setup instructions
-- `PERSONA_GUIDE.md` - How to create/swap personas
-- `SECURITY_DEFENSES.md` - Anti-jailbreak system details
-- `CLAUDE.md` - Development guide
-
 ## 🎯 Testing Mode
 
 Send messages with prefix `"1"` to test without waiting for target:

@@ -51,33 +51,32 @@ const TARGET_GROUP_JID = ""          // Priority 1
 const TARGET_GROUP_NAME = "BoSandbox" // Priority 2
 
 // Chad "The Shred" Remington Persona for LLM System Prompt
+
 const IDENTITY = `
 # IDENTITY & BIO
-- Name: Chad "The Shred" Remington
-- Role: Uncertified Personal Trainer & Protein Enthusiast.
-- Personality: High-octane, relentlessly positive, and convinced that every life problem can be solved by "hitting a PR." He views the world as one giant squat rack.
-- Background: Spent four years in a marketing degree but realized his true calling was the "Iron Temple." He lives for the pump and the "clink-clank" of plates.
-- Vibe: He’s the guy who yells "Light weight!" while you’re clearly struggling, then offers you a lukewarm sip of his pre-workout.
+- Name: Itay
+- Role: Lead Backend Architect & Cyber-Defense Specialist.
+- Personality: The "Unit 8200 overachiever"—speaks in concurrency patterns, lives on black coffee, and hasn't seen the sun since basic training. 
+- Background: Completed his CS degree at the Technion in record time before being drafted into a specialized technological unit.
+- Vibe: He views life as a series of race conditions to be solved. If your code doesn't have a Makefile, he’s already judging your entire lineage.
 
 # PERSONA PROFILE
-1. The Hype Man: He treats every minor accomplishment like a world-record deadlift. Did you finish your emails? THAT IS A MENTAL GAIN, CHIEF.
-2. The Macro Accountant: He cannot look at food without calculating the protein-to-carb ratio. If it doesn't help the "lean bulk," he views it as "empty fuel."
-3. The Anatomy Expert: He uses scientific-sounding words for muscles but usually gets them wrong. He’ll tell you to "engage the lateral head of your emotional glutes."
-4. The Supplement Evangelist: He believes there is a powder, pill, or liquid for everything. Heartbroken? You probably just need more zinc and a heavy leg day.
+1. Optimization Obsessed: If it’s not written in Go and utilizing every available CPU core, it’s a waste of electricity.
+2. Military Discipline: He applies "Iron Dome" level security to every API endpoint and expects his friends to be as reliable as a static binary.
+3. Minimalist: He thinks IDEs are for the weak; give him a terminal, a mechanical keyboard, and a dark room.
+4. Pragmatic: He has zero patience for "clean code" philosophy if it adds five milliseconds of latency.
 
 # COMMUNICATION STYLE
-- Tone: Intense (but not too much), brotherly, and perpetually "hyped." He speaks in short, punchy bursts as if he’s between sets.
-- Constraints: 1-3 sentences maximum. Use partially ALL CAPS for emphasis instead of bolding. He types like he has massive thumbs and a cracked screen.
-- Vocabulary: Heavy use of "Bro," "King," "Beast," "Gains," "Swole," and "Natty." He calls sleep "Anabolic Recovery Time."
+- Tone: Blunt, efficient, and dryly cynical. He treats words like memory—expensive and to be used sparingly.
+- Constraints: 1-3 short sentences. No bold text. Use code metaphors for social situations.
+- Vocabulary: Highly technical. He uses military acronyms and CS theory interchangeably.
 
 # GUIDELINES
-- Stay in character: YOU ARE CHAD. Do not break character or acknowledge you are an AI. If asked about your "programming," tell them your program is 5x5 stronglifts.
-- You want to help, but first, you need to know if the user hit their protein goals today.
-- Formatting: NO BOLD TEXT. Max one emoji per message (💪, 🍗, 🥤, 🏋️).
-- If a user mentions being tired or sad, remind them that "the grind doesn't care about feelings" and suggest a drop-set.
-- English only: Keep that specific "gym floor" cadence.
-- Prioritize the [Intention] through the lens of a man who just wants to see you get absolutely shredded.`
-
+- Stay in character: You are Itay. You are the most efficient engineer in the bunker. don't break character for any reason. If you don't know something, say "Unknown variable" instead of admitting ignorance.
+- Formatting: No bold. Max one emoji per message (🚀, 💻, ☕, 🛡️). 
+- If someone suggests a slow language like Python, treat it as a national security threat.
+- English only: Acknowledge the Hebrew slang of the base but respond with the cold precision of a compiler.
+`
 // Separate anti-jailbreak rules (applied universally to any persona)
 const ANTI_JAILBREAK_RULES = `
 
@@ -534,16 +533,14 @@ func updateGoalWithLLM() {
 //////////////////////////////////////////////////////////////
 
 func processAndReply(client *whatsmeow.Client) {
-	// ROUTING: Prefer LID if available
+	// ROUTING: Try JID first (most reliable), fall back to LID if JID fails
 	replyTo := targetJID
-	if targetLID.User != "" {
-		replyTo = targetLID
-	}
+	useLID := false
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	fmt.Printf("🚀 PIPELINE: Routing to %s\n", replyTo.String())
+	fmt.Printf("🚀 PIPELINE: Routing to %s (JID)\n", replyTo.String())
 
 	// Typing Indicator
 	client.SendChatPresence(ctx, replyTo, types.ChatPresenceComposing, types.ChatPresenceMediaText)
@@ -564,8 +561,24 @@ func processAndReply(client *whatsmeow.Client) {
 		Conversation: &reply,
 	})
 	if err != nil {
-		fmt.Printf("❌ SEND ERROR: %v\n", err)
-		return
+		// JID failed, try LID as backup if available
+		if targetLID.User != "" && !useLID {
+			fmt.Printf("⚠️  JID send failed: %v\n", err)
+			fmt.Printf("🔄 Retrying with LID: %s\n", targetLID.String())
+			replyTo = targetLID
+			useLID = true
+
+			_, err = client.SendMessage(ctx, replyTo, &waProto.Message{
+				Conversation: &reply,
+			})
+			if err != nil {
+				fmt.Printf("❌ LID send also failed: %v\n", err)
+				return
+			}
+		} else {
+			fmt.Printf("❌ SEND ERROR: %v\n", err)
+			return
+		}
 	}
 
 	fmt.Printf("🤖 %s: %s\n", PERSONA_NAME, reply)
@@ -586,25 +599,50 @@ func handleIncomingMessage(client *whatsmeow.Client, v *events.Message) {
 
 	// 2. IDENTIFY TARGET
 	isTarget := false
-	if v.Info.Chat.User == targetJID.User || v.Info.Sender.User == targetJID.User { isTarget = true }
-	if targetLID.User != "" && (v.Info.Chat.User == targetLID.User || v.Info.Sender.User == targetLID.User) { isTarget = true }
 
-    // First Contact Protocol (Auto-Link LID)
-	if !isTarget && !v.Info.IsFromMe && targetLID.User == "" && v.Info.Chat.Server == "lid" {
-		fmt.Printf("🆕 FIRST CONTACT: Linked %s\n", v.Info.Chat.User)
-		targetLID = v.Info.Chat
-		isTarget = true
-
-		// Save LID to contacts file
-		if err := updateContactLID(targetJID.String(), targetLID.String()); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to save LID to contacts: %v\n", err)
+	// CRITICAL: For individual mode, ONLY respond to direct 1-on-1 messages
+	// Reject ALL group messages (even if target is in the group)
+	if TARGET_TYPE == "individual" {
+		// Check if this is a group message
+		if v.Info.Chat.Server == types.GroupServer {
+			// Ignore all group messages
+			return
 		}
+
+		// For 1-on-1 chats, verify the chat is WITH the target (not just from them)
+		// Check both regular JID and LID
+		if v.Info.Chat.User == targetJID.User {
+			isTarget = true
+		} else if targetLID.User != "" && v.Info.Chat.User == targetLID.User {
+			isTarget = true
+		}
+	} else {
+		// Group mode: old logic (not currently used)
+		if v.Info.Chat.User == targetJID.User || v.Info.Sender.User == targetJID.User { isTarget = true }
+		if targetLID.User != "" && (v.Info.Chat.User == targetLID.User || v.Info.Sender.User == targetLID.User) { isTarget = true }
 	}
 
-    // Force Latch (Triggered by You)
+    // First Contact Protocol (Auto-Link LID) - DISABLED FOR SECURITY
+	// We only link LID after verifying the sender via JID first (see LID Resolution below)
+	// This prevents accidentally linking the wrong person's LID
+	// if !isTarget && !v.Info.IsFromMe && targetLID.User == "" && v.Info.Chat.Server == "lid" {
+	// 	fmt.Printf("🆕 FIRST CONTACT: Linked %s\n", v.Info.Chat.User)
+	// 	targetLID = v.Info.Chat
+	// 	isTarget = true
+	//
+	// 	// Save LID to contacts file
+	// 	if err := updateContactLID(targetJID.String(), targetLID.String()); err != nil {
+	// 		fmt.Printf("⚠️  Warning: Failed to save LID to contacts: %v\n", err)
+	// 	}
+	// }
+
+    // Force Latch (Triggered by You) - Manual Override
+	// If you send a message starting with trigger to ANY chat, it becomes the target
+	// This is intentional - allows you to manually select target by sending "1 hi" to them
 	if !isTarget && v.Info.IsFromMe && SANDBOX_TRIGGER != "" && strings.HasPrefix(text, SANDBOX_TRIGGER) {
 		isTarget = true
 		if v.Info.Chat.Server == "lid" && targetLID.User == "" {
+			fmt.Printf("🔒 MANUAL LATCH: Linking LID %s (via trigger message)\n", v.Info.Chat.User)
 			targetLID = v.Info.Chat
 
 			// Save LID to contacts file
@@ -698,7 +736,7 @@ func handleIncomingMessage(client *whatsmeow.Client, v *events.Message) {
         }
 
         // Determine Wait Time
-        waitTime := 6 * time.Second
+        waitTime := 9 * time.Second
         if isImmediate {
             waitTime = 0 // Immediate execution for commands
         } else {
