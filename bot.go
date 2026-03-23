@@ -42,14 +42,13 @@ const (
 )
 
 const PERSONA_NAME = "Leo"
-const TARGET_TYPE = "group" // "individual" or "group"
 
-// For individual targets (loaded from .env):
-var TARGET_PHONE string
-
-// For group targets (loaded from .env):
+// All target config loaded from .env:
+var TARGET_TYPE       string // "individual" or "group"
+var TARGET_PHONE      string
 var TARGET_GROUP_JID  string
 var TARGET_GROUP_NAME string
+var DB_PATH           string // e.g. "bot.db" or "bot_group.db"
 
 // Chad "The Shred" Remington Persona for LLM System Prompt
 const IDENTITY = `
@@ -973,6 +972,17 @@ func main() {
 	// Load .env file
 	_ = godotenv.Load()
 
+	TARGET_TYPE = os.Getenv("TARGET_TYPE")
+	if TARGET_TYPE != "individual" && TARGET_TYPE != "group" {
+		fmt.Println("❌ Error: TARGET_TYPE must be 'individual' or 'group' in .env")
+		return
+	}
+
+	DB_PATH = os.Getenv("DB_PATH")
+	if DB_PATH == "" {
+		DB_PATH = "bot.db"
+	}
+
 	// Load target config from .env
 	if TARGET_TYPE == "individual" {
 		rawPhone := os.Getenv("TARGET_PHONE")
@@ -981,7 +991,7 @@ func main() {
 			return
 		}
 		TARGET_PHONE = sanitizePhone(rawPhone)
-		fmt.Printf("🎯 Target: %s (from \"%s\")\n", TARGET_PHONE, rawPhone)
+		fmt.Printf("🎯 Target: %s\n", TARGET_PHONE)
 	} else {
 		TARGET_GROUP_JID = os.Getenv("TARGET_GROUP_JID")
 		TARGET_GROUP_NAME = os.Getenv("TARGET_GROUP_NAME")
@@ -993,7 +1003,7 @@ func main() {
 	}
 
 	dbLog := waLog.Stdout("Database", "ERROR", true)
-	container, err := sqlstore.New(context.Background(), "sqlite3", "file:bot.db?_foreign_keys=on", dbLog)
+	container, err := sqlstore.New(context.Background(), "sqlite3", "file:"+DB_PATH+"?_foreign_keys=on", dbLog)
 	if err != nil { panic(err) }
 
 	deviceStore, err := container.GetFirstDevice(context.Background())

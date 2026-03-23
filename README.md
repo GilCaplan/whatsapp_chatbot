@@ -1,99 +1,146 @@
 # WhatsApp Persona Bot
 
-A privacy-focused WhatsApp automation bot powered by **Go** and **Ollama**. Adopts a specific persona to reply to messages with automatic contact management and anti-jailbreak protection.
+A Go-based WhatsApp bot that impersonates a custom persona using a local LLM ([Ollama](https://ollama.com)). Responds to messages in private chats or group chats, with natural group behaviour (not every message, skips messages aimed at others).
 
-## ⚡ Prerequisites
+---
 
-* **Go** (1.25+)
-* **Ollama** (running locally with `llama3`)
-* **WhatsApp Mobile App** (to scan QR code)
+## Prerequisites
 
-## 🛠️ Setup
+- [Go 1.21+](https://golang.org/dl/)
+- [Ollama](https://ollama.com) running locally
+- WhatsApp mobile app (to scan QR on first run)
 
-1.  **Clone & Install**
-    ```bash
-    git clone <your-repo-url>
-    cd whatsapp_doppel_go
-    go mod tidy
-    ```
+---
 
-2.  **Start Ollama**
-    ```bash
-    ollama pull llama3:latest
-    ollama serve
-    ```
+## Setup
 
-3.  **Configure Target**
-    Create/edit `.env` file:
-    ```bash
-    TARGET_PHONE=972 54-637-1966
-    ```
-    *(Any phone format works - spaces, dashes, + symbol all auto-sanitized)*
+### 1. Clone & install dependencies
 
-4.  **Export Contacts**
-    ```bash
-    go run export_contacts.go
-    ```
-    Creates `whatsapp_contacts.json` with all your WhatsApp contacts and their JIDs/LIDs.
+```bash
+git clone https://github.com/GilCaplan/whatsapp_chatbot.git
+cd whatsapp_chatbot
+go mod tidy
+```
 
-## 🚀 Run
+### 2. Pull a model into Ollama
+
+```bash
+ollama pull llama3.2:latest
+```
+
+Check available models anytime with `ollama list`.
+
+### 3. Configure `.env`
+
+Copy the example and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+**.env for a private chat:**
+```env
+TARGET_TYPE=individual
+DB_PATH=bot.db
+TARGET_PHONE=15551234567
+```
+
+**.env for a group chat:**
+```env
+TARGET_TYPE=group
+DB_PATH=bot.db
+TARGET_GROUP_NAME=My Group Chat
+# Or use the JID directly for faster startup:
+# TARGET_GROUP_JID=123456789-987654321@g.us
+```
+
+> Phone numbers: any format works — spaces, dashes, and `+` are stripped automatically.
+
+### 4. Customize the persona
+
+Edit the `IDENTITY` constant in `bot.go`. Define the character's name, background, communication style, and tone. Update `PERSONA_NAME` to match.
+
+---
+
+## Run
 
 ```bash
 go run bot.go
 ```
 
-On first run, scan the QR code with WhatsApp. The bot automatically:
-- Loads target from `.env`
-- Finds contact in `whatsapp_contacts.json`
-- Resolves LID if missing
-- Starts responding
+On first run a QR code appears in the terminal — scan it with WhatsApp. The session is saved to `DB_PATH` so you won't need to scan again.
 
-## 🎭 Persona System
+---
 
-Edit the `IDENTITY` constant in `bot.go` to change personas. Security rules are separate in `ANTI_JAILBREAK_RULES` - no need to copy them.
+## Running Two Instances (private + group simultaneously)
 
-**Current persona:** Chad "The Shred" Remington (Gym trainer)
+Each instance needs its own `.env` and database file. The simplest way is two separate directories:
 
-See `PERSONA_GUIDE.md` for templates and examples.
+```bash
+mkdir instance_group instance_private
 
-## 🛡️ Security Features
+# copy source into each
+cp bot.go go.mod go.sum instance_group/
+cp bot.go go.mod go.sum instance_private/
 
-- **5-layer anti-jailbreak protection** blocks prompt injection attempts
-- Aggressive content filtering removes dangerous phrases
-- Injection attempts silently ignored (not added to conversation history)
-- Character lock prevents persona manipulation
+# create .env for each
+echo "TARGET_TYPE=group
+DB_PATH=bot.db
+TARGET_GROUP_NAME=My Group Chat" > instance_group/.env
 
-See `SECURITY_DEFENSES.md` for details.
+echo "TARGET_TYPE=individual
+DB_PATH=bot.db
+TARGET_PHONE=15551234567" > instance_private/.env
 
-## 📁 Key Files
+# run in separate terminals
+cd instance_group && go run bot.go
+cd instance_private && go run bot.go
+```
+
+Each instance will show its own QR code on first run.
+
+---
+
+## Testing
+
+Send a message **from your own WhatsApp** in the target chat prefixed with `1`:
+
+```
+1 hey what's up?
+```
+
+The bot treats it as if the other person sent `"hey what's up?"` and replies immediately. The `1` prefix is stripped before being passed to the LLM.
+
+---
+
+## Group Chat Behaviour
+
+In group mode the bot doesn't reply to every message — it behaves more like a real participant:
+
+| Situation | Action |
+|-----------|--------|
+| Message contains the persona's name | Always replies |
+| Message @mentions someone else | Skips |
+| General message | LLM decides if it's worth jumping in (with 40% fallback) |
+| You send `1 [message]` | Always replies immediately |
+
+---
+
+## Key Files
 
 | File | Purpose |
 |------|---------|
-| `bot.go` | Main bot code |
-| `export_contacts.go` | Contact/LID exporter |
-| `.env` | Target phone configuration |
-| `whatsapp_contacts.json` | Auto-generated contact database |
-| `bot.db` | WhatsApp session data |
-| `persona.go` | Persona template |
+| `bot.go` | All bot logic |
+| `export_contacts.go` | Export WhatsApp contacts + LIDs to JSON |
+| `.env` | Your configuration (never committed) |
+| `.env.example` | Template to copy from |
+| `bot.db` | WhatsApp session (auto-created, never committed) |
+| `persona.go` | Blank persona template |
 
-## 🔧 Switching Targets
+---
 
-Just update `.env` and restart:
-```bash
-TARGET_PHONE=1-555-123-4567
-```
+## Security
 
-## 🎯 Testing Mode
-
-Send messages with prefix `"1"` to test without waiting for target:
-```
-1 Hey what's up?
-```
-Bot responds immediately as if target sent the message (without prefix).
-
-## 📝 Notes
-
-- Contact exports may take 2-5 minutes for LID resolution
-- LIDs auto-update on first message if not in export
-- Injection attempts are logged but silently ignored
-- Clean, minimal codebase - no unnecessary dependencies
+- Anti-jailbreak rules prevent persona manipulation
+- Prompt injection attempts are silently ignored and not added to history
+- `.env` and `bot.db` are gitignored — credentials never leave your machine

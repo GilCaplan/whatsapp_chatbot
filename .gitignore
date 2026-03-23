@@ -9,6 +9,7 @@
 !README.md
 !persona.go
 !exported_contacts.go
+!.env.example
 
 # Double-check safety for these
 bot.db
