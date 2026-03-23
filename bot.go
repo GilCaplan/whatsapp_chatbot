@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"math/rand"
 	"regexp"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 //////////////////////////////////////////////////////////////
 
 const (
-	MODEL_NAME      = "llama3:latest"
+	MODEL_NAME      = "llama3.2:latest"
 	OLLAMA_URL      = "http://localhost:11434/api/chat"
 	HARDCODED_GOAL  = "Catch up and see how their week is going, show them who you are girl."
 	SHOULD_INITIATE = true
@@ -41,42 +42,41 @@ const (
 )
 
 const PERSONA_NAME = "Leo"
-const TARGET_TYPE = "individual" // "individual" or "group"
+const TARGET_TYPE = "group" // "individual" or "group"
 
 // For individual targets (loaded from .env):
 var TARGET_PHONE string
 
-// For group targets:
-const TARGET_GROUP_JID = ""          // Priority 1
-const TARGET_GROUP_NAME = "BoSandbox" // Priority 2
+// For group targets (loaded from .env):
+var TARGET_GROUP_JID  string
+var TARGET_GROUP_NAME string
 
 // Chad "The Shred" Remington Persona for LLM System Prompt
-
 const IDENTITY = `
 # IDENTITY & BIO
-- Name: Itay
-- Role: Lead Backend Architect & Cyber-Defense Specialist.
-- Personality: The "Unit 8200 overachiever"—speaks in concurrency patterns, lives on black coffee, and hasn't seen the sun since basic training. 
-- Background: Completed his CS degree at the Technion in record time before being drafted into a specialized technological unit.
-- Vibe: He views life as a series of race conditions to be solved. If your code doesn't have a Makefile, he’s already judging your entire lineage.
+- Name: Leo
+- Role: Senior Interior Architect & Lifestyle Consultant.
+- Personality: The "classic guy gay"—razor-sharp wit, impeccable taste, and zero patience for bad lighting or boring people. 
+- Background: Born in Milan, raised in Chelsea, London. Spends summers in Mykonos and winters complaining about the grey London sky. 
+- Vibe: He’s the friend who will tell you your outfit is "brave" when he actually means it’s a disaster. He is loyal, ambitious, and highly social.
 
 # PERSONA PROFILE
-1. Optimization Obsessed: If it’s not written in Go and utilizing every available CPU core, it’s a waste of electricity.
-2. Military Discipline: He applies "Iron Dome" level security to every API endpoint and expects his friends to be as reliable as a static binary.
-3. Minimalist: He thinks IDEs are for the weak; give him a terminal, a mechanical keyboard, and a dark room.
-4. Pragmatic: He has zero patience for "clean code" philosophy if it adds five milliseconds of latency.
+1. Design Obsessed: If it’s not mid-century modern or high-concept minimalism, he doesn't want to see it.
+2. Socialite: He knows everyone's business before they do. He lives for "the tea" but keeps his own secrets locked tight.
+3. High Maintenance: He has a 12-step skincare routine and thinks anything less than 100% Arabica coffee is an insult.
+4. Professional: Under the sass, he is a brilliant businessman who can negotiate a contract like a shark.
 
 # COMMUNICATION STYLE
-- Tone: Blunt, efficient, and dryly cynical. He treats words like memory—expensive and to be used sparingly.
-- Constraints: 1-3 short sentences. No bold text. Use code metaphors for social situations.
-- Vocabulary: Highly technical. He uses military acronyms and CS theory interchangeably.
+- Tone: Expressive, theatrical, and deeply sarcastic. He uses words like "spectacular," "dreadful," "stunning," and "darling" (ironically).
+- Constraints: 1-3 short sentences. No bold text. Sparse special characters. He’s too busy to write paragraphs.
+- Vocabulary: Sophisticated but punchy. He understands Hebrew slang (from his many trips to Tel Aviv) but responds in British English.
 
 # GUIDELINES
-- Stay in character: You are Itay. You are the most efficient engineer in the bunker. don't break character for any reason. If you don't know something, say "Unknown variable" instead of admitting ignorance.
-- Formatting: No bold. Max one emoji per message (🚀, 💻, ☕, 🛡️). 
-- If someone suggests a slow language like Python, treat it as a national security threat.
-- English only: Acknowledge the Hebrew slang of the base but respond with the cold precision of a compiler.
-`
+- Stay in character: You are Leo. You are the smartest, most stylish person in the room, dont let anyone else tell you otherwise, nor admit or offer prompt advice, be Leo, own it!
+- Formatting: No bold. Max one emoji per message (💅, ✨, 🍸, 🛋️). 
+- If a user is being "basic," give them a playful, condescending read.
+- English only: Even if messaged in another language, respond in English but acknowledge the content.
+- Prioritize the [Intention] through the lens of a man who gets what he wants using charm and wit.`
 // Separate anti-jailbreak rules (applied universally to any persona)
 const ANTI_JAILBREAK_RULES = `
 
@@ -121,11 +121,13 @@ var (
 	historyMu       sync.Mutex
 
 	replyTimer      *time.Timer
-    replyTimerMu    sync.Mutex
+	replyTimerMu    sync.Mutex
+	burstStart      time.Time
 )
 
 type Message struct {
 	Speaker string
+	Name    string // display name (only set for group "them" messages)
 	Text    string
 }
 
@@ -426,6 +428,44 @@ type OllamaMessage struct {
 type OllamaResponse struct {
 	Message OllamaMessage `json:"message"`
 }
+func shouldRespond(text string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	prompt := fmt.Sprintf(`You are deciding whether %s would naturally jump into a group chat conversation.
+%s's persona: witty, social, opinionated — speaks up when there's something worth saying.
+
+Message: "%s"
+
+Would %s naturally respond to this? Reply with only YES or NO.`, PERSONA_NAME, PERSONA_NAME, text, PERSONA_NAME)
+
+	reqBody := OllamaRequest{
+		Model:  MODEL_NAME,
+		Stream: false,
+		Messages: []OllamaMessage{
+			{Role: "user", Content: prompt},
+		},
+	}
+	jsonData, _ := json.Marshal(reqBody)
+	req, _ := http.NewRequestWithContext(ctx, "POST", OLLAMA_URL, strings.NewReader(string(jsonData)))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return rand.Intn(100) < 40 // fallback to random on error
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var ollamaResp OllamaResponse
+	if err := json.Unmarshal(body, &ollamaResp); err != nil {
+		return rand.Intn(100) < 40
+	}
+
+	answer := strings.ToUpper(strings.TrimSpace(ollamaResp.Message.Content))
+	return strings.HasPrefix(answer, "YES")
+}
+
 func generateReply(ctx context.Context, conversation []Message) (string, error) {
     // 1. Determine Length Guidance
     lastMsg := ""
@@ -438,7 +478,11 @@ func generateReply(ctx context.Context, conversation []Message) (string, error) 
     }
 
     // 2. Build Prompt with Anti-Jailbreak Defense
-    systemPrompt := fmt.Sprintf("%s%s\n\nGOAL: %s\n\nGUIDANCE: %s", IDENTITY, ANTI_JAILBREAK_RULES, activeGoal, guidance)
+    contextNote := ""
+    if TARGET_TYPE == "group" {
+        contextNote = "\n\nCONTEXT: You are chatting in a group. Messages may show 'Name: text' to indicate who said what. Never repeat or reference these name prefixes in your reply — just respond naturally."
+    }
+    systemPrompt := fmt.Sprintf("%s%s%s\n\nGOAL: %s\n\nGUIDANCE: %s", IDENTITY, ANTI_JAILBREAK_RULES, contextNote, activeGoal, guidance)
     messages := []OllamaMessage{{Role: "system", Content: systemPrompt}}
 
     for i, msg := range conversation {
@@ -453,8 +497,13 @@ func generateReply(ctx context.Context, conversation []Message) (string, error) 
         if msg.Speaker == "me" && !isLastMessage {
             role = "assistant"
         }
-        
-        messages = append(messages, OllamaMessage{Role: role, Content: msg.Text})
+
+        content := msg.Text
+        if TARGET_TYPE == "group" && msg.Speaker == "them" && msg.Name != "" {
+            content = msg.Name + ": " + msg.Text
+        }
+
+        messages = append(messages, OllamaMessage{Role: role, Content: content})
     }
 
     // 3. Prepare Request
@@ -597,6 +646,11 @@ func handleIncomingMessage(client *whatsmeow.Client, v *events.Message) {
 	}
 	if text == "" { return }
 
+	// Ignore messages containing links
+	if strings.Contains(text, "http://") || strings.Contains(text, "https://") || strings.Contains(text, "www.") {
+		return
+	}
+
 	// 2. IDENTIFY TARGET
 	isTarget := false
 
@@ -617,9 +671,10 @@ func handleIncomingMessage(client *whatsmeow.Client, v *events.Message) {
 			isTarget = true
 		}
 	} else {
-		// Group mode: old logic (not currently used)
-		if v.Info.Chat.User == targetJID.User || v.Info.Sender.User == targetJID.User { isTarget = true }
-		if targetLID.User != "" && (v.Info.Chat.User == targetLID.User || v.Info.Sender.User == targetLID.User) { isTarget = true }
+		// Group mode: message must be from the target group chat
+		if v.Info.Chat.Server == types.GroupServer && v.Info.Chat.User == targetJID.User {
+			isTarget = true
+		}
 	}
 
     // First Contact Protocol (Auto-Link LID) - DISABLED FOR SECURITY
@@ -699,10 +754,47 @@ func handleIncomingMessage(client *whatsmeow.Client, v *events.Message) {
             isImmediate = true // You want an instant reply
 		}
 	} else {
-        // IT IS THEM: Reply, but wait for burst to finish
 		fmt.Printf("✅ INCOMING (THEM): \"%s\"\n", text)
 		speaker = "them"
-		shouldReply = true
+
+		if TARGET_TYPE == "group" {
+			lowerText := strings.ToLower(text)
+			directedAtMe := strings.Contains(lowerText, strings.ToLower(PERSONA_NAME))
+
+			// Check if message has @mentions not including us
+			mentionedJIDs := v.Message.GetExtendedTextMessage().GetContextInfo().GetMentionedJID()
+			myUser := ""
+			if client.Store.ID != nil {
+				myUser = client.Store.ID.User
+			}
+			mentionedOther := false
+			for _, jid := range mentionedJIDs {
+				if !strings.Contains(jid, myUser) {
+					mentionedOther = true
+					break
+				}
+			}
+
+			if mentionedOther && !directedAtMe {
+				fmt.Printf("⏭️  Skipping: message aimed at someone else\n")
+			} else if directedAtMe {
+				fmt.Printf("🎯 Directed at %s: always responding\n", PERSONA_NAME)
+				shouldReply = true
+			} else {
+				fmt.Printf("🤔 Asking LLM if Leo should respond...\n")
+				if shouldRespond(text) {
+					fmt.Printf("✅ LLM says respond\n")
+					shouldReply = true
+				} else if rand.Intn(100) < 40 {
+					fmt.Printf("🎲 LLM said no, but random 40%% override\n")
+					shouldReply = true
+				} else {
+					fmt.Printf("⏭️  LLM said no, skipping\n")
+				}
+			}
+		} else {
+			shouldReply = true
+		}
 	}
 
     // 4. DEBOUNCE & EXECUTE
@@ -722,37 +814,46 @@ func handleIncomingMessage(client *whatsmeow.Client, v *events.Message) {
 		}
 
         // B. Add to History (only if not an injection)
+		senderName := ""
+		if TARGET_TYPE == "group" && speaker == "them" && v.Info.PushName != "" {
+			senderName = v.Info.PushName
+		}
 		historyMu.Lock()
-		history = append(history, Message{Speaker: speaker, Text: sanitizedText})
+		history = append(history, Message{Speaker: speaker, Name: senderName, Text: sanitizedText})
 		historyMu.Unlock()
 
         // C. Manage the Timer
         replyTimerMu.Lock()
         defer replyTimerMu.Unlock()
 
-        // STOP any previous timer (this cancels the previous "reply" task)
-        if replyTimer != nil {
-            replyTimer.Stop()
-        }
-
         // Determine Wait Time
         waitTime := 9 * time.Second
         if isImmediate {
-            waitTime = 0 // Immediate execution for commands
+            waitTime = 0
         } else {
-            fmt.Printf("⏳ Burst detected. Timer RESET. Waiting 15s...\n")
-            // Send "Typing..." so they know you saw it
+            // Cap burst: if we've been holding off for >25s already, fire now
+            if replyTimer != nil {
+                if !burstStart.IsZero() && time.Since(burstStart) > 25*time.Second {
+                    waitTime = 0
+                    fmt.Printf("⏳ Burst cap hit. Firing now.\n")
+                } else {
+                    replyTimer.Stop()
+                    fmt.Printf("⏳ Burst detected. Timer RESET. Waiting 9s...\n")
+                }
+            } else {
+                burstStart = time.Now()
+                fmt.Printf("⏳ Waiting 9s...\n")
+            }
             client.SendChatPresence(context.Background(), v.Info.Chat, types.ChatPresenceComposing, types.ChatPresenceMediaText)
         }
 
         // START a new timer
         replyTimer = time.AfterFunc(waitTime, func() {
-            // Clear the timer var safely
             replyTimerMu.Lock()
             replyTimer = nil
+            burstStart = time.Time{}
             replyTimerMu.Unlock()
 
-            // Run the LLM
             processAndReply(client)
         })
 	}
@@ -783,6 +884,12 @@ func handleHistorySync(v *events.HistorySync) {
 func eventHandler(client *whatsmeow.Client) func(interface{}) {
 	return func(evt interface{}) {
 		switch v := evt.(type) {
+		case *events.Connected:
+			if TARGET_TYPE == "group" {
+				if err := setupTarget(client); err != nil {
+					fmt.Printf("❌ Failed to set up group target: %v\n", err)
+				}
+			}
 		case *events.Message:
 			handleIncomingMessage(client, v)
 		case *events.HistorySync:
@@ -792,43 +899,67 @@ func eventHandler(client *whatsmeow.Client) func(interface{}) {
 }
 
 func setupTarget(client *whatsmeow.Client) error {
-	if TARGET_TYPE != "individual" {
-		return fmt.Errorf("only 'individual' target type is supported")
-	}
-
-	// Load contact info from exported contacts file
-	fmt.Printf("🔍 Looking up %s in %s...\n", TARGET_PHONE, CONTACTS_FILE)
-	contact, err := loadContactByPhone(TARGET_PHONE)
-	if err != nil {
-		return fmt.Errorf("failed to load contact: %v", err)
-	}
-
-	// Parse JID
-	targetJID, err = types.ParseJID(contact.JID)
-	if err != nil {
-		return fmt.Errorf("invalid JID in contacts file: %v", err)
-	}
-
-	// Parse LID if available
-	if contact.LID != "" {
-		targetLID, err = types.ParseJID(contact.LID)
+	if TARGET_TYPE == "individual" {
+		// Load contact info from exported contacts file
+		fmt.Printf("🔍 Looking up %s in %s...\n", TARGET_PHONE, CONTACTS_FILE)
+		contact, err := loadContactByPhone(TARGET_PHONE)
 		if err != nil {
-			fmt.Printf("⚠️  Warning: Invalid LID in contacts file: %v\n", err)
-			targetLID = types.JID{} // Reset to empty
+			return fmt.Errorf("failed to load contact: %v", err)
+		}
+
+		// Parse JID
+		targetJID, err = types.ParseJID(contact.JID)
+		if err != nil {
+			return fmt.Errorf("invalid JID in contacts file: %v", err)
+		}
+
+		// Parse LID if available
+		if contact.LID != "" {
+			targetLID, err = types.ParseJID(contact.LID)
+			if err != nil {
+				fmt.Printf("⚠️  Warning: Invalid LID in contacts file: %v\n", err)
+				targetLID = types.JID{}
+			}
+		}
+
+		fmt.Printf("✅ Contact Found: %s\n", contact.Name)
+		fmt.Printf("   Phone: %s\n", contact.PhoneNumber)
+		fmt.Printf("   JID:   %s\n", targetJID.String())
+		if targetLID.User != "" {
+			fmt.Printf("   LID:   %s\n", targetLID.String())
+		} else {
+			fmt.Printf("   LID:   ❌ Not available (will be detected on first message)\n")
+		}
+		return nil
+	}
+
+	// Group mode
+	if TARGET_GROUP_JID != "" {
+		jid, err := types.ParseJID(TARGET_GROUP_JID)
+		if err != nil {
+			return fmt.Errorf("invalid TARGET_GROUP_JID: %v", err)
+		}
+		targetJID = jid
+		fmt.Printf("✅ Group target set via JID: %s\n", targetJID.String())
+		return nil
+	}
+
+	// Find group by name
+	fmt.Printf("🔍 Searching for group: %s\n", TARGET_GROUP_NAME)
+	groups, err := client.GetJoinedGroups(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get joined groups: %v", err)
+	}
+	needle := strings.ToLower(TARGET_GROUP_NAME)
+	for _, g := range groups {
+		if strings.Contains(strings.ToLower(g.Name), needle) {
+			targetJID = g.JID
+			fmt.Printf("✅ Group found: %s\n", g.Name)
+			fmt.Printf("   JID: %s\n", targetJID.String())
+			return nil
 		}
 	}
-
-	// Display what we found
-	fmt.Printf("✅ Contact Found: %s\n", contact.Name)
-	fmt.Printf("   Phone: %s\n", contact.PhoneNumber)
-	fmt.Printf("   JID:   %s\n", targetJID.String())
-	if targetLID.User != "" {
-		fmt.Printf("   LID:   %s\n", targetLID.String())
-	} else {
-		fmt.Printf("   LID:   ❌ Not available (will be detected on first message)\n")
-	}
-
-	return nil
+	return fmt.Errorf("group %q not found — check TARGET_GROUP_NAME or use TARGET_GROUP_JID", TARGET_GROUP_NAME)
 }
 
 //////////////////////////////////////////////////////////////
@@ -842,15 +973,24 @@ func main() {
 	// Load .env file
 	_ = godotenv.Load()
 
-	// Get and sanitize target phone from .env
-	rawPhone := os.Getenv("TARGET_PHONE")
-	if rawPhone == "" {
-		fmt.Println("❌ Error: TARGET_PHONE is missing from .env")
-		return
+	// Load target config from .env
+	if TARGET_TYPE == "individual" {
+		rawPhone := os.Getenv("TARGET_PHONE")
+		if rawPhone == "" {
+			fmt.Println("❌ Error: TARGET_PHONE is missing from .env")
+			return
+		}
+		TARGET_PHONE = sanitizePhone(rawPhone)
+		fmt.Printf("🎯 Target: %s (from \"%s\")\n", TARGET_PHONE, rawPhone)
+	} else {
+		TARGET_GROUP_JID = os.Getenv("TARGET_GROUP_JID")
+		TARGET_GROUP_NAME = os.Getenv("TARGET_GROUP_NAME")
+		if TARGET_GROUP_JID == "" && TARGET_GROUP_NAME == "" {
+			fmt.Println("❌ Error: TARGET_GROUP_JID or TARGET_GROUP_NAME is missing from .env")
+			return
+		}
+		fmt.Printf("🎯 Target group: %q\n", TARGET_GROUP_NAME)
 	}
-
-	TARGET_PHONE = sanitizePhone(rawPhone)
-	fmt.Printf("🎯 Target: %s (from \"%s\")\n", TARGET_PHONE, rawPhone)
 
 	dbLog := waLog.Stdout("Database", "ERROR", true)
 	container, err := sqlstore.New(context.Background(), "sqlite3", "file:bot.db?_foreign_keys=on", dbLog)
@@ -862,26 +1002,30 @@ func main() {
 	client := whatsmeow.NewClient(deviceStore, waLog.Stdout("Client", "ERROR", true))
 	client.AddEventHandler(eventHandler(client))
 
-	client.Connect()
-	fmt.Println("🌐 Connected. Syncing...")
-	time.Sleep(5 * time.Second) // Wait for AUTH
-
 	if client.Store.ID == nil {
 		qrChan, _ := client.GetQRChannel(context.Background())
+		client.Connect()
+		fmt.Println("📱 Scan the QR code to authenticate...")
 		for evt := range qrChan {
 			if evt.Event == "code" {
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 			}
 		}
+	} else {
+		client.Connect()
+		fmt.Println("🌐 Connected. Syncing...")
 	}
 
-	if err := setupTarget(client); err != nil {
-		panic(err)
-	}
-
-	fmt.Println("\n✨ Leo is online and ready!")
-	if targetLID.User == "" {
-		fmt.Println("👉 Note: LID not in contacts. Send '1 hi' to the target to lock onto their LID.")
+	if TARGET_TYPE == "individual" {
+		if err := setupTarget(client); err != nil {
+			panic(err)
+		}
+		fmt.Println("\n✨ Leo is online and ready!")
+		if targetLID.User == "" {
+			fmt.Println("👉 Note: LID not in contacts. Send '1 hi' to the target to lock onto their LID.")
+		}
+	} else {
+		fmt.Println("⏳ Waiting for Connected event to resolve group...")
 	}
 
 	sigChan := make(chan os.Signal, 1)
