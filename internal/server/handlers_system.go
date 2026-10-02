@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +34,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"onboardingCompleted": onboarding,
 		"fakeWA":              s.d.FakeWA,
 		"fakeLLM":             s.d.FakeLLM,
+		"platform":            runtime.GOOS,
 	})
 }
 
@@ -90,16 +91,14 @@ func (s *Server) handleQuit(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleOpenDataDir(w http.ResponseWriter, r *http.Request) {
 	dir := s.dataDir()
-	if dir == "" {
-		unavailable(w, "Data folder")
+	if dir == "" || s.d.OpenFolder == nil {
+		unavailable(w, "Opening the data folder")
 		return
 	}
-	cmd := exec.Command("open", dir)
-	if err := cmd.Start(); err != nil {
+	if err := s.d.OpenFolder(dir); err != nil {
 		writeError(w, http.StatusInternalServerError, "open_failed", "Could not open the data folder: "+err.Error())
 		return
 	}
-	go cmd.Wait()
 	writeOK(w)
 }
 

@@ -6,8 +6,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"whatsappdoppel/internal/behavior"
 	"whatsappdoppel/internal/model"
@@ -66,7 +68,7 @@ var V3Fields = []string{
 // labelled preset like V3Fields).
 var V4Fields = []string{"typoPercent", "typoFixStyle"}
 
-// NotificationSettings controls macOS notifications (internal/notify).
+// NotificationSettings controls desktop notifications (internal/notify).
 type NotificationSettings struct {
 	Enabled   bool `json:"enabled"`
 	Approvals bool `json:"approvals"` // a reply is waiting for your OK
@@ -458,5 +460,15 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 		os.Remove(name)
 		return err
 	}
-	return os.Rename(name, path)
+	err = os.Rename(name, path)
+	// Windows refuses to replace a file another process has open at that
+	// moment (e.g. the launcher polling instance.json): retry briefly.
+	for i := 0; err != nil && runtime.GOOS == "windows" && i < 25; i++ {
+		time.Sleep(20 * time.Millisecond)
+		err = os.Rename(name, path)
+	}
+	if err != nil {
+		os.Remove(name)
+	}
+	return err
 }

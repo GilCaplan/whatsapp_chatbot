@@ -8,12 +8,24 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
 	"whatsappdoppel/internal/config"
 )
+
+// helperEnv turns the test binary into a stand-in server for spawn tests:
+// "exit1" exits with status 1 right away (portable /usr/bin/false).
+const helperEnv = "DOPPEL_TEST_HELPER"
+
+func TestMain(m *testing.M) {
+	if os.Getenv(helperEnv) == "exit1" {
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
 
 func testPaths(t *testing.T) config.Paths {
 	t.Helper()
@@ -130,7 +142,7 @@ func TestLaunchOpensRunningInstance(t *testing.T) {
 	var opened string
 	url, err := Launch(context.Background(), Options{
 		DataDir: p.Dir,
-		Exe:     "/nonexistent/should-not-spawn",
+		Exe:     filepath.Join(t.TempDir(), "should-not-spawn"),
 		Open:    func(u string) error { opened = u; return nil },
 	})
 	if err != nil {
@@ -143,11 +155,13 @@ func TestLaunchOpensRunningInstance(t *testing.T) {
 
 func TestLaunchReportsEarlyExit(t *testing.T) {
 	p := testPaths(t)
-	// Stale instance.json pointing at nothing; lock free → spawn; /usr/bin/false exits at once.
+	// Stale instance.json pointing at nothing; lock free → spawn; the test
+	// binary itself, as a helper (see TestMain), exits with status 1 at once.
 	WriteInstance(p, Instance{Port: 1, Token: "stale"})
+	t.Setenv(helperEnv, "exit1")
 	_, err := Launch(context.Background(), Options{
 		DataDir:      p.Dir,
-		Exe:          "/usr/bin/false",
+		Exe:          os.Args[0],
 		Open:         func(string) error { t.Fatal("must not open"); return nil },
 		StartTimeout: 5 * time.Second,
 	})
