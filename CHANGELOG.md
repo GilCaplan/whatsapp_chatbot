@@ -28,6 +28,9 @@ Everything below is new unless noted.
   double-click starts a background server and opens the browser, a second click reuses it.
 - Liquid-glass web interface with light/dark mode, a first-run setup (AI brain, WhatsApp QR link,
   persona, first chat), a guided tour, an illustrated in-app Guide and "?" help tips.
+- Looks: Settings › Appearance offers Liquid Glass (default), Midnight (pure black), Daylight (pure
+  white), Classic, Vintage (Parchment / Candlelit study), Ocean, Forest, Neon and High contrast, each
+  previewed live; light/dark or system per look (`settings.skin`).
 - Port finder and live port switching; Quit from Settings.
 - One WhatsApp account, many chats running at once; each chat opens a centered window with
   Overview, People, Goal, Behaviour and Memory tabs.

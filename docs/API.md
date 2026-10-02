@@ -18,7 +18,8 @@ and `internal/config/config.go` — JSON field names below match their tags exac
 ## Shapes (abridged; see Go types)
 
 ```
-Settings      { version, port, theme:"system|light|dark", onboardingCompleted,
+Settings      { version, port, theme:"system|light|dark",
+                skin:"glass|midnight|daylight|classic|vintage|ocean|forest|neon|contrast", onboardingCompleted,
                 llm:{ defaultProvider:"ollama|anthropic|openai", defaultModel, ollamaURL, ollamaModel,
                       anthropicModel, openaiModel, openaiBaseURL, temperature, replyMaxTokens, ollamaNumCtx },
                 behavior:{ triggerPrefix, private: BehaviorProfile, group: BehaviorProfile },
@@ -33,6 +34,8 @@ Settings      { version, port, theme:"system|light|dark", onboardingCompleted,
                 // v3 files get the v4 fields (marked ‡) the same way, and the default notifications/safety/memory/recap/clone blocks.
                 // Defaults: notifications all on except recap; every hand-off category on; memory on; recap off at 21:00, 30 days;
                 // clone sampling off, 500 samples.
+                // skin (the "look") defaults to glass; an empty or unknown value in config.json reads as glass, PUT rejects it.
+                // theme is kept when a dark-only (midnight, neon) or light-only (daylight) skin is chosen; the UI forces the mode.
                 // v4 files get the default memory.cross block (v5); its bools can't be told apart from unset either.
 CrossSettings { enabled, groupMode:"off|discreet|open", dmMode:"off|discreet|open",
                 sensitive:{ money, health, meeting, distress, bot, legal, romance, secret } (true = never crosses),
