@@ -1,0 +1,12 @@
+# Keep LF everywhere (gofmt and shell scripts need it, even on Windows checkouts).
+* text=auto eol=lf
+
+# Windows scripts are run by cmd.exe / PowerShell: CRLF is the safe choice.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets.
+*.png binary
+*.ico binary
+*.syso binary

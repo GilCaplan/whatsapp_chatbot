@@ -3,14 +3,18 @@
 # Exercises health, settings, personas, chats, the SSE stream, token/host
 # guards, assigning a chat, a simulated incoming message → "sent" activity,
 # and quit. Exits non-zero on the first failure.
-#   scripts/smoke.sh        (or: make smoke)
+#   scripts/smoke.sh        (or: make smoke)       env: SMOKE_PORT=7900 to pin the port
+# Runs on macOS, Linux and Windows (Git Bash). Needs bash, curl and jq (or
+# macOS plutil).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/doppel-smoke.XXXXXX")"
-BIN="$WORK/whatsapp-doppel"
+EXE=""
+case "${OSTYPE:-}" in msys* | cygwin* | win32*) EXE=".exe" ;; esac
+BIN="$WORK/whatsapp-doppel$EXE"
 DATA="$WORK/data"
 LOG="$WORK/serve.log"
 PID=""
@@ -30,21 +34,34 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# json <path> : extract a value from JSON on stdin (plutil understands JSON).
-json() { plutil -extract "$1" raw -o - - 2>/dev/null; }
+# json <path> : print one value from JSON on stdin; fails (prints nothing) when
+# it is missing or null. Paths use plutil's keypath style: items.0.text.
+if command -v jq >/dev/null 2>&1; then
+  json() {
+    local q
+    q="$(sed -E 's/(^|\.)([0-9]+)/[\2]/g; s/^([^[])/.\1/; s/^\[/.[/' <<<"$1")"
+    jq -r "$q | if . == null then error(\"missing\") else . end" 2>/dev/null | tr -d '\r'
+  }
+elif command -v plutil >/dev/null 2>&1; then
+  json() { plutil -extract "$1" raw -o - - 2>/dev/null; }
+else
+  echo "smoke.sh needs jq (or macOS plutil)" >&2
+  exit 1
+fi
 
+# free_port: a random port nothing listens on (bash /dev/tcp probe, no nc needed).
 free_port() {
   local p
   for _ in $(seq 1 50); do
     p=$((20000 + RANDOM % 20000))
-    if ! nc -z 127.0.0.1 "$p" 2>/dev/null; then echo "$p"; return; fi
+    if ! (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then echo "$p"; return; fi
   done
   echo 0
 }
 
 echo "Building…"
-CGO_ENABLED=1 go build -o "$BIN" . || fail "build failed"
-PORT="$(free_port)"
+CGO_ENABLED=0 go build -o "$BIN" . || fail "build failed"
+PORT="${SMOKE_PORT:-$(free_port)}" # SMOKE_PORT pins the port
 [[ "$PORT" != 0 ]] || fail "no free port"
 BASE="http://127.0.0.1:$PORT"
 
@@ -62,7 +79,8 @@ HEALTH="$(curl -fsS "$BASE/api/health")" || fail "health"
 TOKEN="$(json token <<<"$HEALTH")"
 [[ -n "$TOKEN" ]] || fail "no token in /api/health"
 [[ "$(json fakeWA <<<"$HEALTH")" == "true" ]] || fail "fakeWA not reported"
-pass "health ($(json version <<<"$HEALTH"))"
+[[ "$(json platform <<<"$HEALTH")" =~ ^(darwin|linux|windows)$ ]] || fail "platform not reported"
+pass "health ($(json version <<<"$HEALTH") on $(json platform <<<"$HEALTH"))"
 
 CODE=""
 RESP=""
