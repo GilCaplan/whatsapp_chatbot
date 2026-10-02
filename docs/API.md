@@ -25,14 +25,19 @@ Settings      { version, port, theme:"system|light|dark", onboardingCompleted,
                 notifications:{ enabled, approvals, goals, handoff, whatsapp, recap, sound },          // (wave 3)
                 safety:{ handoff:{ enabled, money, health, meeting, distress, bot, legal, aiCheck },
                          reveal:{ template (≤ 600 chars; {persona} and {me} are filled in) } },        // (wave 3)
-                memory:{ enabled }, recap:{ enabled, time:"HH:MM", keepDays (1–365) },                  // (wave 3)
+                memory:{ enabled, cross: CrossSettings }, recap:{ enabled, time:"HH:MM", keepDays (1–365) }, // (wave 3; cross v5)
                 clone:{ collectSamples, maxSamples (50–5000) } }                                         // (wave 3)
                 // defaultModel is derived from the per-provider model of defaultProvider; set ollamaModel/anthropicModel/openaiModel.
-                // version is 4. v1 files ("replies"/"approvals" blocks) are migrated on load; those top-level keys are ignored by PUT.
+                // version is 5. v1 files ("replies"/"approvals" blocks) are migrated on load; those top-level keys are ignored by PUT.
                 // v2 files get the v3 behaviour fields (marked † below) from the preset each profile is labelled with;
                 // v3 files get the v4 fields (marked ‡) the same way, and the default notifications/safety/memory/recap/clone blocks.
                 // Defaults: notifications all on except recap; every hand-off category on; memory on; recap off at 21:00, 30 days;
                 // clone sampling off, 500 samples.
+                // v4 files get the default memory.cross block (v5); its bools can't be told apart from unset either.
+CrossSettings { enabled, groupMode:"off|discreet|open", dmMode:"off|discreet|open",
+                sensitive:{ money, health, meeting, distress, bot, legal, romance, secret } (true = never crosses),
+                freshDays (1–90), maxPeople (1–8), maxItems (1–16) }
+                // Defaults: on, groups "discreet", private chats "open", every sensitive topic kept local, 14 days, 4 people, 8 items.
 Persona       { id, builtIn, name, tagline, avatar:{kind:"generated|upload", gradient:[c1,c2], glyph, initials, version},
                 bio, personality, style, vocabulary, rules, language, emoji:{usage:"none|rare|some|lots", favorites:[]},
                 messageLength:"short|medium|long", goal, decisionHint, fallbackReply, advancedPrompt,
@@ -50,10 +55,11 @@ RoutineBlock  { label (≤ 24), days:["mon".."sun"] (empty = every day), from:"H
 ChatAssignment{ key:"dm:<phone>|group:<id>|lid:<lid>", kind:"dm|group", jid, altJid, name, personaId, enabled,
                 mode:"auto|approve|copilot", approvalMode, goalOverride, goalStyle: null|"subtle|balanced|direct", goalPlanAhead: null|bool,
                 behavior: BehaviorOverrides, people: PeopleConfig, snoozedUntil: null|time,
-                memory: null|bool, handoff: null|HandoffState, missionId, revealedAt: null|time, lastActivityAt, createdAt }
+                memory: null|bool, handoff: null|HandoffState, missionId, cross: CrossContext, revealedAt: null|time, lastActivityAt, createdAt }
                 // goalStyle / goalPlanAhead: null = use the persona's setting.
                 // mode (wave 3) replaces approvalMode, which stays as a derived bool (mode != "auto") for one version;
                 // old files get mode from approvalMode. memory: null = settings.memory.enabled.
+CrossContext  { mode: ""|"off"|"discreet"|"open" ("" = the app default for the chat kind), share: null|bool (null = on) }
 HandoffState  { category:"money|health|meeting|distress|bot|legal", excerpt, sender, messageId, at, how:"keyword|ai" }
                 // set while a sensitive message has paused the persona in this chat (see Hand-off below)
 ChatGoal      { text, source:"chat|persona|default", style, styleSource:"chat|persona", planAhead,
@@ -62,19 +68,28 @@ ChatGoal      { text, source:"chat|persona|default", style, styleSource:"chat|pe
                 // "overrides" (v1) is gone: old chats.json files are migrated into "behavior" on start.
 ChatItem      { key, kind, jid, altJid, name, phone, participantCount, lastMessageAt, isSelf, assigned }
 PeopleConfig  { mode:"auto|everyone|selected" ("" = auto), people:[PersonPrefs] }
-PersonPrefs   { jid, name, respond: null|bool (null = follow the mode), priority, notes (≤ 300 characters) }
+PersonPrefs   { jid, name, respond: null|bool (null = follow the mode), priority, notes (≤ 300 characters),
+                cross: null|bool (groups: use the persona's private chat with this person here; null = on) }
 Participant   { jid, phone, lid, name, isAdmin, isSelf }   // a group member; jid is the address tags must use (lid or phone)
-Message       { id, ts, speaker:"them|me", name, text, fromBot, senderJid?, mentions?, kind?, corrected?, waId? }
+Message       { id, ts, speaker:"them|me", name, text, fromBot, senderJid?, mentions?, kind?, corrected?, waId?, crossUsed? }
+                // crossUsed: names of the people whose context from other chats informed this persona bubble.
                 // (wave 3) kind: "fix" (the "*word" bubble after a typo) | "edited" | "reveal"; corrected: the intended
                 // text of a bubble sent with a typo; waId: WhatsApp message id of a persona bubble.
                 // senderJid: who wrote a "them" message (groups). mentions: display names tagged with "@" in text
                 // ("@Dana" — incoming "@<number>" tags are shown as "@Name"). Both absent in older history.
-PendingReply  { id, chatKey, chatName, personaId, personaName, text, context:[Message], createdAt, stale, autoSendAt, provider, model, mentions?, opener, drafts? }
+PendingReply  { id, chatKey, chatName, personaId, personaName, text, context:[Message], createdAt, stale, autoSendAt, provider, model, mentions?, opener, drafts?, crossUsed? }
                 // drafts (wave 3, co-pilot): [{tone:"brief|warm|playful", text, mentions?}] ×3; text == drafts[0].text.
                 // mentions: the display names the reply tags (text contains "@Name" for each).
 ActivityEvent { id, ts, type, chatKey, chatName, personaName, text, meta:{...} }
 Memory        { id, chatKey, personJid?, person?, text (≤ 160), kind:"fact|preference|event|relationship|other",
-                source:"learned|user", pinned, confidence (0–100), evidence?, createdAt, updatedAt, lastUsedAt, expiresAt }  // (wave 3)
+                source:"learned|user", pinned, confidence (0–100), evidence?, createdAt, updatedAt, lastUsedAt, expiresAt,
+                sensitive?: "money|health|meeting|distress|bot|legal|romance|secret", scope?: "local|shared" }  // (wave 3; sensitive/scope: cross-chat)
+MemoryItem    Memory & { shares (used in other chats right now), effectiveSensitive ("" or the stored/classified topic) }
+Brief         { chatKey, personaId, kind, topics:[≤4], commitments:[≤3], tone, people:[{name, jid?, note}] (groups, ≤6),
+                sensitive:[topics the window touched], from, to, messageCount, generatedAt }                    // cross-chat
+CrossView     { enabled, kind, mode, modeSource:"chat|default", share, shareSource:"chat|default",
+                sources:[{chatKey, name, kind, person, personJid?, items, hasBrief, blocked?:"handoff|revealed|share_off|person_off|memory_off|mode_off"}],
+                brief: null|Brief, briefPending }
 Recap         { id, chatKey, chatName, personaName, date:"YYYY-MM-DD", from, to, messageCount, headline, topics:[],
                 goalProgress, toKnow:[], mood, generatedAt, onDemand }                                                    // (wave 3)
 MissionTemplate { id, title, blurb, goal (with {blank} placeholders), category:"words|vibes|curious|share|plans",
@@ -230,10 +245,10 @@ A normal reply narrates: `incoming` → `noticing` → `seen` → `waiting` → 
 | `noticing` | "Hasn't looked at the chat yet — will see it in 14s" | `delaySeconds` |
 | `seen` | "Seen (2 messages)" / "Looked at the chat (2 messages) — read receipts off" | `count`, `readReceipts` |
 | `waiting` | "Waiting 8s for more messages", "More messages — waiting 5s", "Burst cap reached — replying now", "New message while thinking — starting over" | `waitSeconds`, `resetCount`, `reason` (`burst_cap`, `new_messages`, `cooldown`) |
-| `thinking` | "Thinking for 6s" · distraction: "Got distracted — back in about 2 minutes" · plan ahead: "Planned the next move" | `delaySeconds`, `distracted` (true for the distraction event); plan ahead: `stage:"plan"`, `plan` (the private next move), `latencyMs` |
+| `thinking` | "Thinking for 6s" · distraction: "Got distracted — back in about 2 minutes" · plan ahead: "Planned the next move" · cross-chat: "Keeping in mind 2 things from your private chat with Dana — discreet" | `delaySeconds`, `distracted` (true for the distraction event); plan ahead: `stage:"plan"`, `plan` (the private next move), `latencyMs`; cross-chat: `stage:"cross"`, `crossContext` (below; never the notes themselves) |
 | `generating` | "Writing a reply…" (trigger prefix and approval mode, which skip "thinking") | `model`, `messages` |
 | `typing` | "Typing for 12s (84 characters, part 1 of 2)" (single bubble: "Typing for 12s (84 characters)") | `typingSeconds`, `chars`, `part`, `parts`, `approvalId` (approved replies) |
-| `sent` | the message text | `provider`, `model`, `latencyMs`, `jid`, `part`, `parts`, `quoted`, `proactive`, `manual`, `goalRewritten` (the first draft gave the goal away and was rewritten), `mentions` (display names tagged in this bubble) |
+| `sent` | the message text | `provider`, `model`, `latencyMs`, `jid`, `part`, `parts`, `quoted`, `proactive`, `manual`, `goalRewritten` (the first draft gave the goal away and was rewritten), `crossContext` `{mode, people, items, sources}` (context from other chats was used), `crossRewritten` (a draft gave away something from another chat and was rewritten), `crossDropped` (in the end it was written without other chats), `mentions` (display names tagged in this bubble) |
 | `goal.reached` | "Goal reached — Josh said apple" / "Goal reached — find out what Dana is doing this weekend" / "Goal reached — Dana sent a photo" | `goal`, `how` (`said_word`, `ai`, `media`), `evidence`, `afterReached`, `missionId?` |
 | `deferred` | "Outside active hours — will reply around 08:30" / "Away until 09:00 — will reply then" | `resumeAt` (time), `reason` (`outside_hours`, `snoozed`) |
 | `reacted` | "Reacted to Dana's message instead of replying" | `emoji`, `messageId` |
@@ -345,8 +360,8 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 |---|---|---|
 | `GET /api/chats` | – | `[ChatAssignment & {personaName, pendingCount, historyCount, goal: ChatGoal, nextCheckInAt: null\|time}]` (`nextCheckInAt` = scheduled automatic check-in, from runtime.json) |
 | `POST /api/chats` | `{jid, personaId, mode?, approvalMode?, enabled?, behavior?: BehaviorOverrides}` (mode wins over approvalMode) | `ChatAssignment` (201; server canonicalizes key/jid/altJid/name); 409 `already_assigned`; 400 `invalid_behavior` |
-| `PATCH /api/chats/{key}` | any of `{enabled, personaId, mode, approvalMode, goalOverride, goalStyle, goalPlanAhead, name, behavior, snoozedUntil, people, memory, missionId}` | `ChatAssignment`; 400 `invalid_behavior` / `invalid_snooze` / `invalid_goal` / `invalid_people` / `invalid_mode` / `invalid_memory`. `approvalMode:true` keeps co-pilot, `false` = auto; `memory:null` = the app setting |
-| `GET /api/chats/{key}/people` | – | `{kind, mode:"auto\|everyone\|selected", effectiveMode:"everyone\|selected", memberCount, threshold, answerAnyoneWhoAddressesIt, members:[{jid, name, phone, lid, isAdmin, isSelf, respond (effective), respondSource:"person\|mode", priority, notes, lastSpokeAt: null\|time, left}], membersError?}` — group members (cached by WhatsApp, 10 min) merged with the chat's preferences; people with preferences who are no longer members are listed with `left:true`. Order: recent speakers, then by name, then you, then people who left. DMs list the single contact (for notes). |
+| `PATCH /api/chats/{key}` | any of `{enabled, personaId, mode, approvalMode, goalOverride, goalStyle, goalPlanAhead, name, behavior, snoozedUntil, people, memory, missionId, cross}` | `ChatAssignment`; 400 `invalid_behavior` / `invalid_snooze` / `invalid_goal` / `invalid_people` / `invalid_mode` / `invalid_memory` / `invalid_cross`. `approvalMode:true` keeps co-pilot, `false` = auto; `memory:null` = the app setting; `cross: {mode?: string\|null, share?: bool\|null}` (absent = keep, null = the app default; `cross:null` resets both); `people.people[].cross: bool\|null` |
+| `GET /api/chats/{key}/people` | – | `{kind, mode:"auto\|everyone\|selected", effectiveMode:"everyone\|selected", memberCount, threshold, answerAnyoneWhoAddressesIt, members:[{jid, name, phone, lid, isAdmin, isSelf, respond (effective), respondSource:"person\|mode", priority, notes, lastSpokeAt: null\|time, left, cross (effective), crossSource:"person\|default", dmChatKey ("" = no private chat with this persona), dmShares}], membersError?}` — group members (cached by WhatsApp, 10 min) merged with the chat's preferences; people with preferences who are no longer members are listed with `left:true`. Order: recent speakers, then by name, then you, then people who left. DMs list the single contact (for notes). |
 | `GET /api/chats/{key}/behavior` | – | `{kind:"dm\|group", effective: BehaviorProfile, sources:{field:"chat"\|"default"}, overrides: BehaviorOverrides, defaults: BehaviorProfile, snoozedUntil: null\|time, available: bool, nextChangeAt: null\|time, goal: ChatGoal, dials:{speed, chattiness, boldness: DialPos}}` |
 | `POST /api/chats/{key}/initiate` | `{hint?: string ≤ 300}` | `{ok:true, approval:bool}` — the persona starts a conversation now (below). 409 `chat_disabled` / `busy`, 400 `invalid_hint`, 404 |
 | `POST /api/chats/{key}/goal/reset` | – | `ChatGoal` — forgets the goal progress (reached / planned moves); the persona pursues the goal again. SSE `chats.changed` |
@@ -356,9 +371,9 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 | `POST /api/chats/{key}/send` | `{text}` | `{ok:true}` — sends as the persona |
 | `POST /api/chats/{key}/reveal` | `{text?, force?}` | `{ok, text}` — sends the reveal message as yours (text "" = `safety.reveal.template` with `{persona}`/`{me}` filled in; no typos, no delays; history `kind:"reveal"`), discards pending replies, clears `handoff`, pauses the chat (`enabled:false`, `revealedAt`). 409 `already_revealed` while revealed and paused (then `force:true`); 400 `text_too_long` (> 2000); 502 `reveal_failed` |
 | `POST /api/chats/{key}/handoff/resume` | – | `ChatAssignment` — clears `handoff` (no-op when not paused); activity `handoff.resumed`; the next message is answered normally |
-| `GET /api/chats/{key}/memories` | – | `{enabled, items:[Memory] (pinned first, then newest), pending (messages since the last extraction), lastExtractedAt: null\|time}` |
-| `POST /api/chats/{key}/memories` | `{text, person?, personJid?, pinned?}` | `Memory` (`source:"user"`, never rewritten by the extractor); 400 `invalid_memory` (empty or > 160 chars) |
-| `PATCH /api/chats/{key}/memories/{id}` | `{text?, pinned?, person?}` | `Memory`; changing the text makes it `source:"user"`; 400 `invalid_memory`; 404 |
+| `GET /api/chats/{key}/memories` | – | `{enabled, crossEnabled (what is learned here may reach other chats), items:[MemoryItem] (pinned first, then newest), pending (messages since the last extraction), lastExtractedAt: null\|time}` |
+| `POST /api/chats/{key}/memories` | `{text, person?, personJid?, pinned?, scope?, sensitive?}` | `Memory` (`source:"user"`, never rewritten by the extractor; `sensitive` classified when not given); 400 `invalid_memory` (empty or > 160 chars, unknown scope/topic) |
+| `PATCH /api/chats/{key}/memories/{id}` | `{text?, pinned?, person?, scope?: "local"\|"shared"\|null, sensitive?: ""\|topic}` | `Memory`; changing the text makes it `source:"user"`; `scope:"local"` = never used in other chats, `"shared"` = your unlock (crosses even when sensitive), `null` = follow the settings; 400 `invalid_memory`; 404 |
 | `DELETE /api/chats/{key}/memories/{id}` | – | `{ok:true}`; 404 |
 | `DELETE /api/chats/{key}/memories` | – | `{ok:true}` — forget everything learned in this chat |
 | `POST /api/chats/{key}/memories/extract` | – | `{added, updated}` — reads the messages since the last extraction now (waits for the background slot); 502 `extract_failed` |
@@ -370,6 +385,33 @@ otherwise it is dropped; moods and "what I did today" are skipped. Near-repeats 
 ids kept), at most 60 per chat (oldest unpinned learned ones go first), events are forgotten 7 days after their date.
 Replies get up to 12 memories (pinned first, then recent, on-topic and upcoming ones). Every change publishes
 `memories.changed`; the chat's `memory` switch (null = `settings.memory.enabled`) turns learning and use off.
+
+### Cross-chat context
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/chats/{key}/cross` | – | `CrossView` — the chat's effective mode and sharing, the other chats of the same persona it may draw on (and why some are not used), its own brief |
+| `POST /api/chats/{key}/cross/refresh` | – | `Brief` — rewrites this chat's brief now (waits for the background slot); 502 `brief_failed`; 404 |
+
+A persona can use what it learned in its **other chats with the same people** (same persona only). In a group, the
+private chats with the people taking part right now (the person answered, recent speakers, people tagged lately;
+`maxPeople`) — **Discreet** by default: the prompt section is background only ("never mention, quote or hint at it;
+never imply you chat privately"); **Open** may refer to it lightly with that person, never in front of others. In a
+private chat, the groups the contact shares with the persona (roster, else their messages there) — **Open** by default:
+what *they* said or did there and what the persona promised there, never other members' things. **Off** keeps chats apart.
+Only summaries cross: the source chat's memories about that person and its **brief** (`briefs/<chatKey>.json`: written
+by a background JSON call after 8 new messages and 3 min of quiet, only for chats that can be a source; ≤ 300 tokens).
+Never crossing, whatever the mode: memories whose topic is sensitive (stored `sensitive`, else a keyword classifier in
+English and Hebrew over text and evidence; topics switched on in `memory.cross.sensitive`), memories learned from a
+sensitive message, `scope:"local"` memories, unpinned memories and briefs older than `freshDays`, past events, a brief's
+topics and notes when its window touched a sensitive topic (its promises are checked one by one), and anything from a
+chat that is paused for a hand-off (its brief is deleted on hand-off), revealed (deleted on reveal), has learning off,
+sharing off (`cross.share:false`) or — for one person in a group — `people[].cross:false`. Every reply that used other
+chats is checked (`crossctx.Leak`: distinctive words or three-word runs of a note that weren't said in this chat, or
+phrases like "you told me", "in our private chat"); a leaky draft is written again with a reminder, then — if it still
+leaks — without the other chats (activity `crossRewritten`/`crossDropped`). Co-pilot drafts that leak are dropped.
+No extra model call per reply otherwise. Playground and preview chats never draw on real chats. The prompt preview
+shows the section.
 | `POST /api/chats/{key}/simulate` | `{text, fromMe?, senderJid?}` (groups: the member it comes from; absent = a random member, else "Tester") | `{ok:true}` — injects an incoming message into the real pipeline. Allowed only with `--fake-wa`, for your own (self) chat, or when the chat is in approval mode; otherwise 403 `simulate_not_allowed` (a fake message must never trigger a real reply to a real person) |
 
 `{key}` must be URL-encoded (`encodeURIComponent`) — keys contain `:`.
@@ -550,6 +592,6 @@ On connect the server immediately sends one `wa.status` event with the current s
 | `settings.changed` | `Settings` (no secrets) |
 | `ollama.pull` | `PullProgress` |
 | `system` | `{kind:"port_changed", url}` or `{kind:"quitting"}` |
-| `memories.changed` (wave 3) | `{chatKey}` |
+| `memories.changed` (wave 3) | `{chatKey}` — also after a chat's brief (cross-chat context) was rewritten |
 | `recaps.changed` (wave 3) | `{}` |
 | `missions.changed` | `{}` |

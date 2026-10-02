@@ -103,8 +103,9 @@ api GET /api/settings
 SETTINGS="$RESP"
 [[ "$CODE" == 200 && "$(json behavior.private.waitForMoreSec <<<"$SETTINGS")" =~ ^[0-9]+$ ]] || fail "GET /api/settings ($CODE)"
 [[ "$(json behavior.group.preset <<<"$SETTINGS")" == natural ]] || fail "default group preset is not natural"
-[[ "$(json version <<<"$SETTINGS")" == 4 && "$(json recap.time <<<"$SETTINGS")" == 21:00 ]] || fail "settings are not v4"
-pass "settings (v4)"
+[[ "$(json version <<<"$SETTINGS")" == 5 && "$(json recap.time <<<"$SETTINGS")" == 21:00 ]] || fail "settings are not v5"
+[[ "$(json memory.cross.groupMode <<<"$SETTINGS")" == discreet && "$(json memory.cross.dmMode <<<"$SETTINGS")" == open ]] || fail "cross-chat defaults"
+pass "settings (v5)"
 
 api GET /api/missions
 [[ "$CODE" == 200 && "$RESP" == *'"achievements"'* ]] || fail "GET /api/missions ($CODE)"
@@ -221,6 +222,19 @@ api POST "/api/chats/$EKEY/memories/extract"
 api POST /api/clone/draft '{"name":"Me"}'
 [[ "$CODE" == 400 && "$(json code <<<"$RESP")" == too_few_samples ]] || fail "clone draft without samples ($CODE): $RESP"
 pass "memories CRUD + extract, clone guard"
+
+# Cross-chat context: per-chat mode, the view, memory scope.
+api PATCH "/api/chats/$EKEY" '{"cross":{"mode":"open"}}'
+[[ "$CODE" == 200 && "$(json cross.mode <<<"$RESP")" == open ]] || fail "PATCH cross ($CODE): $RESP"
+api PATCH "/api/chats/$EKEY" '{"cross":{"mode":"loud"}}'
+[[ "$CODE" == 400 && "$(json code <<<"$RESP")" == invalid_cross ]] || fail "invalid cross mode accepted ($CODE): $RESP"
+api GET "/api/chats/$EKEY/cross"
+[[ "$CODE" == 200 && "$(json mode <<<"$RESP")" == open && "$(json modeSource <<<"$RESP")" == chat ]] || fail "GET cross ($CODE): $RESP"
+api PATCH "/api/chats/$EKEY/memories/$MEMID" '{"scope":"local"}'
+[[ "$CODE" == 200 && "$(json scope <<<"$RESP")" == local ]] || fail "PATCH memory scope ($CODE): $RESP"
+api PATCH "/api/chats/$EKEY" '{"cross":null}'
+[[ "$CODE" == 200 ]] || fail "reset cross ($CODE): $RESP"
+pass "cross-chat context: mode, view, memory scope"
 
 api POST "/api/chats/$EKEY/simulate" '{"text":"hey, how was your weekend?"}'
 [[ "$CODE" == 200 ]] || fail "simulate ($CODE)"
