@@ -119,6 +119,7 @@ export const GUIDE_SECTIONS = [
       { qa: [
         ['Ollama, Claude or OpenAI?', 'Ollama is free and private: the AI runs on your computer (16 GB of memory or more works best, and llama3.1:8b is a good first model). Claude and OpenAI usually write more natural replies; they need an API key, charge per use and see the messages they answer.'],
         ['Does my phone have to stay on?', 'No. Linked devices keep working while your phone is off for a while. Doppel itself needs your computer awake and the app running.'],
+        ['Can I change how it looks?', 'Yes. Settings › Appearance has nine looks: Liquid Glass, pure-black Midnight, pure-white Daylight, flat Classic, paper-and-ink Vintage, Ocean, Forest, Neon and High contrast, each with a live preview, plus a light/dark switch. The choice is saved with your settings, so every browser on this computer shows the same look.'],
         ['How do I quit?', 'Settings › About › Quit Doppel. Personas stop replying until you open the app again, and nothing is deleted.'],
         ['The page says the port is in use.', 'Settings › Server › Find free ports, pick one and press the button to switch. The page moves to the new address by itself and remembers it.'],
         ['Where is my data?', 'In one folder in your home folder. Settings › Data shows exactly where and opens it for you (on a Mac it is Library › Application Support › WhatsappDoppel, on Windows AppData › Roaming › WhatsappDoppel, on Linux .config › WhatsappDoppel). Deleting that folder starts completely fresh.'],
@@ -178,6 +179,8 @@ export const TIPS = {
     text: 'In small groups it answers everyone. In bigger ones it answers the people you pick, plus anyone who says its name or tags it.' },
   missions: { title: 'Missions', section: 'goals',
     text: 'Ready-made goals with blanks to fill in. The persona works on it quietly; when it happens, the mission is complete and badges unlock.' },
+  looks: { title: 'Looks', section: 'faq',
+    text: 'Pick how Doppel looks: **Liquid Glass**, pure-black **Midnight**, pure-white **Daylight**, flat **Classic**, paper-and-ink **Vintage** and more. Some looks are always dark or always light; the rest follow **Light or dark**.' },
   'goal-style': { title: 'Goal style', section: 'goals',
     text: '**Subtle** keeps it secret and gradual. **Balanced** may ask about it naturally. **Direct** goes for it openly.' },
 };

@@ -169,6 +169,10 @@ api PUT /api/settings "{\"behavior\":{\"private\":$FAST,\"group\":$FAST}}"
   || fail "PUT /api/settings ($CODE): $RESP"
 api PUT /api/settings '{"behavior":{"private":{"replyPercent":101}}}'
 [[ "$CODE" == 400 ]] || fail "out-of-range behavior accepted ($CODE)"
+api PUT /api/settings '{"skin":"classic"}'
+[[ "$CODE" == 200 && "$(json skin <<<"$RESP")" == classic ]] || fail "PUT skin ($CODE): $RESP"
+api PUT /api/settings '{"skin":"disco"}'
+[[ "$CODE" == 400 ]] || fail "unknown skin accepted ($CODE)"
 pass "settings update + validation"
 
 api POST /api/chats "{\"jid\":\"$JID\",\"personaId\":\"$PERSONA_ID\",\"approvalMode\":false}"

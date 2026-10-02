@@ -118,10 +118,10 @@ export function installIcons() {
   const svg = `<svg id="doppel-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
     <defs>
       <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#25d366"/><stop offset=".55" stop-color="#14b8c4"/><stop offset="1" stop-color="#8b5cf6"/>
+        <stop offset="0" style="stop-color:var(--brand-1)"/><stop offset=".55" style="stop-color:var(--brand-2)"/><stop offset="1" style="stop-color:var(--brand-3)"/>
       </linearGradient>
       <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#25d366"/><stop offset=".55" stop-color="#14b8c4"/><stop offset="1" stop-color="#8b5cf6"/>
+        <stop offset="0" style="stop-color:var(--brand-1)"/><stop offset=".55" style="stop-color:var(--brand-2)"/><stop offset="1" style="stop-color:var(--brand-3)"/>
       </linearGradient>
     </defs>${symbols}</svg>`;
   document.body.insertAdjacentHTML('afterbegin', svg);

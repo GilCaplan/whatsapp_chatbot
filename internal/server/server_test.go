@@ -314,6 +314,31 @@ func TestSettingsDeepMerge(t *testing.T) {
 	if e.cfg.Get().Theme != "system" {
 		t.Fatal("invalid theme persisted")
 	}
+	// Looks: unknown skin rejected, a valid one saved without reloading the engine or LLM.
+	if code := e.do("PUT", "/api/settings", map[string]any{"skin": "disco"}, &apiErr); code != 400 || apiErr.Code != "invalid_settings" {
+		t.Fatalf("invalid skin: %d %+v", code, apiErr)
+	}
+	if e.cfg.Get().Skin != "glass" {
+		t.Fatalf("invalid skin persisted: %q", e.cfg.Get().Skin)
+	}
+	reloads, rebuilds := e.eng.reloads.Load(), e.llm.rebuilds.Load()
+	if code := e.do("PUT", "/api/settings", map[string]any{"skin": "midnight"}, &got); code != 200 || got.Skin != "midnight" {
+		t.Fatalf("skin: %d %q", code, got.Skin)
+	}
+	if e.cfg.Get().Skin != "midnight" || e.cfg.Get().Theme != "system" {
+		t.Fatalf("skin not persisted or theme rewritten: %+v", e.cfg.Get())
+	}
+	select {
+	case ev := <-ch:
+		if ev.Type != events.TypeSettingsChanged {
+			t.Fatalf("skin event = %s", ev.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no settings.changed event for skin")
+	}
+	if e.eng.reloads.Load() != reloads || e.llm.rebuilds.Load() != rebuilds {
+		t.Fatal("skin change reloaded engine/llm")
+	}
 	// defaultModel alone updates the default provider's model.
 	if code := e.do("PUT", "/api/settings", map[string]any{"llm": map[string]any{"defaultModel": "qwen3:8b"}}, &got); code != 200 {
 		t.Fatalf("defaultModel: %d", code)

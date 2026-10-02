@@ -1,10 +1,17 @@
 /* ─────────────────────────────────────────────────────────────
-   Design tokens — "Liquid Glass"
-   Light by default, dark via prefers-color-scheme, and a manual
-   override through <html data-theme="light|dark">.
+   Design tokens — the default look, "Liquid Glass".
+
+   <html data-skin="…" data-theme="light|dark">: boot.js / web/skins.js
+   always set the *resolved* mode, so `data-theme` is never missing once
+   JavaScript runs. Other looks override these tokens in skins.css.
+   Components use tokens only — never hard-code a colour in a component.
+
+   Every block also matches `.skin-preview` (the live mini previews in
+   Settings › Appearance) so a preview recomputes the derived tokens
+   (gradients, rings, shadows) from its own skin's colours.
    ───────────────────────────────────────────────────────────── */
 
-:root {
+:root, .skin-preview {
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Inter, Roboto, sans-serif;
   --font-display: -apple-system-headline, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
@@ -19,14 +26,32 @@
   --r-md: 14px;
   --r-lg: 20px;
   --r-xl: 26px;
+  --r-pill: 999px;
+  --r-switch: 999px;
+  --r-input: 12px;
+  --r-row: 14px;
+  --r-panel: 24px;
+  --r-hero: 30px;
 
   --sidebar-w: 244px;
+
+  /* Material: frosted glass. Flat looks set the blurs to 0px. */
+  --blur: 24px;
+  --blur-strong: 30px;
+  --blur-soft: 20px;
+  --saturate: 180%;
+  --saturate-strong: 190%;
+  --scrim-filter: blur(8px) saturate(120%);
+  --bg-image: none;
+  --glow: none;
 
   /* Brand */
   --brand-1: #25d366;
   --brand-2: #14b8c4;
   --brand-3: #8b5cf6;
   --brand-grad: linear-gradient(135deg, var(--brand-1) 0%, var(--brand-2) 52%, var(--brand-3) 100%);
+  --brand-glow: #14b8c4;
+  --brand-filter: none;
   --accent-grad: linear-gradient(135deg, #1cc27a 0%, #0fa8b8 100%);
 
   /* System colors (Apple-ish) */
@@ -44,6 +69,97 @@
   --yellow: #ffcc00;
   --gray: #8e8e93;
 
+  /* Text and fills on coloured surfaces */
+  --on-accent: #fff;
+  --on-accent-spin: rgba(255, 255, 255, .9);
+  --on-brand: #fff;
+  --on-danger: #fff;
+  --on-success: #fff;
+  --thumb: #fff;
+
+  /* Interaction hue (focus rings, selected chips/tiles, sliders). A future
+     settings.accent could override --accent/--ring/--accent-grad only. */
+  --ring: var(--teal);
+  --ring-soft: color-mix(in srgb, var(--ring) 14%, transparent);
+  --ring-soft-2: color-mix(in srgb, var(--ring) 18%, transparent);
+  --range-a: var(--ring);
+  --range-b: var(--brand-1);
+  --selection: rgba(20, 184, 196, .28);
+
+  /* Semantic gradients */
+  --danger-grad: linear-gradient(135deg, #ff6b4a, #ff2d55);
+  --danger-btn-grad: linear-gradient(135deg, #ff5a4f, #ff2d55);
+  --badge-grad: linear-gradient(135deg, #ff8a3d, #ff2d55);
+  --danger-glow: #ff2d55;
+  --success-grad: linear-gradient(135deg, #34d399, #10b981);
+  --success-glow: #10b981;
+  --info-grad: linear-gradient(135deg, #38bdf8, #6366f1);
+  --warn-grad: linear-gradient(135deg, #fbbf24, #f59e0b);
+  --week-grad: linear-gradient(90deg, #818cf8, #6366f1);
+  --mission-a: #a78bfa;
+  --mission-b: #14b8c4;
+  --mission-grad: linear-gradient(135deg, #a78bfa, #f472b6);
+  --mission-shadow: rgba(244, 114, 182, .8);
+
+  /* Soft tints (chips, banners) */
+  --violet-text: #7c5cff;
+  --violet-soft: rgba(139, 92, 246, .13);
+  --amber-soft: rgba(245, 166, 10, .15);
+  --red-text: var(--red);
+  --red-soft: rgba(255, 59, 48, .12);
+  --blue-chip-text: var(--blue);
+  --blue-soft: rgba(10, 132, 255, .12);
+  --amber-banner: rgba(245, 166, 10, .12);
+  --amber-banner-edge: rgba(245, 166, 10, .35);
+  --red-banner: rgba(255, 59, 48, .10);
+  --red-banner-edge: rgba(255, 59, 48, .3);
+  --blue-banner: rgba(10, 132, 255, .09);
+  --blue-banner-edge: rgba(10, 132, 255, .25);
+
+  /* Component shadows */
+  --btn-hover-filter: brightness(1.07) saturate(1.05);
+  --btn-primary-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 rgba(0, 0, 0, .08), 0 8px 20px -8px rgba(15, 168, 150, .75);
+  --btn-primary-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, .35), 0 12px 26px -8px rgba(15, 168, 150, .85);
+  --btn-brand-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 10px 24px -10px rgba(139, 92, 246, .7);
+  --btn-glass-shadow: inset 0 1px 0 var(--glass-hi), 0 1px 2px rgba(0, 0, 0, .05), 0 6px 16px -10px rgba(0, 0, 0, .3);
+  --nav-active-shadow: inset 0 1px 0 var(--glass-hi), 0 1px 2px rgba(0, 0, 0, .06), 0 6px 16px -10px rgba(0, 0, 0, .3);
+  --raised-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 3px 10px -4px rgba(0, 0, 0, .14), inset 0 1px 0 var(--glass-hi);
+  --seg-thumb: var(--glass-strong);
+  --input-shadow: inset 0 1px 2px rgba(0, 0, 0, .04);
+  --input-focus-shadow: 0 0 0 4px var(--ring-soft-2);
+  --thumb-shadow: 0 2px 8px rgba(0, 0, 0, .22), 0 0 0 .5px rgba(0, 0, 0, .12);
+  --switch-track-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .06);
+  --switch-thumb-shadow: 0 3px 8px rgba(0, 0, 0, .15), 0 1px 1px rgba(0, 0, 0, .14), 0 0 0 .5px rgba(0, 0, 0, .04);
+  --icon-tile-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 14px -6px rgba(0, 0, 0, .35);
+  --icon-tile-shadow-2: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 14px -8px rgba(0, 0, 0, .45);
+  --hero-icon-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 16px 32px -14px rgba(20, 184, 196, .9);
+  --bubble-shadow: 0 1px .5px rgba(0, 0, 0, .10);
+  --bubble-who: var(--teal);
+
+  /* QR code card: always a light card so phones can scan it */
+  --qr-bg: #fff;
+  --qr-text: #0d1117;
+  --qr-veil: rgba(255, 255, 255, .55);
+  --qr-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 24px 50px -20px rgba(16, 24, 40, .45);
+  --qr-c1: var(--teal);
+  --qr-c2: #3fb8d9;
+  --qr-c3: #1fbf75;
+  --qr-c4: var(--violet);
+  --qr-sweep: linear-gradient(180deg, transparent, rgba(20, 184, 196, .22) 70%, rgba(20, 184, 196, .55) 98%, transparent);
+  --qr-sk-1: #f1f3f6;
+  --qr-sk-2: #e8ebf0;
+
+  /* Coach-mark tour */
+  --tour-scrim: rgba(8, 12, 22, .55);
+  --tour-ring: rgba(255, 255, 255, .9);
+  --tour-glow: rgba(20, 184, 196, .55);
+  --tour-pulse: rgba(52, 211, 153, .9);
+
+  /* Illustrations (art.js, guide-art.js use var(--art-*, <glass colour>)) and
+     data-coloured pictures (avatars, medals, dials) are tinted per look. */
+  --art-filter: none;
+  --avatar-filter: none;
+
   /* ── Light ── */
   --bg: #eef2f7;
   --text: #0d1117;
@@ -58,6 +174,7 @@
   --glass-edge: rgba(15, 23, 42, .07);
   --glass-hi: rgba(255, 255, 255, .95);
   --sheen: rgba(255, 255, 255, .55);
+  --sheen-2: rgba(255, 255, 255, .06);
 
   --fill-1: rgba(118, 128, 150, .09);
   --fill-2: rgba(118, 128, 150, .15);
@@ -76,6 +193,14 @@
   --accent-text: #08804f;
   --accent-soft: rgba(16, 185, 129, .13);
   --focus: rgba(20, 184, 196, .45);
+
+  --amber-text: #c27c00;
+  --tuned-text: #b26b00;
+  --stale-text: #8a5300;
+  --indigo-text: var(--indigo);
+  --blue-text: var(--blue);
+  --mention-bg: color-mix(in srgb, var(--blue) 10%, transparent);
+  --skeleton-shine: rgba(255, 255, 255, .45);
 
   --bubble-them: rgba(255, 255, 255, .92);
   --bubble-them-text: #111b21;
@@ -96,7 +221,8 @@
   color-scheme: light;
 }
 
-/* ── Dark (system) ── */
+/* ── Dark (system) ── no-JavaScript fallback only: boot.js always sets the
+   resolved data-theme, which the forced block below matches. Keep in sync. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #05070c;
@@ -130,6 +256,14 @@
     --accent-text: #4be3a2;
     --accent-soft: rgba(43, 214, 142, .14);
 
+    --amber-text: #ffc24a;
+    --tuned-text: #ffc24a;
+    --stale-text: #ffd08a;
+    --indigo-text: #a5a4ff;
+    --blue-text: #6cb8ff;
+    --mention-bg: rgba(10, 132, 255, .18);
+    --skeleton-shine: rgba(255, 255, 255, .08);
+
     --bubble-them: rgba(38, 44, 54, .94);
     --bubble-them-text: #e9edef;
     --bubble-me: #005c4b;
@@ -150,8 +284,8 @@
   }
 }
 
-/* ── Dark (forced) ── keep in sync with the block above */
-:root[data-theme="dark"] {
+/* ── Dark (resolved) ── keep in sync with the block above */
+:root[data-theme="dark"], .skin-preview[data-theme="dark"] {
   --bg: #05070c;
   --text: #f2f4f8;
   --text-2: rgba(242, 244, 248, .66);
@@ -182,6 +316,14 @@
   --accent: #2bd68e;
   --accent-text: #4be3a2;
   --accent-soft: rgba(43, 214, 142, .14);
+
+  --amber-text: #ffc24a;
+  --tuned-text: #ffc24a;
+  --stale-text: #ffd08a;
+  --indigo-text: #a5a4ff;
+  --blue-text: #6cb8ff;
+  --mention-bg: rgba(10, 132, 255, .18);
+  --skeleton-shine: rgba(255, 255, 255, .08);
 
   --bubble-them: rgba(38, 44, 54, .94);
   --bubble-them-text: #e9edef;
