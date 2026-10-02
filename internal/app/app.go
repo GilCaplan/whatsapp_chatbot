@@ -27,6 +27,7 @@ import (
 	"whatsappdoppel/internal/model"
 	"whatsappdoppel/internal/notify"
 	"whatsappdoppel/internal/persona"
+	"whatsappdoppel/internal/platform"
 	"whatsappdoppel/internal/server"
 	"whatsappdoppel/internal/store"
 	"whatsappdoppel/internal/wa"
@@ -35,7 +36,7 @@ import (
 
 // Options are the `serve` flags.
 type Options struct {
-	DataDir     string // "" = default (~/Library/Application Support/WhatsappDoppel or $DOPPEL_DATA_DIR)
+	DataDir     string // "" = default (config.DefaultDataDir: $DOPPEL_DATA_DIR or the per-user folder)
 	Port        int    // 0 = automatic (DOPPEL_PORT > settings.port > well-known list)
 	LegacyDB    string // explicit legacy bot.db to import on first start
 	FakeWA      bool
@@ -93,7 +94,7 @@ func Run(opts Options) error {
 		return fmt.Errorf("open store: %w", err)
 	}
 	hub := events.NewHub()
-	// Activity goes to the log file and to macOS notifications (notify).
+	// Activity goes to the log file and to desktop notifications (notify).
 	var baseURL atomic.Value // "http://127.0.0.1:<port>/", for notification clicks
 	baseURL.Store("")
 	notifier := notify.New(notify.Options{
@@ -160,6 +161,7 @@ func Run(opts Options) error {
 		Playground: eng.Playground(),
 		Builder:    eng.Builder(),
 		Notifier:   notifier,
+		OpenFolder: platform.OpenFolder,
 		Seed:       persona.Seed,
 		Normalize:  persona.Normalize,
 		Web:        web.FS,

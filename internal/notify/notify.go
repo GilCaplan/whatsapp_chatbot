@@ -1,8 +1,12 @@
-// Package notify shows macOS notifications for activity that needs you: a
+// Package notify shows desktop notifications for activity that needs you: a
 // reply waiting for your OK, a goal reached, a chat that needs you
-// (hand-off), WhatsApp disconnecting, the daily recap. It uses
-// terminal-notifier when installed (clickable, grouped per chat) and
-// otherwise AppleScript's "display notification" via osascript.
+// (hand-off), WhatsApp disconnecting, the daily recap. Backends:
+//
+//   - macOS: terminal-notifier when installed (clickable, grouped per chat),
+//     otherwise AppleScript's "display notification" via osascript;
+//   - Linux: notify-send (libnotify; not clickable);
+//   - Windows: a toast shown through Windows PowerShell (clickable, opens the
+//     browser; labelled "Windows PowerShell").
 //
 // Notifications follow settings.notifications (master switch, per-event
 // switches, sound), are rate limited per event type and chat, and a
@@ -10,9 +14,14 @@
 package notify
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"os/exec"
 	"runtime"
@@ -20,16 +29,20 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf16"
 
 	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/model"
+	"whatsappdoppel/internal/platform"
 )
 
 // Backends.
 const (
 	BackendTerminalNotifier = "terminal-notifier"
 	BackendOSAScript        = "osascript"
-	BackendDryRun           = "dry-run" // logs instead of showing (tests, smoke runs)
+	BackendNotifySend       = "notify-send" // Linux (libnotify)
+	BackendPowerShell       = "powershell"  // Windows toast via Windows PowerShell
+	BackendDryRun           = "dry-run"     // logs instead of showing (tests, smoke runs)
 	BackendNone             = "none"
 )
 
@@ -51,9 +64,10 @@ var ErrUnavailable = errors.New("notifications aren't available on this computer
 type Note struct {
 	Subtitle string
 	Message  string
-	Group    string // terminal-notifier: replaces an earlier note of the same group
-	Open     string // terminal-notifier: URL opened on click
+	Group    string // replaces an earlier note of the same group (terminal-notifier, notify-send, toast)
+	Open     string // URL opened on click (terminal-notifier, toast)
 	Sound    bool
+	Urgent   bool // notify-send: critical urgency (stays until dismissed)
 }
 
 // Timer is the part of *time.Timer the debounce needs.
@@ -67,7 +81,7 @@ type Options struct {
 	// Events: notify about activity. false = only "Send a test" works (the
 	// app runs with fake WhatsApp, e.g. a demo or a test run).
 	Events bool
-	// Backend forces a backend ("" = detect: terminal-notifier, osascript, none).
+	// Backend forces a backend ("" = Detect()).
 	Backend string
 	// Run executes a backend command (nil = os/exec).
 	Run func(ctx context.Context, name string, args ...string) error
@@ -78,7 +92,7 @@ type Options struct {
 	Logf func(format string, args ...any)
 }
 
-// Notifier turns activity events into macOS notifications.
+// Notifier turns activity events into desktop notifications.
 type Notifier struct {
 	o       Options
 	backend string
@@ -95,7 +109,9 @@ type Notifier struct {
 func New(o Options) *Notifier {
 	if o.Run == nil {
 		o.Run = func(ctx context.Context, name string, args ...string) error {
-			out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+			cmd := exec.CommandContext(ctx, name, args...)
+			platform.HideWindow(cmd) // no console flash for powershell.exe
+			out, err := cmd.CombinedOutput()
 			if err != nil && len(out) > 0 {
 				return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 			}
@@ -123,14 +139,24 @@ func New(o Options) *Notifier {
 
 // Detect finds the best available backend on this computer.
 func Detect() string {
-	if runtime.GOOS != "darwin" {
-		return BackendNone
-	}
-	if _, err := exec.LookPath("terminal-notifier"); err == nil {
-		return BackendTerminalNotifier
-	}
-	if _, err := exec.LookPath("osascript"); err == nil {
-		return BackendOSAScript
+	has := func(bin string) bool { _, err := exec.LookPath(bin); return err == nil }
+	switch runtime.GOOS {
+	case "darwin":
+		if has("terminal-notifier") {
+			return BackendTerminalNotifier
+		}
+		if has("osascript") {
+			return BackendOSAScript
+		}
+	case "windows":
+		// Windows PowerShell 5.1 (not pwsh, which cannot load the WinRT toast types).
+		if has(powerShellExe) {
+			return BackendPowerShell
+		}
+	default:
+		if has("notify-send") {
+			return BackendNotifySend
+		}
 	}
 	return BackendNone
 }
@@ -231,7 +257,7 @@ func (n *Notifier) noteFor(a model.ActivityEvent, s config.NotificationSettings)
 			msg += ": " + quoted(ex)
 		}
 		return Note{Subtitle: "Needs you · " + chat, Message: msg + ". " + persona + " is paused there.",
-			Group: "doppel:handoff:" + a.ChatKey, Open: chatURL, Sound: true}, a.Type, true
+			Group: "doppel:handoff:" + a.ChatKey, Open: chatURL, Sound: true, Urgent: true}, a.Type, true
 	case model.ActRecap:
 		if !s.Recap || a.Meta["onDemand"] == true {
 			return Note{}, "", false
@@ -322,7 +348,7 @@ func (n *Notifier) show(ctx context.Context, note Note) error {
 	case BackendDryRun:
 		n.o.Logf("notify (dry run): %s — %s", note.Subtitle, note.Message)
 		return nil
-	case BackendTerminalNotifier, BackendOSAScript:
+	case BackendTerminalNotifier, BackendOSAScript, BackendNotifySend, BackendPowerShell:
 		bin, args := Args(n.backend, note)
 		return n.o.Run(ctx, bin, args...)
 	}
@@ -334,6 +360,12 @@ func Args(backend string, note Note) (string, []string) {
 	sub, msg := clean(note.Subtitle, 80), clean(note.Message, maxMessage)
 	if msg == "" {
 		msg = " "
+	}
+	switch backend {
+	case BackendNotifySend:
+		return notifySendArgs(sub, msg, note)
+	case BackendPowerShell:
+		return powerShellExe, powerShellArgs(sub, msg, note)
 	}
 	if backend == BackendTerminalNotifier {
 		// terminal-notifier reads a leading "-" or "[" as an option.
@@ -391,4 +423,92 @@ func quoted(s string) string {
 		return ""
 	}
 	return "“" + s + "”"
+}
+
+// notifySendArgs: summary "WhatsApp Doppel · <subtitle>", body = message.
+// "--" ends the options so a message starting with "-" is not read as one;
+// the body is escaped because most notification daemons render markup.
+// notify-send has no click action and plays no sound of its own.
+func notifySendArgs(sub, msg string, note Note) (string, []string) {
+	summary := Title
+	if sub != "" {
+		summary += " · " + sub
+	}
+	urgency := "normal"
+	if note.Urgent {
+		urgency = "critical"
+	}
+	args := []string{"-a", Title, "-i", "whatsapp-doppel", "-u", urgency,
+		"-h", "string:desktop-entry:whatsapp-doppel"}
+	if note.Group != "" {
+		args = append(args, "-h", "string:x-canonical-private-synchronous:"+note.Group)
+	}
+	body := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(msg)
+	return "notify-send", append(args, "--", summary, body)
+}
+
+// powerShellExe is Windows PowerShell 5.1, on PATH on every Windows 10/11.
+const powerShellExe = "powershell.exe"
+
+// powerShellAppID is the AppUserModelID Windows PowerShell registers; a toast
+// needs a registered app id, so it is shown as coming from "Windows PowerShell".
+const powerShellAppID = `{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe`
+
+// powerShellArgs builds a toast (XML-escaped text, protocol activation opening
+// note.Open) and passes the script as -EncodedCommand (UTF-16LE base64), so no
+// shell quoting is involved. The XML is one line (clean() collapsed the text),
+// so it cannot end the '@ here-string early.
+func powerShellArgs(sub, msg string, note Note) []string {
+	esc := func(s string) string {
+		var b bytes.Buffer
+		_ = xml.EscapeText(&b, []byte(s))
+		return b.String()
+	}
+	var x strings.Builder
+	x.WriteString(`<toast`)
+	if note.Open != "" {
+		x.WriteString(` activationType="protocol" launch="` + esc(note.Open) + `"`)
+	}
+	if note.Urgent {
+		x.WriteString(` scenario="reminder"`)
+	}
+	x.WriteString(`><visual><binding template="ToastGeneric"><text>` + esc(Title) + `</text>`)
+	if sub != "" {
+		x.WriteString(`<text>` + esc(sub) + `</text>`)
+	}
+	x.WriteString(`<text>` + esc(msg) + `</text></binding></visual>`)
+	if note.Urgent && note.Open != "" {
+		// A reminder toast needs a button; it opens the chat like a click does.
+		x.WriteString(`<actions><action content="Open" activationType="protocol" arguments="` + esc(note.Open) + `"/></actions>`)
+	}
+	if !note.Sound {
+		x.WriteString(`<audio silent="true"/>`)
+	}
+	x.WriteString(`</toast>`)
+
+	tag := ""
+	if note.Group != "" {
+		h := fnv.New64a()
+		h.Write([]byte(note.Group))
+		tag = fmt.Sprintf("$t.Tag = '%016x'; $t.Group = 'doppel'\n", h.Sum64()) // tags are limited to 64 (old: 16) chars
+	}
+	script := "$ErrorActionPreference = 'Stop'\n" +
+		"[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]\n" +
+		"[void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]\n" +
+		"$x = New-Object Windows.Data.Xml.Dom.XmlDocument\n" +
+		"$x.LoadXml(@'\n" + x.String() + "\n'@)\n" +
+		"$t = New-Object Windows.UI.Notifications.ToastNotification $x\n" +
+		tag +
+		"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('" + powerShellAppID + "').Show($t)\n"
+	return []string{"-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encodePowerShell(script)}
+}
+
+// encodePowerShell returns s as base64 of UTF-16LE, the -EncodedCommand format.
+func encodePowerShell(s string) string {
+	u := utf16.Encode([]rune(s))
+	b := make([]byte, 2*len(u))
+	for i, c := range u {
+		binary.LittleEndian.PutUint16(b[2*i:], c)
+	}
+	return base64.StdEncoding.EncodeToString(b)
 }

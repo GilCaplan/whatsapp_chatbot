@@ -34,9 +34,12 @@ type Deps struct {
 	LLM        contract.LLM
 	Playground contract.Playground
 	Builder    contract.Builder
-	// Notifier shows macOS notifications (wave 3); nil = POST
+	// Notifier shows desktop notifications (wave 3); nil = POST
 	// /api/system/notify-test answers 501.
 	Notifier contract.Notifier
+	// OpenFolder shows a folder in Finder / File Explorer / the file manager;
+	// nil = POST /api/system/open-data-dir answers 503.
+	OpenFolder func(dir string) error
 	// Seed returns the factory version of a built-in persona (for reset).
 	Seed func(id string) (model.Persona, bool)
 	// Normalize fills persona defaults (avatar gradient, enums, ...) and

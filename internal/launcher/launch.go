@@ -8,10 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	"whatsappdoppel/internal/config"
+	"whatsappdoppel/internal/platform"
 )
 
 // Options configures Launch.
@@ -91,8 +91,8 @@ func Launch(ctx context.Context, opts Options) (string, error) {
 	return "", fmt.Errorf("the server did not become ready within %s%s", timeout, logTail(paths.ServerLog()))
 }
 
-// spawn starts `<exe> serve --from-launcher --data-dir <dir>` in its own
-// session, detached from the launcher, with output appended to logs/server.log.
+// spawn starts `<exe> serve --from-launcher --data-dir <dir>` detached from
+// the launcher (own session; on Windows no console, own process group), with output appended to logs/server.log.
 // The returned channel receives the exit status if it dies early.
 func spawn(paths config.Paths, opts Options) (chan error, error) {
 	exe := opts.Exe
@@ -112,10 +112,10 @@ func spawn(paths config.Paths, opts Options) (chan error, error) {
 	args := append([]string{"serve", "--from-launcher", "--data-dir", paths.Dir}, opts.ExtraArgs...)
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = paths.Dir
-	cmd.Stdin = nil // /dev/null
+	cmd.Stdin = nil // the null device
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	platform.DetachAttrs(cmd)
 	cmd.Env = os.Environ()
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start server: %w", err)
@@ -125,20 +125,8 @@ func spawn(paths config.Paths, opts Options) (chan error, error) {
 	return exited, nil
 }
 
-// OpenBrowser opens url with the macOS `open` command.
-func OpenBrowser(url string) error {
-	return exec.Command("open", url).Run()
-}
-
-// ShowAlert displays a native dialog (used when the .app launcher fails, since
-// it has no terminal). Errors are ignored.
-func ShowAlert(title, msg string) {
-	esc := func(s string) string {
-		return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s)
-	}
-	script := fmt.Sprintf(`display alert "%s" message "%s" as critical`, esc(title), esc(msg))
-	_ = exec.Command("osascript", "-e", script).Run()
-}
+// OpenBrowser opens url in the default browser.
+func OpenBrowser(url string) error { return platform.OpenURL(url) }
 
 func logTail(path string) string {
 	b, err := os.ReadFile(path)

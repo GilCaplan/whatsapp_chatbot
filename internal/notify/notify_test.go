@@ -2,6 +2,10 @@ package notify
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -254,7 +258,83 @@ func TestBackends(t *testing.T) {
 	if err := n.Test(context.Background()); err != ErrUnavailable {
 		t.Errorf("none = %v", err)
 	}
-	if b := Detect(); b != BackendOSAScript && b != BackendTerminalNotifier && b != BackendNone {
-		t.Errorf("Detect = %q", b)
+	ok := map[string][]string{
+		"darwin":  {BackendTerminalNotifier, BackendOSAScript, BackendNone},
+		"windows": {BackendPowerShell, BackendNone},
+	}[runtime.GOOS]
+	if ok == nil {
+		ok = []string{BackendNotifySend, BackendNone}
+	}
+	if b := Detect(); !slices.Contains(ok, b) {
+		t.Errorf("Detect = %q on %s, want one of %q", b, runtime.GOOS, ok)
+	}
+}
+
+func TestArgsNotifySend(t *testing.T) {
+	bin, args := Args(BackendNotifySend, Note{Subtitle: "Needs you · Dana", Message: "-rf <b>bold</b> & co\nline", Group: "doppel:handoff:dm:1", Urgent: true})
+	got := strings.Join(args, "|")
+	want := "-a|WhatsApp Doppel|-i|whatsapp-doppel|-u|critical|-h|string:desktop-entry:whatsapp-doppel" +
+		"|-h|string:x-canonical-private-synchronous:doppel:handoff:dm:1" +
+		"|--|WhatsApp Doppel · Needs you · Dana|-rf &lt;b&gt;bold&lt;/b&gt; &amp; co line"
+	if bin != "notify-send" || got != want {
+		t.Errorf("args = %s\n%s\nwant\n%s", bin, got, want)
+	}
+	_, args = Args(BackendNotifySend, Note{Message: "x"})
+	if got := strings.Join(args, "|"); !strings.Contains(got, "-u|normal") || strings.Contains(got, "synchronous") ||
+		!strings.HasSuffix(got, "|--|WhatsApp Doppel|x") {
+		t.Errorf("plain args = %s", got)
+	}
+}
+
+// decodePS reverses -EncodedCommand (base64 of UTF-16LE).
+func decodePS(t *testing.T, enc string) string {
+	t.Helper()
+	b, err := base64.StdEncoding.DecodeString(enc)
+	if err != nil || len(b)%2 != 0 {
+		t.Fatalf("bad base64: %v", err)
+	}
+	r := make([]rune, 0, len(b)/2)
+	for i := 0; i < len(b); i += 2 {
+		r = append(r, rune(binary.LittleEndian.Uint16(b[i:])))
+	}
+	return string(r)
+}
+
+func TestArgsPowerShellEscaping(t *testing.T) {
+	note := Note{Subtitle: `Needs you · "Dana" <3`, Message: "she said '@ & <script>\n'@ hi", Group: "doppel:approval:dm:972500000000",
+		Open: "http://127.0.0.1:7788/#/chats/dm:1?a=1&b=2", Sound: false}
+	bin, args := Args(BackendPowerShell, note)
+	if bin != "powershell.exe" || len(args) != 6 || args[4] != "-EncodedCommand" || args[0] != "-NoProfile" {
+		t.Fatalf("args = %s %q", bin, args)
+	}
+	script := decodePS(t, args[5])
+	start, end := strings.Index(script, "@'\n"), strings.Index(script, "\n'@)")
+	if start < 0 || end < start {
+		t.Fatalf("no here-string in:\n%s", script)
+	}
+	toast := script[start+3 : end]
+	if strings.Contains(toast, "\n") {
+		t.Errorf("toast XML must be one line: %q", toast)
+	}
+	for _, want := range []string{
+		`launch="http://127.0.0.1:7788/#/chats/dm:1?a=1&amp;b=2"`,
+		`<text>Needs you · &#34;Dana&#34; &lt;3</text>`,
+		`<text>she said &#39;@ &amp; &lt;script&gt; &#39;@ hi</text>`,
+		`<audio silent="true"/>`,
+	} {
+		if !strings.Contains(toast, want) {
+			t.Errorf("toast lacks %s:\n%s", want, toast)
+		}
+	}
+	if strings.Contains(toast, "<script>") {
+		t.Error("raw markup from the message leaked into the XML")
+	}
+	if !strings.Contains(script, "$t.Tag = '") || !strings.Contains(script, `CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe')`) {
+		t.Errorf("script:\n%s", script)
+	}
+	_, args = Args(BackendPowerShell, Note{Message: "x", Sound: true, Urgent: true, Open: "http://h/"})
+	script = decodePS(t, args[5])
+	if strings.Contains(script, "audio") || strings.Contains(script, "Tag") || !strings.Contains(script, `scenario="reminder"`) || !strings.Contains(script, "<actions>") {
+		t.Errorf("urgent with sound:\n%s", script)
 	}
 }
