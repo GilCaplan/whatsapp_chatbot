@@ -4,7 +4,24 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 
 ## [0.1.0] — Unreleased
 
-The command-line bot became a Mac app with a web interface. Everything below is new unless noted.
+The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
+Everything below is new unless noted.
+
+### Windows and Linux
+- Runs on Windows 10/11 and 64-bit Linux as well as macOS (amd64 and arm64 everywhere).
+- Downloads built by `make dist` (and by the release workflow on a `v*` tag): a universal macOS
+  app zip, a Linux tar.gz with an installer (app menu entry, icon, Desktop shortcut) and a Windows
+  zip with a double-click `install.cmd` (Start menu and Desktop shortcuts, Settings > Apps entry).
+  Installers work per user, need no admin rights and never touch your data.
+- One-command installs from source: `scripts/install-from-source.sh` (macOS, Linux) and
+  `scripts/install-from-source.ps1` (Windows); `INSTALL_FOR_AGENTS.md` lets coding agents do it.
+- Data folder per OS: `~/Library/Application Support/WhatsappDoppel` (unchanged),
+  `%APPDATA%\WhatsappDoppel`, `~/.config/WhatsappDoppel`.
+- Notifications: notify-send on Linux, toasts via Windows PowerShell on Windows.
+- SQLite is now pure Go (`modernc.org/sqlite`): no Xcode tools or C compiler needed to build.
+  Existing WhatsApp sessions open unchanged.
+- The UI says "this computer" instead of "this Mac", and names Finder, File Explorer or your
+  file manager as appropriate.
 
 ### App and setup
 - Mac app (`make install`): Applications, Launchpad, Desktop icon and a project-folder shortcut; one

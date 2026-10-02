@@ -4,13 +4,17 @@ Guidance for Claude Code sessions working in this repository.
 
 ## What this is
 
-**WhatsApp Doppel** — a local macOS web app (single Go binary, embedded web UI) that links
+**WhatsApp Doppel** — a local web app for macOS, Windows and Linux (single Go binary, embedded web UI) that links
 ONE WhatsApp account (via `go.mau.fi/whatsmeow`) and lets LLM personas reply in the chats
 the user assigns. LLM providers: Ollama (local, default), Anthropic (official Go SDK),
 OpenAI (plain HTTP). The old single-file CLI bot (`bot.go`/`persona.go`) was replaced; its
 logic lives on in `internal/engine`, `internal/prompt`, `internal/guard` and the persona seeds.
 
-Module: `whatsappdoppel`, Go 1.26, CGO required (`mattn/go-sqlite3`).
+Module: `whatsappdoppel`, Go 1.26, pure Go: SQLite is `modernc.org/sqlite` (driver `"sqlite"`), so every
+target cross-compiles with `CGO_ENABLED=0` (only `go test -race` needs cgo).
+
+Installing the app for a user (any OS, including as an agent): follow **[INSTALL_FOR_AGENTS.md](INSTALL_FOR_AGENTS.md)**
+(safety rules, exact commands, verification). Keep it in sync when installers or paths change.
 
 ## Commands
 
@@ -21,8 +25,11 @@ make run              # serve for real with ./data
 make test             # go test -race ./...
 make vet              # go vet + gofmt check
 make smoke            # scripts/smoke.sh: end-to-end against a throwaway fake server
-make app              # build/WhatsappDoppel.app (icon, Info.plist, ad-hoc codesign)
-make install          # app → /Applications + Desktop alias + ./WhatsappDoppel.app symlink (ask the user first)
+make app              # (Mac) build/WhatsappDoppel.app (icon, Info.plist, ad-hoc codesign; ARCHS="arm64 amd64" = universal)
+make install          # (Mac) app → /Applications + Desktop alias + ./WhatsappDoppel.app symlink (ask the user first)
+make dist             # dist/: macOS universal zip (Mac only), Linux tar.gz + Windows zip (amd64, arm64), SHA256SUMS
+scripts/install-from-source.sh   # one-command install (Mac → install_app.sh, Linux → scripts/linux/install.sh)
+scripts\install-from-source.ps1  # Windows: GUI exe with icon → scripts/windows/install.ps1; scripts\dev.ps1 = Makefile for Windows
 go run . serve --fake-wa --fake-llm --data-dir ./data/fake --port 7788
 go run . status|quit [--data-dir D]
 ```
@@ -36,7 +43,8 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 |---|---|
 | `main.go` | subcommands: `launch` (default, what the .app runs), `serve`, `status`, `quit`, `version`; `version`/`devProjectDir` set via `-ldflags -X` |
 | `internal/app` | `Run(Options)`: wires config → store → events hub → WA (real/fake) → llm registry → engine → server; lock, port choice, `instance.json`, graceful shutdown |
-| `internal/launcher` | `instance.json` read/write, `server.lock` flock, `/api/health` probe (token must match), detached spawn of `serve --from-launcher`, `Quit` |
+| `internal/launcher` | `instance.json` read/write, `server.lock` (via `platform.TryLockFile`), `/api/health` probe (token must match), detached spawn of `serve --from-launcher`, `Quit` |
+| `internal/platform` | every OS difference (leaf: stdlib + `x/sys`), one file per OS: `DefaultDataDir` (`os.UserConfigDir`), `IsTerminal`, `OpenURL`/`OpenFolder` (open, xdg-open, ShellExecute), `TryLockFile`/`UnlockFile` (flock; LockFileEx on one byte far past EOF), `DetachAttrs`/`HideWindow`, `Alert` (osascript, zenity/kdialog/notify-send, MessageBox), `AttachParentConsole` (Windows GUI build) |
 | `internal/server` | HTTP API per `docs/API.md` (Go 1.22 mux patterns), SSE `/api/events`, middleware (Host/Origin/Sec-Fetch-Site guard, `X-Doppel-Token`, JSON errors, logging, recovery), static UI with token templating, port scan + live `Rebind`, avatar processing |
 | `internal/engine` | per-chat `Runner`s: reply-cycle state machine (`pipeline.go`: idle → noticing → waiting → thinking → typing, or queued outside active hours), group decisions, guard, prompt, generation, split/quoted delivery, reactions, rate limits, proactive check-ins (`proactive.go`), approvals; "who it answers" gate + streak guard (`people.go`), @tags (`mentions.go`: member directory, prompt options, tag validation/encoding); playground + AI builder; wave 3: chat modes auto/approve/co-pilot (`drafts.go`: three tone drafts), typos (`typo.go`), routine gating + late-reply notes (`routine.go`), serialised background jobs (`jobs.go`: memory extraction `memory.go`, daily recaps `recap.go`), hand-off pause/resume (`handoff.go`), reveal (`reveal.go`), clone builder (`clone.go`), missions (`goal.go`: `publishGoalReached` → `store.CompleteMission`, `goalMedia`) |
 | `internal/behavior` | reply-behaviour logic (leaf, imports only `model`): presets, ranges/enums + `Validate`/`Clamp`/`Normalize`/`ValidateOverrides`, `Resolve` (app profile → chat overrides, with sources), `NextOpen` (active hours), `Sampler`/`Fixed`, `PlanDelivery`/`PlanBubbles`/`SplitText`/`TypingDuration`/`PickReaction`, typos (`typo.go`), v1 migration; vibe dials (`dials.go`: `Dials`/`DialTable`, `ApplyDial`, `ReadDials`) and the one-shot v4 relabel of old Busy/Slow presets (`relabel.go`) |
@@ -44,7 +52,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/world` | where a persona lives (leaf): time zone, weekend, part of day, daily routine (`RoutineAt`…) for the prompt's "right now" section and routine gating |
 | `internal/memory` | what personas learn about people (leaf): `Merge` (dedupe/update/cap/expiry) and `Select` for the reply prompt |
 | `internal/handoff` | keyword classifier (leaf, English + Hebrew) for messages you should answer yourself (money, health, meeting, distress, bot, legal) |
-| `internal/notify` | macOS notifications (terminal-notifier or osascript) for approvals, goals, hand-offs, WhatsApp drops, recaps; rate-limited, per-event settings |
+| `internal/notify` | desktop notifications for approvals, goals, hand-offs, WhatsApp drops, recaps; rate-limited, per-event settings. Backends: terminal-notifier/osascript (macOS), notify-send (Linux), a toast via Windows PowerShell (`-EncodedCommand`, XML-escaped; shown as "Windows PowerShell"); `Args` is pure and tested on every OS |
 | `internal/llm` | `Provider` interface; `ollama.go`, `anthropic.go`, `openai.go`, `fake.go`; `Registry` (resolves persona/default provider, rebuilds on settings change) |
 | `internal/mention` | @tags in groups (leaf, imports only `model`): member `Directory` with unique display names, `Normalize` (validate LLM "@Name" tags), `Encode` ("@<number>" + MentionedJID for WhatsApp), `Humanize` (incoming tags → "@Name"), `TagFirst`, `CleanName` |
 | `internal/prompt` | system prompt composition (golden tests in `testdata/`), builder prompt; `goal.go`: the goal section (`GoalSection`, per-reply `GoalTurn`) and the plan-ahead request/parser (`Plan`, `ParsePlan`); `goal_eval_test.go` = live goal-pursuit eval (env-guarded) |
@@ -58,15 +66,16 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/contract` | interfaces `WhatsApp`, `Engine`, `LLM`, `Playground`, `Builder` — the server only talks to these |
 | `internal/model` | shared plain types (JSON tags are the API field names); `behavior.go` = `BehaviorProfile`/`BehaviorOverrides` |
 | `web/` | vanilla ES modules + CSS, no build step; `web/embed.go` embeds it (`//go:embed *` — every subfolder must contain a file). `pages/` (one module per route), `components/` (shared views; `drawer/` = the chat panel's tabs Overview · People/Contact · Goal · Behaviour · Memory around the `chat-drawer.js` shell; `settings/` = Settings sections), `guide-content.js` (every word of the Guide, help tips and tour), `styles/` (`tokens` → `base` → `components` → `pages` → `control` → `animations` → `fun`) |
-| `scripts/` | `build_app.sh`, `install_app.sh`, `uninstall_app.sh`, `smoke.sh`, `geniconn/` (stdlib icon renderer) |
+| `scripts/` | Mac: `build_app.sh`, `install_app.sh`, `uninstall_app.sh`; all: `dist.sh`, `smoke.sh` (bash + curl + jq/plutil), `install-from-source.sh`/`.ps1`, `dev.ps1`; `linux/` and `windows/` = the installers shipped in the archives; `geniconn/` (stdlib icon renderer, also `-ico`) |
 | `assets/icon/icon.svg` | editable icon source; the shipped icon is rendered by `scripts/geniconn` |
 | `docs/API.md` | **the authoritative HTTP/SSE contract** — keep server, frontend and this doc in sync |
 
 ## Data directory
 
-Default `~/Library/Application Support/WhatsappDoppel/` (override: `--data-dir` or
-`DOPPEL_DATA_DIR`; `make run` uses `./data`, gitignored). Never use relative paths in code:
-the .app starts with cwd `/`. Contents: `config.json`, `secrets.json`, `personas.json`,
+Default (`platform.DefaultDataDir`): macOS `~/Library/Application Support/WhatsappDoppel/`,
+Windows `%APPDATA%\WhatsappDoppel\`, Linux `$XDG_CONFIG_HOME|~/.config/WhatsappDoppel/` (override:
+`--data-dir` or `DOPPEL_DATA_DIR`; `make run` uses `./data`, gitignored). Never use relative paths in
+code: the .app starts with cwd `/`, shortcuts and .desktop files with other folders. Contents: `config.json`, `secrets.json`, `personas.json`,
 `chats.json`, `approvals.json`, `runtime.json` (per-chat reply timestamps, last incoming/reply,
 proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `avatars/`, `cache/`,
 `history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
@@ -82,8 +91,10 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
 - The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals` only —
   never on `engine`/`wa`/`llm` directly. `internal/app` is the only place that imports everything.
 - Import rules: `model` has no deps; `behavior`, `mention`, `mission`, `world`, `memory`, `handoff` import only `model`
-  (+ stdlib); `goals` imports `model`+`persona`; `config` imports `behavior`+`model`; `store` imports
-  `config`+`behavior`+`model`(+`world`); `notify` imports `config`+`model`. Prompt text for every feature lives in
+  (+ stdlib); `goals` imports `model`+`persona`; `platform` imports only stdlib + `x/sys`; `config` imports
+  `behavior`+`model`+`platform`; `store` imports `config`+`behavior`+`model`(+`world`); `notify` imports
+  `config`+`model`+`platform`. OS-specific code goes only in `platform` (build-tagged files), never
+  `runtime.GOOS` switches elsewhere except for pure decisions (notify backends, tests). Prompt text for every feature lives in
   `internal/prompt/<feature>.go` so the goldens stay in one package.
 - Vibe dials (Speed, Chattiness, Boldness; 5 levels each) are **derived, never stored**: `behavior.DialTable()` is the
   single source of truth (served in `GET /api/behavior/presets` → `dials`); moving a dial writes its fields through the
@@ -158,7 +169,13 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   a "You (message yourself)" chat.
 - `--fake-wa --fake-llm` run the whole app with no phone and no model — use it for UI work
   and `scripts/smoke.sh`.
-- `DOPPEL_NO_BROWSER=1` stops `launch`/`serve --open` from opening a browser in scripts.
+- `DOPPEL_NO_BROWSER=1` stops `launch`/`serve --open` from opening a browser (and `launch` from showing
+  an error dialog) in scripts.
+- CI (`.github/workflows/ci.yml`) runs vet/gofmt/race tests/smoke on ubuntu, macos and windows,
+  cross-compiles the six release targets and installs → launches (fake) → quits → uninstalls with
+  each OS's installer; `release.yml` publishes `make dist` output on a `v*` tag.
+- Tests must not assume Unix: no `/usr/bin/...`, no permission-bit checks on Windows, paths via
+  `filepath`/`t.TempDir()` (the launcher test re-executes its own binary as a helper).
 - Real WhatsApp testing: use a throwaway `--data-dir` to exercise pairing; assign a persona
   to "You (message yourself)" and send `1 hi` from the phone (`triggerPrefix`).
 
@@ -172,7 +189,15 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
 
 - `//go:embed *` in `web/embed.go` fails to compile if any `web/` subfolder is empty.
 - The .app is `LSUIElement` (no Dock icon): the launcher exits after opening the browser and
-  the server keeps running detached; failures surface as a native alert (osascript).
+  the server keeps running detached; failures surface as a native alert (`platform.Alert`).
+- Windows release exe is GUI subsystem (`-H=windowsgui`, no console on double-click);
+  `platform.AttachParentConsole` lets `status`/`quit`/`version` print in cmd/PowerShell (PowerShell
+  only waits when the output is piped: `& exe status | Out-Host`). Dev builds (`go build`) are console exes.
+- Windows icon/version resources: `rsrc_windows_*.syso` generated at dist/install time by
+  `go run github.com/tc-hib/go-winres@v0.3.3` (not in go.mod), deleted after the build, gitignored.
+- `.gitattributes` forces LF (CRLF for `.cmd`/`.ps1`); keep `.ps1` files ASCII (Windows PowerShell 5.1
+  reads BOM-less files as ANSI). Never put `:` or other Windows-invalid characters in file names.
+- Don't enable WAL on `whatsapp.db`: `-wal`/`-shm` sidecars look like "old bot still running" to `migrateLegacy`.
 - Running the legacy bot with the same session at the same time causes `StreamReplaced`
   ping-pong (WA state `replaced`).
 - `make install` writes to `/Applications` and the Desktop — only with the user's go-ahead.
