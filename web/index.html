@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="doppel-token" content="__DOPPEL_TOKEN__">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#eef2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#06080d" media="(prefers-color-scheme: dark)">
+  <title>WhatsApp Doppel</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/base.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/pages.css">
+  <link rel="stylesheet" href="/styles/control.css">
+  <link rel="stylesheet" href="/styles/animations.css">
+  <link rel="stylesheet" href="/styles/fun.css">
+  <link rel="stylesheet" href="/styles/realism.css">
+  <script src="/boot.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="blob b4"></div>
+    <div class="grain"></div>
+  </div>
+
+  <div id="app" class="app" data-layout="boot">
+    <aside id="sidebar" class="sidebar glass" aria-label="Main navigation"></aside>
+    <div class="main">
+      <header id="topbar" class="topbar"></header>
+      <main id="page" class="page-host" tabindex="-1">
+        <div class="splash">
+          <img src="/assets/favicon.svg" alt="" width="72" height="72">
+          <p>Waking up your Doppel…</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="overlays"></div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="system-overlay"></div>
+
+  <noscript>
+    <div class="noscript">WhatsApp Doppel needs JavaScript turned on.</div>
+  </noscript>
+</body>
+</html>

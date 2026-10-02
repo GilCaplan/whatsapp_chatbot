@@ -1,0 +1,257 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Format
+        run: |
+          out=$(gofmt -l main.go internal scripts web)
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+
+      - name: Build without cgo
+        env:
+          CGO_ENABLED: "0"
+        run: go build -o build/ .
+
+      - name: Unit tests (race detector)
+        run: go test -race ./...
+
+      - name: Check web UI JavaScript syntax
+        run: find web -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: End-to-end smoke test (fake WhatsApp + fake LLM)
+        env:
+          DOPPEL_NO_BROWSER: "1"
+        run: scripts/smoke.sh
+
+  cross-compile:
+    name: cross-compile (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [darwin, linux, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -trimpath -ldflags "-s -w" -o /dev/null .
+
+      - name: Vet
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go vet ./...
+
+  # Release archives for Linux + Windows, and the Linux installer end to end.
+  install-linux:
+    name: package + install (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build the Linux and Windows archives
+        run: |
+          scripts/dist.sh linux windows
+          ls -l dist
+          for f in dist/*.tar.gz; do tar tzvf "$f"; done
+          for f in dist/*.zip; do unzip -l "$f"; done
+
+      - name: Install from the tarball, start, check, quit, uninstall
+        run: |
+          set -euo pipefail
+          X="$RUNNER_TEMP/x"; mkdir -p "$X"
+          tar xzf dist/*-linux-amd64.tar.gz -C "$X"
+          PKG="$(echo "$X"/*)"
+          export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME/Desktop"
+          unset XDG_CONFIG_HOME XDG_DATA_HOME
+          "$PKG/install.sh" --no-launch </dev/null
+          B="$HOME/.local/bin/whatsapp-doppel"
+          test -x "$B"
+          test -f "$HOME/.local/share/applications/whatsapp-doppel.desktop"
+          test -f "$HOME/.local/share/icons/hicolor/256x256/apps/whatsapp-doppel.png"
+          test -x "$HOME/Desktop/whatsapp-doppel.desktop"
+          grep -q "^Exec=\"$B\"$" "$HOME/.local/share/applications/whatsapp-doppel.desktop"
+          export DOPPEL_NO_BROWSER=1 DOPPEL_NOTIFY=dry DOPPEL_PORT=7901
+          "$B" launch --fake-wa --fake-llm
+          DATA="$HOME/.config/WhatsappDoppel"
+          "$B" status
+          PORT="$(jq -r .port "$DATA/instance.json")"
+          curl -fsS "http://127.0.0.1:$PORT/api/health" | jq -e '.ok == true and .platform == "linux"'
+          if "$B" serve --fake-wa --fake-llm --port 7902; then echo "second server must refuse to start"; exit 1; fi
+          "$B" quit
+          if "$B" status; then echo "still running"; exit 1; fi
+          test -x "$HOME/.local/share/whatsapp-doppel/uninstall.sh"
+          "$HOME/.local/share/whatsapp-doppel/uninstall.sh" --purge
+          test ! -e "$HOME/.local/share/whatsapp-doppel"
+          test ! -e "$B"
+          test ! -e "$HOME/.local/share/applications/whatsapp-doppel.desktop"
+          test ! -d "$DATA"
+
+      - name: One-command install from source
+        run: |
+          set -euo pipefail
+          # Keep the Go caches where setup-go put them, then pretend to be a fresh user.
+          export GOPATH="$(go env GOPATH)" GOMODCACHE="$(go env GOMODCACHE)" GOCACHE="$(go env GOCACHE)"
+          export HOME="$RUNNER_TEMP/home2"; mkdir -p "$HOME"
+          scripts/install-from-source.sh --no-launch </dev/null
+          test -x "$HOME/.local/bin/whatsapp-doppel"
+          "$HOME/.local/bin/whatsapp-doppel" version
+
+  install-windows:
+    name: install (windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Parse every PowerShell script
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem -Path scripts -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null; $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errs)
+            foreach ($e in $errs) { Write-Host "$($_.FullName):$($e.Extent.StartLineNumber): $($e.Message)"; $failed = $true }
+            Write-Host "parsed $($_.Name)"
+          }
+          if ($failed) { exit 1 }
+
+      - name: One-command install from source (GUI exe with icon)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-from-source.ps1 -NoLaunch
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem -Path . -Filter *.syso | Out-Host  # must be gone again
+
+      - name: Start, check, second-instance lock, quit, uninstall
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          function Fail([string]$m) { Write-Host "FAIL: $m"; $log = "$env:APPDATA\WhatsappDoppel\logs\server.log"; if (Test-Path $log) { Get-Content $log -Tail 60 }; exit 1 }
+          $dest = "$env:LOCALAPPDATA\Programs\WhatsappDoppel"
+          $exe = "$dest\WhatsappDoppel.exe"
+          foreach ($p in @($exe, "$dest\uninstall.ps1", "$dest\uninstall.cmd",
+              (Join-Path ([Environment]::GetFolderPath('Programs')) 'WhatsApp Doppel.lnk'),
+              (Join-Path ([Environment]::GetFolderPath('Desktop')) 'WhatsApp Doppel.lnk'),
+              'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhatsappDoppel')) {
+            if (-not (Test-Path -LiteralPath $p)) { Fail "missing $p" }
+          }
+          $info = (Get-Item $exe).VersionInfo
+          $info | Format-List * | Out-Host
+          if ($info.ProductName -ne 'WhatsApp Doppel') { Fail 'version resource missing' }
+          $v = (& $exe version | Out-String)
+          Write-Host "version: $v"
+          if ($v -notmatch 'whatsapp-doppel') { Fail "version output: $v" }
+
+          $env:DOPPEL_NO_BROWSER = '1'; $env:DOPPEL_NOTIFY = 'dry'; $env:DOPPEL_PORT = '7901'
+          & $exe launch --fake-wa --fake-llm | Out-Host
+          if ($LASTEXITCODE -ne 0) { Fail "launch exit $LASTEXITCODE" }
+          $inst = Get-Content "$env:APPDATA\WhatsappDoppel\instance.json" -Raw | ConvertFrom-Json
+          $h = Invoke-RestMethod "http://127.0.0.1:$($inst.port)/api/health"
+          Write-Host "health: ok=$($h.ok) platform=$($h.platform) port=$($h.port)"
+          if (-not $h.ok -or $h.platform -ne 'windows') { Fail 'health' }
+          $s = (& $exe status | Out-String); Write-Host $s
+          if ($s -notmatch 'is running') { Fail 'status' }
+          & $exe serve --fake-wa --fake-llm --port 7902 2>&1 | Out-Host
+          if ($LASTEXITCODE -eq 0) { Fail 'a second server started on the same data folder' }
+          & $exe quit | Out-Host
+          & $exe status | Out-Host
+          if ($LASTEXITCODE -eq 0) { Fail 'still running after quit' }
+
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$dest\uninstall.ps1" -Purge
+          if ($LASTEXITCODE -ne 0) { Fail 'uninstall' }
+          foreach ($p in @($dest, "$env:APPDATA\WhatsappDoppel",
+              (Join-Path ([Environment]::GetFolderPath('Programs')) 'WhatsApp Doppel.lnk'),
+              'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\WhatsappDoppel')) {
+            if (Test-Path -LiteralPath $p) { Fail "left behind: $p" }
+          }
+          Write-Host 'Windows install/uninstall OK'
+
+  install-macos:
+    name: package + install (macos)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Universal .app zip
+        run: |
+          scripts/dist.sh mac
+          unzip -l dist/*-macos-universal.zip
+          rm -rf "$RUNNER_TEMP/m" && mkdir -p "$RUNNER_TEMP/m" && ditto -x -k dist/*-macos-universal.zip "$RUNNER_TEMP/m"
+          lipo -archs "$RUNNER_TEMP/m/WhatsappDoppel.app/Contents/MacOS/WhatsappDoppel" | tee /dev/stderr | grep -q 'x86_64 arm64\|arm64 x86_64'
+          codesign --verify --strict "$RUNNER_TEMP/m/WhatsappDoppel.app"
+
+      - name: One-command install from source, start, check, quit, uninstall
+        env:
+          NO_DESKTOP_ALIAS: "1"
+        run: |
+          set -euo pipefail
+          scripts/install-from-source.sh --no-launch </dev/null
+          A=/Applications/WhatsappDoppel.app/Contents/MacOS/WhatsappDoppel
+          [[ -x "$A" ]] || A="$HOME/Applications/WhatsappDoppel.app/Contents/MacOS/WhatsappDoppel"
+          export DOPPEL_NO_BROWSER=1 DOPPEL_NOTIFY=dry DOPPEL_PORT=7901
+          "$A" launch --fake-wa --fake-llm
+          DATA="$HOME/Library/Application Support/WhatsappDoppel"
+          PORT="$(jq -r .port "$DATA/instance.json")"
+          curl -fsS "http://127.0.0.1:$PORT/api/health" | jq -e '.ok == true and .platform == "darwin"'
+          "$A" quit
+          scripts/uninstall_app.sh --purge
+          [[ ! -d "$DATA" ]]

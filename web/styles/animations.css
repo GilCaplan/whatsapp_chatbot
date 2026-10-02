@@ -1,0 +1,72 @@
+/* ─────────────────────────────────────────────────────────────
+   Motion: keyframes, page transitions, reduced-motion handling
+   ───────────────────────────────────────────────────────────── */
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pop-in { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(18px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes sheet-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(.97); } }
+@keyframes drawer-in { from { opacity: 0; transform: translateY(22px) scale(.95); } to { opacity: 1; transform: none; } }
+@keyframes drawer-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.97); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(24px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.95); } }
+@keyframes bubble-in { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+@keyframes ping { 0% { transform: scale(.7); opacity: .9; } 80%, 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes breathe-dot { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes typing-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-5px); opacity: 1; } }
+@keyframes qr-sweep { 0% { top: -70px; } 100% { top: 100%; } }
+@keyframes tick-pop { 0% { transform: scale(0) rotate(-30deg); } 100% { transform: none; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes grad-pan { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+@keyframes row-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes leave { to { opacity: 0; transform: scale(.96) translateY(-6px); } }
+@keyframes wiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+
+/* Onboarding step transitions */
+@keyframes step-in-right { from { opacity: 0; transform: translateX(48px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes step-in-left { from { opacity: 0; transform: translateX(-48px) scale(.97); } to { opacity: 1; transform: none; } }
+
+/* Fallback page transition (no View Transitions API) */
+.page-enter { animation: page-in .45s var(--ease-out) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* View Transitions: only the page area morphs; the sidebar stays put */
+::view-transition-old(page) { animation: vt-out .18s var(--ease) both; }
+::view-transition-new(page) { animation: vt-in .42s var(--ease-out) both; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+@keyframes vt-out { to { opacity: 0; transform: translateY(-6px) scale(.995); } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(12px); } }
+
+.leaving { animation: leave .28s var(--ease) both; pointer-events: none; }
+.row-new { animation: row-in .45s var(--spring) both; }
+
+/* Stagger helper for grids */
+.stagger > * { animation: fade-up .5s var(--spring) both; }
+.stagger > *:nth-child(2) { animation-delay: .03s; }
+.stagger > *:nth-child(3) { animation-delay: .06s; }
+.stagger > *:nth-child(4) { animation-delay: .09s; }
+.stagger > *:nth-child(5) { animation-delay: .12s; }
+.stagger > *:nth-child(6) { animation-delay: .15s; }
+.stagger > *:nth-child(7) { animation-delay: .18s; }
+.stagger > *:nth-child(n+8) { animation-delay: .21s; }
+
+/* ── Reduced motion: keep fades, drop movement & loops ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .blob { animation: none !important; }
+  .qr-frame .sweep { display: none; }
+  .spinner, .btn.loading::after { animation-duration: .9s !important; animation-iteration-count: infinite !important; }
+  ::view-transition-old(page), ::view-transition-new(page) { animation: none !important; }
+}
