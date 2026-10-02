@@ -136,7 +136,7 @@ export function openCloneSheet() {
             <li><b>Chat as usual.</b> After about ${MIN} messages there is enough to learn from.</li>
             <li><b>Clone.</b> The AI writes a persona that texts like you. You review and edit it before it's saved.</li>
           </ol>
-          <div class="banner info small">${icon('lock')}<div>The sample stays on this Mac and is only used when you tap Clone. Delete it any time in Settings › Data.</div></div>
+          <div class="banner info small">${icon('lock')}<div>The sample stays on this computer and is only used when you tap Clone. Delete it any time in Settings › Data.</div></div>
         </div>
         <div class="sheet-actions">
           <button class="btn btn-ghost" @click=${() => ctl.close()}>Not now</button>
@@ -178,7 +178,7 @@ export function openCloneSheet() {
         <div class="field"><label class="field-label" for="cl-brain">Brain</label>
           <select id="cl-brain" class="select" @change=${(e) => { st.provider = e.target.value; ctl.update(); }}>
             <option value="" ?selected=${!st.provider}>Default (${providerLabel(def || 'ollama')})</option>
-            <option value="ollama" ?selected=${st.provider === 'ollama'}>Ollama — on this Mac</option>
+            <option value="ollama" ?selected=${st.provider === 'ollama'}>Ollama — on this computer</option>
             <option value="anthropic" ?selected=${st.provider === 'anthropic'} ?disabled=${!store.state.secrets.anthropic || !store.state.secrets.anthropic.set}>Claude</option>
             <option value="openai" ?selected=${st.provider === 'openai'} ?disabled=${!store.state.secrets.openai || !store.state.secrets.openai.set}>OpenAI</option>
           </select></div>
@@ -188,8 +188,8 @@ export function openCloneSheet() {
           @input=${(e) => { st.extra = e.target.value; }}>${st.extra}</textarea>
         <div class="field-help">Helps fill in the background. Your texting style comes from the samples.</div></div>
       ${samplesBox}
-      ${cloud ? html`<div class="banner warn small mt-8">${icon('lock')}<div><b>${providerLabel(prov)}</b> will read your ${Math.min(count, 150)} sample messages to write the persona. Pick Ollama to keep them on this Mac.</div></div>`
-        : html`<div class="tiny faint mt-8 row gap-6">${icon('lock', 'ic-sm')}<span>Runs on this Mac with Ollama — your messages don't leave it.</span></div>`}
+      ${cloud ? html`<div class="banner warn small mt-8">${icon('lock')}<div><b>${providerLabel(prov)}</b> will read your ${Math.min(count, 150)} sample messages to write the persona. Pick Ollama to keep them on this computer.</div></div>`
+        : html`<div class="tiny faint mt-8 row gap-6">${icon('lock', 'ic-sm')}<span>Runs on this computer with Ollama — your messages don't leave it.</span></div>`}
       <div class="sheet-actions">
         <button class="btn btn-ghost" @click=${() => ctl.close()}>Cancel</button>
         <button class="btn btn-brand" ?disabled=${!st.name.trim()} @click=${() => clone(ctl)}>${icon('sparkles')}Clone me</button>

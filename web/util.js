@@ -164,3 +164,19 @@ export function prettyPhone(p) {
   else parts = r.match(/.{1,4}/g) || [r];
   return `+${cc} ${parts.join(' ')}`;
 }
+
+/** The OS the server runs on, from /api/health: 'darwin' | 'windows' | 'linux' | … ('' while unknown). */
+export const platformOf = (health) => (health && health.platform) || '';
+
+/** Label for the "show the data folder" button on this OS. */
+export function openFolderLabel(health) {
+  switch (platformOf(health)) {
+    case 'darwin': return 'Open in Finder';
+    case 'windows': return 'Open in File Explorer';
+    default: return 'Open folder';
+  }
+}
+
+/** The shortcut modifier on the keyboard in front of the user: '⌘' on Apple devices, 'Ctrl' elsewhere. */
+export const modKey = () =>
+  /Mac|iPhone|iPad/.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl';

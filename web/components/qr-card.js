@@ -112,7 +112,7 @@ export function createQRCard({ showSteps = true, update = () => {} } = {}) {
       ${showSteps ? html`<div class="qr-steps">
         <div class="h3 mb-12">How to scan</div>
         ${steps()}
-        <div class="banner info mt-16">${icon('lock')}<div class="small">Doppel links like WhatsApp Web. Your messages stay on this Mac — nothing is sent anywhere else except the AI you choose.</div></div>
+        <div class="banner info mt-16">${icon('lock')}<div class="small">Doppel links like WhatsApp Web. Your messages stay on this computer — nothing is sent anywhere else except the AI you choose.</div></div>
       </div>` : ''}
     </div>`;
   }

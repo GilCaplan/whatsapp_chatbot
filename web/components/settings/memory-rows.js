@@ -37,7 +37,7 @@ export function memoryRows(h) {
     <div class="field-row">
       <div class="grow">
         <div class="field-label">${icon('lock', 'ic-sm')}Privacy</div>
-        <div class="field-help">Memories are stored only on this Mac. With Ollama nothing leaves your Mac; a persona using Claude or OpenAI sends the messages it learns from to that service.</div>
+        <div class="field-help">Memories are stored only on this computer. With Ollama nothing leaves your computer; a persona using Claude or OpenAI sends the messages it learns from to that service.</div>
       </div>
       <button class="btn btn-ghost btn-sm danger-text" @click=${forgetAll}>${icon('trash')}Forget all memories</button>
     </div>`;

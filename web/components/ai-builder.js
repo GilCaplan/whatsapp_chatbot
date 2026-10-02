@@ -153,7 +153,7 @@ export function openAIBuilder({ onSaved, stay = false } = {}) {
           Brain
           <select class="select input-sm" style="width:auto" @change=${(e) => { st.provider = e.target.value; }}>
             <option value="" ?selected=${!st.provider}>Default</option>
-            <option value="ollama" ?selected=${st.provider === 'ollama'}>Ollama (this Mac)</option>
+            <option value="ollama" ?selected=${st.provider === 'ollama'}>Ollama (this computer)</option>
             <option value="anthropic" ?selected=${st.provider === 'anthropic'} ?disabled=${!store.state.secrets.anthropic || !store.state.secrets.anthropic.set}>Claude</option>
             <option value="openai" ?selected=${st.provider === 'openai'} ?disabled=${!store.state.secrets.openai || !store.state.secrets.openai.set}>OpenAI</option>
           </select>

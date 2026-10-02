@@ -144,7 +144,7 @@ export function weekEditor({ week, timezone = '', onWeek, onTimezone, disabled =
       <span class="field-label">${icon('globe')}Time zone</span>
       <select class="select input-sm" aria-label="Time zone" ?disabled=${disabled} data-keep data-key=${'tz:' + timezone} @change=${(e) => onTimezone && onTimezone(e.target.value)}>
         <option value="persona" ?selected=${timezone === 'persona'}>Same as the persona${personaZone ? ` (${personaZone.replace(/_/g, ' ')})` : ''}</option>
-        <option value="" ?selected=${!timezone}>This Mac's time zone${local ? ` (${local.replace(/_/g, ' ')})` : ''}</option>
+        <option value="" ?selected=${!timezone}>This computer's time zone${local ? ` (${local.replace(/_/g, ' ')})` : ''}</option>
         ${!tzKnown ? html`<option value=${timezone} selected>${timezone}</option>` : ''}
         ${list.map((z) => html`<option value=${z} ?selected=${z === timezone}>${z.replace(/_/g, ' ')}</option>`)}
       </select>

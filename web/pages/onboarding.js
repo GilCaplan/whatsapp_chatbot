@@ -106,12 +106,12 @@ export default function Onboarding(ctx) {
       queueMicrotask(async () => { await checkOllama(); await chooseOllamaModel(job.name); toast(`${job.name} is ready`, { type: 'success' }); });
     }
     if (!o || st.ollamaLoading) {
-      return html`<div class="row gap-12 muted" style="padding:18px 4px">${spinner()}<span>Looking for Ollama on this Mac…</span></div>`;
+      return html`<div class="row gap-12 muted" style="padding:18px 4px">${spinner()}<span>Looking for Ollama on this computer…</span></div>`;
     }
     if (!o.reachable) {
       return html`<div class="col gap-12">
-        <div class="banner warn">${icon('warning')}<div><strong>Ollama isn't running on this Mac.</strong>
-          <div class="small mt-4">Ollama runs AI models privately on your computer — free, and nothing leaves your Mac.</div></div></div>
+        <div class="banner warn">${icon('warning')}<div><strong>Ollama isn't running on this computer.</strong>
+          <div class="small mt-4">Ollama runs AI models privately on your computer — free, and nothing leaves it.</div></div></div>
         <ol class="scan-steps">
           <li><span>Download it from <a href="https://ollama.com/download" target="_blank" rel="noopener noreferrer">ollama.com/download</a> and open it.</span></li>
           <li><span>Come back here and press <b>Check again</b>.</span></li>
@@ -125,7 +125,7 @@ export default function Onboarding(ctx) {
     const models = o.models || [];
     const current = (store.state.settings && store.state.settings.llm && store.state.settings.llm.ollamaModel) || '';
     return html`<div class="col gap-12">
-      <div class="banner success">${icon('check')}<div><strong>Ollama is running</strong>${o.version ? html` <span class="faint">· v${o.version}</span>` : ''}. Replies are generated privately on this Mac.</div></div>
+      <div class="banner success">${icon('check')}<div><strong>Ollama is running</strong>${o.version ? html` <span class="faint">· v${o.version}</span>` : ''}. Replies are generated privately on this computer.</div></div>
       ${models.length ? html`
         <div class="field-label">Pick the model your personas use</div>
         <div class="row row-wrap gap-8">
@@ -166,7 +166,7 @@ export default function Onboarding(ctx) {
           <button class="btn btn-ghost btn-icon btn-sm input-suffix" type="button" aria-label=${st.showKey ? 'Hide key' : 'Show key'}
             @click=${() => { st.showKey = !st.showKey; update(); }}>${icon(st.showKey ? 'eye-off' : 'eye')}</button>
         </div>
-        <div class="field-help">${where} Your key is stored only on this Mac.</div>
+        <div class="field-help">${where} Your key is stored only on this computer.</div>
       </div>
       <div class="row gap-10 row-wrap">
         <button class=${'btn btn-primary ' + (st.testing ? 'loading' : '')} ?disabled=${!st.key[provider].trim() && !sec.set}
@@ -188,10 +188,10 @@ export default function Onboarding(ctx) {
       <div class="onb-hero">
         <div class="onb-badge">${icon('brain', 'ic-lg')}</div>
         <h2>Choose your persona's brain</h2>
-        <p>This is the AI that writes the replies. Run it free on this Mac, or use Claude or OpenAI with your own key.</p>
+        <p>This is the AI that writes the replies. Run it free on this computer, or use Claude or OpenAI with your own key.</p>
       </div>
       ${seg([
-        { value: 'ollama', label: 'This Mac (Ollama)', icon: 'cpu' },
+        { value: 'ollama', label: 'This computer (Ollama)', icon: 'cpu' },
         { value: 'anthropic', label: 'Claude', icon: 'sparkles' },
         { value: 'openai', label: 'OpenAI', icon: 'bolt' },
       ], st.tab, (v) => { st.tab = v; st.test = null; st.showKey = false; update(); if (v === 'ollama' && !st.ollama) checkOllama(); }, { cls: 'seg-lg seg-block', label: 'AI provider' })}

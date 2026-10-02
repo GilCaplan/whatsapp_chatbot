@@ -170,7 +170,7 @@ export function sayShare(share) {
   return `about 1 in ${n}`;
 }
 
-/** The persona's IANA time zone on this Mac. */
+/** The persona's IANA time zone on this computer. */
 export function localTimeZone() {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; }
 }

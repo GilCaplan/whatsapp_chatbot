@@ -38,13 +38,13 @@ Persona       { id, builtIn, name, tagline, avatar:{kind:"generated|upload", gra
                 messageLength:"short|medium|long", goal, decisionHint, fallbackReply, advancedPrompt,
                 goalStyle:"subtle|balanced|direct", goalPlanAhead: bool (null = true), goalAfterReached:"relax|continue",
                 llm: null | {provider, model}, world: World, createdAt, updatedAt }
-World         { city, country, timezone ("" = this Mac, else IANA), routine:[RoutineBlock] (never null, ≤ 12) }
+World         { city, country, timezone ("" = this computer, else IANA), routine:[RoutineBlock] (never null, ≤ 12) }
 RoutineBlock  { label (≤ 24), days:["mon".."sun"] (empty = every day), from:"HH:MM", to:"HH:MM", reach:"normal|slow|unreachable" }
                 // to <= from wraps past midnight; from == to is invalid. Times are in World.timezone. An unknown zone,
                 // a bad time or day → 400 invalid_persona; labels are trimmed, days sorted, reach defaults to "normal".
                 // The reply prompt gets "RIGHT NOW: Thursday 1 October, 20:11 — evening in Tel Aviv (your local time)…",
                 // the weekend for World.country (Israel/Gulf: Fri–Sat), the current/just-finished/next routine block,
-                // the people's time when the zone differs from this Mac's, and — when answering ≥ 10 min late across a
+                // the people's time when the zone differs from this computer's, and — when answering ≥ 10 min late across a
                 // slow/unreachable block (≥ 45 min otherwise) — a late-reply note. Unreachable blocks hold new messages
                 // until they end (activity `deferred`, reason `routine`); slow blocks triple the notice delay.
 ChatAssignment{ key:"dm:<phone>|group:<id>|lid:<lid>", kind:"dm|group", jid, altJid, name, personaId, enabled,
@@ -116,7 +116,7 @@ BehaviorProfile {
   manual sends or reveals), typoFixStyle‡: "correction" ("*word" bubble) | "edit" (WhatsApp edit, falls back to
   correction) | "none",
   // Blocks (overridden per chat as a whole)
-  availability: { enabled, timezone ("" = this Mac, "persona" = the chat persona's World.timezone, else IANA), week:[DayHours ×7 mon..sun],
+  availability: { enabled, timezone ("" = this computer, "persona" = the chat persona's World.timezone, else IANA), week:[DayHours ×7 mon..sun],
                   outsideHours:"queue|silent", catchUpMaxMin },
   proactive:    { enabled, afterHours, maxPerDay, spreadMinutes },
   // Safety
@@ -267,12 +267,12 @@ Other common `meta` keys: `provider`, `model`, `latencyMs`, `score`, `matches`, 
 
 | Method & path | Body | Response |
 |---|---|---|
-| `GET /api/health` | – | `{ok, version, port, token, startedAt, dataDir, onboardingCompleted, fakeWA, fakeLLM}` |
+| `GET /api/health` | – | `{ok, version, port, token, startedAt, dataDir, onboardingCompleted, fakeWA, fakeLLM, platform:"darwin\|linux\|windows"}` (`platform` = the server's OS, for OS-specific wording in the UI) |
 | `GET /api/system/ports?from=7000&to=9999&limit=20` | – | `{current, free:[int]}` |
 | `POST /api/system/port` | `{port}` | `{url}` then SSE `system {kind:"port_changed", url}`; old port closes ~3 s later. 409 `port_in_use`, 400 `invalid_port` |
 | `POST /api/system/quit` | – | `{ok:true}`, SSE `system {kind:"quitting"}`, process exits |
-| `POST /api/system/open-data-dir` | – | `{ok:true}` (opens Finder) |
-| `POST /api/system/notify-test[?dry=1]` | – | `{ok, backend:"terminal-notifier\|osascript\|dry-run\|none", events}` — shows "Notifications are working" (`dry=1`: only reports the backend; `events:false` = fake-WhatsApp run, only tests are shown). 502 `notify_failed`. `DOPPEL_NOTIFY=dry\|off\|on` (env) logs instead / turns them off / allows activity notifications with `--fake-wa` |
+| `POST /api/system/open-data-dir` | – | `{ok:true}` (opens the data folder in Finder / File Explorer / the file manager via `xdg-open`); 503 `unavailable` when the server has no folder opener, 500 `open_failed` |
+| `POST /api/system/notify-test[?dry=1]` | – | `{ok, backend:"terminal-notifier\|osascript\|notify-send\|powershell\|dry-run\|none", events}` — shows "Notifications are working" (`dry=1`: only reports the backend; `events:false` = fake-WhatsApp run, only tests are shown). 502 `notify_failed`. `DOPPEL_NOTIFY=dry\|off\|on` (env) logs instead / turns them off / allows activity notifications with `--fake-wa` |
 | `GET /api/events` | – | SSE stream (below) |
 
 ## Settings & LLM
@@ -473,7 +473,7 @@ and approvals you send yourself still work. `POST …/handoff/resume` lets the p
 
 ## Daily recap
 
-At `recap.time` (this Mac's zone) when `recap.enabled`, every enabled chat with at least 3 messages since the last
+At `recap.time` (this computer's zone) when `recap.enabled`, every enabled chat with at least 3 messages since the last
 scheduled recap (at most 24 h back) gets one recap (one JSON call per chat, one chat at a time, at most 20; postponed 2
 minutes while a reply is being written). A recap for the same chat and day replaces the earlier one; recaps older than
 `recap.keepDays` are dropped. Changing the recap settings re-arms the timer right away.
@@ -494,7 +494,7 @@ SSE `missions.changed`). Media missions (`detect: "media:image" | "media:audio"`
 photo / voice note while the mission is the chat's goal (`how: "media"`). Editing the goal text by hand
 (`PATCH goalOverride` without `missionId`) drops `missionId`. Achievements are computed from the history, never stored:
 `first-mission`, `three-missions`, `word-smith` (3 say-the-word), `social-butterfly` (3 chats), `smooth-operator`
-(subtle style), `night-shift` (00:00–05:00 on this Mac), `photo-finish`, `planner` (a "make plans" mission),
+(subtle style), `night-shift` (00:00–05:00 on this computer), `photo-finish`, `planner` (a "make plans" mission),
 `streak-week` (3 within 7 days), `ten-missions`; locked ones carry `progress`/`target`.
 
 | Method & path | Body | Response |
