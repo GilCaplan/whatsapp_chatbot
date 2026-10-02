@@ -62,6 +62,9 @@ Everything below is new unless noted.
 - Hand-off: money, health, meeting up, distress, legal and "are you a bot?" pause the chat and alert you.
 - Reveal: a pre-written "it was me" message that ends the act.
 - Memory of people (view, pin, edit, forget), daily recaps, Mac notifications.
+- Cross-chat context: a persona remembers across its chats with the same people. Groups use private chats
+  discreetly (it knows, it never tells), private chats may mention shared groups; sensitive topics never cross,
+  any memory can be locked to its chat, and a leak guard rewrites replies that would give a private chat away.
 - Prompt-injection filtering, character-break detection, and a guard against writing as another group member.
 
 ### Fixed (from the original bot)

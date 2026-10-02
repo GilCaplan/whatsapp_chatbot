@@ -31,6 +31,10 @@ Conversations in assigned chats are stored on your computer and, if you pick Cla
 provider to write replies. Use the local Ollama option for maximum privacy, and clear a chat's history
 from its panel when you're done. See [SECURITY.md](../SECURITY.md) for exactly what is stored where.
 
+A persona can let what someone told it privately inform its replies in a group — **discreet by default** (it knows,
+it never tells) and never for sensitive topics. Turn it off per chat or in Settings › Memory & recap if the people
+involved wouldn't expect it.
+
 ## License
 
 Free for personal, non-commercial use under the
