@@ -107,7 +107,7 @@ try {
     DisplayName     = $appName
     DisplayIcon     = "$exe,0"
     DisplayVersion  = $version
-    Publisher       = 'WhatsApp Doppel (open source)'
+    Publisher       = 'WhatsApp Doppel'
     InstallLocation = $dest
     UninstallString = $uninstallCmd
     QuietUninstallString = "$uninstallCmd -KeepData"

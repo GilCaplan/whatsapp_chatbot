@@ -118,7 +118,7 @@ dist_windows() {
   step "Generating Windows icon + version resources (go-winres)"
   go run "$WINRES" simply --arch amd64,arm64 --out rsrc --manifest gui \
     --icon build/icon.ico --product-name "WhatsApp Doppel" --file-description "WhatsApp Doppel" \
-    --original-filename WhatsappDoppel.exe --copyright "MIT-licensed open source" \
+    --original-filename WhatsappDoppel.exe --copyright "PolyForm Noncommercial 1.0.0" \
     --product-version "$VERSION" --file-version "$FILE_VERSION"
   local arch name dir f
   for arch in amd64 arm64; do

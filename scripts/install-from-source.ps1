@@ -60,6 +60,9 @@ if (-not ($gov -match '^go1\.(\d+)') -or [int]$Matches[1] -lt 21) {
   exit 1
 }
 if (-not $version) { $version = 'dev' }
+# Numeric a.b.c.d for the Windows file version ("v1.2.3-4-gabc" -> 1.2.3.0).
+$fileVersion = '0.0.0.0'
+if ($version -match '^v?(\d+)\.(\d+)\.(\d+)') { $fileVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0" }
 Step "Using $gov ($arch), version $version"
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'build') | Out-Null
@@ -72,8 +75,10 @@ try {
     Step 'Adding icon and version info (go-winres)'
     $code = Invoke-Native 'go' @('run', 'github.com/tc-hib/go-winres@v0.3.3', 'simply', '--arch', $arch, '--out', 'rsrc',
       '--manifest', 'gui', '--icon', $icon, '--product-name', 'WhatsApp Doppel', '--file-description', 'WhatsApp Doppel',
-      '--original-filename', 'WhatsappDoppel.exe', '--product-version', $version)
-    if ($code -ne 0) { Write-Warning 'Could not add the icon (offline?). Building without it.' }
+      '--original-filename', 'WhatsappDoppel.exe', '--copyright', 'PolyForm Noncommercial 1.0.0',
+      '--product-version', $version, '--file-version', $fileVersion)
+    if ($code -ne 0 -or -not (Test-Path -LiteralPath $syso)) { Write-Warning 'Could not add the icon (offline?). Building without it.' }
+    else { Write-Host "icon and version info: $(Split-Path -Leaf $syso)" }
   } else {
     Write-Warning 'Could not render the icon. Building without it.'
   }

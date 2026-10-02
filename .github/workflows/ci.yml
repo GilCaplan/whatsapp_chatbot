@@ -128,7 +128,9 @@ jobs:
           if "$B" serve --fake-wa --fake-llm --port 7902; then echo "second server must refuse to start"; exit 1; fi
           "$B" quit
           if "$B" status; then echo "still running"; exit 1; fi
-          "$PKG/uninstall.sh" --purge
+          test -x "$HOME/.local/share/whatsapp-doppel/uninstall.sh"
+          "$HOME/.local/share/whatsapp-doppel/uninstall.sh" --purge
+          test ! -e "$HOME/.local/share/whatsapp-doppel"
           test ! -e "$B"
           test ! -e "$HOME/.local/share/applications/whatsapp-doppel.desktop"
           test ! -d "$DATA"
@@ -172,6 +174,7 @@ jobs:
           $ErrorActionPreference = 'Continue'
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-from-source.ps1 -NoLaunch
           if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem -Path . -Filter *.syso | Out-Host  # must be gone again
 
       - name: Start, check, second-instance lock, quit, uninstall
         shell: powershell
@@ -187,7 +190,7 @@ jobs:
             if (-not (Test-Path -LiteralPath $p)) { Fail "missing $p" }
           }
           $info = (Get-Item $exe).VersionInfo
-          Write-Host "ProductName=$($info.ProductName) FileDescription=$($info.FileDescription) ProductVersion=$($info.ProductVersion)"
+          $info | Format-List * | Out-Host
           if ($info.ProductName -ne 'WhatsApp Doppel') { Fail 'version resource missing' }
           $v = (& $exe version | Out-String)
           Write-Host "version: $v"
