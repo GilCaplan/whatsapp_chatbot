@@ -4,6 +4,8 @@
 #   • a "WhatsApp Doppel" alias on the Desktop
 #   • <project>/WhatsappDoppel.app  → symlink to the installed app
 # Safe to run again: every step replaces what a previous run created.
+# Env: SKIP_BUILD=1 (use the existing build/WhatsappDoppel.app), NO_DESKTOP_ALIAS=1
+#      (skip the Finder alias, e.g. on a headless CI machine).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -53,21 +55,23 @@ touch "$DEST"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 [[ -x "$LSREGISTER" ]] && "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
 
-step "Creating Desktop alias"
 DESKTOP="$HOME/Desktop"
-# Replace only a previous alias file (a regular file), never a real folder or app.
-for old in "$DESKTOP/$ALIAS_NAME" "$DESKTOP/$APP_NAME.app alias" "$DESKTOP/$APP_NAME alias"; do
-  if [[ -f "$old" && ! -L "$old" ]]; then rm -f "$old"; fi
-done
-if [[ -e "$DESKTOP/$ALIAS_NAME" ]]; then
-  warn "$DESKTOP/$ALIAS_NAME already exists and is not an alias; leaving it alone"
-else
-  osascript >/dev/null <<OSA || warn "could not create the Desktop alias (Finder automation permission?)"
+if [[ "${NO_DESKTOP_ALIAS:-0}" != "1" ]]; then
+  step "Creating Desktop alias"
+  # Replace only a previous alias file (a regular file), never a real folder or app.
+  for old in "$DESKTOP/$ALIAS_NAME" "$DESKTOP/$APP_NAME.app alias" "$DESKTOP/$APP_NAME alias"; do
+    if [[ -f "$old" && ! -L "$old" ]]; then rm -f "$old"; fi
+  done
+  if [[ -e "$DESKTOP/$ALIAS_NAME" ]]; then
+    warn "$DESKTOP/$ALIAS_NAME already exists and is not an alias; leaving it alone"
+  else
+    osascript >/dev/null <<OSA || warn "could not create the Desktop alias (Finder automation permission?)"
 tell application "Finder"
   set theAlias to make alias file to (POSIX file "$DEST" as alias) at (path to desktop folder)
   set name of theAlias to "$ALIAS_NAME"
 end tell
 OSA
+  fi
 fi
 
 step "Linking $ROOT/$APP_NAME.app"

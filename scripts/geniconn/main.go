@@ -3,6 +3,8 @@
 // two overlapping speech bubbles — a solid one and its translucent twin.
 //
 //	go run ./scripts/geniconn -o build/icon_1024.png
+//	go run ./scripts/geniconn -size 256 -o build/icon_256.png
+//	go run ./scripts/geniconn -ico build/icon.ico     (Windows: 16…256 px, each rendered at its size)
 //
 // Every shape is a signed-distance function evaluated on a 4×4 sub-pixel grid,
 // so edges are anti-aliased without any image library. assets/icon/icon.svg is
@@ -10,6 +12,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"image"
@@ -347,7 +351,17 @@ func main() {
 	out := flag.String("o", "build/icon_1024.png", "output PNG path")
 	size := flag.Int("size", 1024, "output size in pixels")
 	ss := flag.Int("ss", 4, "supersampling factor per axis")
+	ico := flag.String("ico", "", "write a multi-size Windows .ico here instead of a PNG")
 	flag.Parse()
+
+	if *ico != "" {
+		if err := writeICO(*ico, *ss); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("wrote", *ico)
+		return
+	}
 
 	img := render(*size, *ss)
 	if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
@@ -369,4 +383,46 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println("wrote", *out)
+}
+
+// writeICO writes a .ico whose entries are PNGs rendered at each size
+// (supported since Windows Vista; 256 px must be PNG anyway).
+func writeICO(path string, ss int) error {
+	sizes := []int{16, 24, 32, 48, 64, 128, 256}
+	var pngs [][]byte
+	for _, sz := range sizes {
+		var b bytes.Buffer
+		if err := png.Encode(&b, render(sz, ss)); err != nil {
+			return err
+		}
+		pngs = append(pngs, b.Bytes())
+	}
+	var out bytes.Buffer
+	le := func(v any) { _ = binary.Write(&out, binary.LittleEndian, v) }
+	le(uint16(0))          // reserved
+	le(uint16(1))          // type: icon
+	le(uint16(len(sizes))) // count
+	offset := 6 + 16*len(sizes)
+	for i, sz := range sizes {
+		dim := uint8(sz)
+		if sz >= 256 {
+			dim = 0 // 0 means 256
+		}
+		out.WriteByte(dim) // width
+		out.WriteByte(dim) // height
+		out.WriteByte(0)   // palette colours
+		out.WriteByte(0)   // reserved
+		le(uint16(1))      // colour planes
+		le(uint16(32))     // bits per pixel
+		le(uint32(len(pngs[i])))
+		le(uint32(offset))
+		offset += len(pngs[i])
+	}
+	for _, p := range pngs {
+		out.Write(p)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, out.Bytes(), 0o644)
 }

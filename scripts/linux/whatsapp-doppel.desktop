@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=WhatsApp Doppel
+GenericName=WhatsApp personas
+Comment=AI personas that reply in your WhatsApp chats
+Exec=__EXEC__
+Icon=whatsapp-doppel
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=WhatsApp;persona;AI;chat;bot;
+StartupNotify=false
