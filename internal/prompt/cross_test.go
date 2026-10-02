@@ -42,7 +42,7 @@ func TestCrossSectionGoldens(t *testing.T) {
 	sys := SystemPrompt(p, model.ChatAssignment{}, true, "hey", Options{Cross: groupCross("discreet")})
 	for _, want := range []string{
 		"WHAT YOU KNOW FROM PRIVATE CHATS (background only — never to be mentioned here)",
-		"Dana (from your private chat):\n- works night shifts as a nurse\n- lately talking about: exam stress, flat hunting\n- you promised: to bring wine on Sat 4 Oct",
+		"Dana (private — do not bring up):\n- works night shifts as a nurse\n- lately talking about: exam stress, flat hunting\n- you promised: to bring wine on Sat 4 Oct",
 	} {
 		if !strings.Contains(sys, want) {
 			t.Errorf("missing %q", want)

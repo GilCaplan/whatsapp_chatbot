@@ -383,7 +383,7 @@ func (e *Engine) crossFor(ctx context.Context, c model.ChatAssignment, d *mentio
 	}
 	// What this chat already knows (said here, remembered here, your notes).
 	for _, m := range hist {
-		u.Here = append(u.Here, m.Text)
+		u.Here = append(u.Here, m.Text, m.Name) // names of people talking here are no giveaway
 	}
 	if mems, err := e.store.Memories(c.Key); err == nil {
 		for _, m := range mems {

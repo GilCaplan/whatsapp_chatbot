@@ -478,7 +478,7 @@ Mutations publish SSE `personas.changed`.
 | Method & path | Body | Response |
 |---|---|---|
 | `POST /api/playground` | `{personaId}` | `{sessionId}` |
-| `POST /api/playground/{id}/messages` | `{text, group?:bool, goal?:string, initiate?:bool}` (with `initiate:true` the persona speaks first; `text` is then an optional topic and may be empty) | `PlaygroundReply {reply, decision:null\|{wouldReply,reason}, latencyMs, blocked, blockReason, provider, model, goal:{text, style, plan, reached, evidence, rewritten}, speaker?, mentions?}` |
+| `POST /api/playground/{id}/messages` | `{text, group?:bool, goal?:string, initiate?:bool, source?:string, crossMode?:string}` (with `initiate:true` the persona speaks first; `text` is then an optional topic and may be empty) | `PlaygroundReply {reply, decision:null\|{wouldReply,reason}, latencyMs, blocked, blockReason, provider, model, goal:{text, style, plan, reached, evidence, rewritten}, speaker?, mentions?, cross?:{mode, people, items, rewritten, dropped}}`; 400 `invalid_cross` |
 | `DELETE /api/playground/{id}` | – | `{ok:true}` |
 
 Playground group mode: each user message is attributed to a small rotating cast (`speaker`: Dana, Noam, Maya, Eitan) so
@@ -487,6 +487,11 @@ tagging can be tried; `mentions` lists the display names the reply tags.
 Playground `goal`: present = the session's "Goal for this test" (`""` = back to the persona's goal; absent = unchanged).
 The reply's `goal.plan` is the private plan-ahead move (only shown in the playground), `goal.reached` the session's
 progress, `goal.rewritten` true when the first draft gave the goal away.
+
+Playground `source` (cross-chat context, group mode): a private chat key of the session's persona ("" = none; absent =
+unchanged). The cast member Dana then stands for that contact and the persona draws on that private chat as it would
+in a real group (`crossMode` `""|"off"|"discreet"|"open"`, "" = the app default for groups); `cross` reports it
+(never the notes). Nothing is stored or sent.
 
 ## Approvals
 

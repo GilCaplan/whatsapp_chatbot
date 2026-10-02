@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"whatsappdoppel/internal/handoff"
@@ -362,12 +363,75 @@ var genericWords = map[string]bool{
 func Distinct(it Item, here map[string]bool, names map[string]bool) []string {
 	var out []string
 	seen := map[string]bool{}
+	proper := properNouns(it.Text + " " + it.Evidence)
 	for _, w := range memory.Tokens(it.Text + " " + it.Evidence) {
-		if seen[w] || here[w] || names[w] || genericWords[w] || utf8.RuneCountInString(w) < 4 || isNumber(w) {
+		n := utf8.RuneCountInString(w)
+		short := n < 3 || (n == 3 && common3[w] && (!proper[w] || dateWords[w]))
+		if seen[w] || here[w] || names[w] || genericWords[w] || short || isNumber(w) {
 			continue
 		}
 		seen[w] = true
 		out = append(out, w)
+	}
+	return out
+}
+
+// common3 are three-letter words that never give anything away; other
+// three-letter words ("Wix", "Tel" Aviv, "gym", "job") count.
+var common3 = map[string]bool{
+	"the": true, "and": true, "you": true, "are": true, "for": true, "not": true, "but": true, "all": true, "can": true,
+	"had": true, "her": true, "was": true, "one": true, "our": true, "out": true, "day": true, "get": true, "has": true,
+	"him": true, "his": true, "how": true, "new": true, "now": true, "old": true, "see": true, "two": true, "way": true,
+	"who": true, "did": true, "its": true, "let": true, "put": true, "say": true, "she": true, "too": true, "use": true,
+	"any": true, "got": true, "lot": true, "yes": true, "yet": true, "why": true, "off": true, "own": true, "big": true,
+	"bit": true, "end": true, "few": true, "far": true, "per": true, "set": true, "try": true, "ask": true, "ago": true,
+	"lol": true, "omg": true, "haha": true, "hey": true, "wow": true, "yay": true, "ugh": true, "nah": true, "yep": true,
+	"guy": true, "man": true, "pls": true, "bad": true, "fun": true, "top": true, "hot": true, "may": true, "sat": true,
+	"sun": true, "mon": true, "tue": true, "wed": true, "thu": true, "fri": true, "oct": true, "nov": true, "dec": true,
+	"jan": true, "feb": true, "mar": true, "apr": true, "jun": true, "jul": true, "aug": true, "sep": true,
+}
+
+// hasProper reports whether a hit is a name written with a capital in the item.
+func hasProper(hits []string, it Item) bool {
+	proper := properNouns(it.Text + " " + it.Evidence)
+	for _, h := range hits {
+		if proper[h] && !dateWords[h] {
+			return true
+		}
+	}
+	return false
+}
+
+// liveTopic reports whether a meaningful word of the item was already said
+// here (then any further detail from the private chat gives it away).
+func liveTopic(it Item, here map[string]bool) bool {
+	for _, w := range memory.Tokens(it.Text) {
+		if here[w] && utf8.RuneCountInString(w) >= 4 && !genericWords[w] {
+			return true
+		}
+	}
+	return false
+}
+
+// dateWords are day and month abbreviations: capitalised, but no giveaway.
+var dateWords = map[string]bool{"sat": true, "sun": true, "mon": true, "tue": true, "wed": true, "thu": true, "fri": true,
+	"jan": true, "feb": true, "mar": true, "apr": true, "may": true, "jun": true, "jul": true, "aug": true, "sep": true,
+	"oct": true, "nov": true, "dec": true}
+
+// properNouns are the lower-cased words written with a capital letter
+// inside a text (not at its start): names of places, companies, people.
+func properNouns(text string) map[string]bool {
+	out := map[string]bool{}
+	f := strings.Fields(text)
+	for i, w := range f {
+		w = strings.Trim(w, ".,!?;:'\"()")
+		if i == 0 || w == "" {
+			continue
+		}
+		r, _ := utf8.DecodeRuneInString(w)
+		if unicode.IsUpper(r) {
+			out[strings.ToLower(w)] = true
+		}
 	}
 	return out
 }
@@ -443,6 +507,11 @@ func Leak(in LeakInput) []string {
 		if present {
 			continue // Open: their own things may be mentioned with them
 		}
+		if it.Kind == KindCommitment && !namesPerson(replyToks, it.Person) {
+			// Keeping your own promise ("I'll bring the wine") is the point;
+			// tying it to that person ("told Dana I'd…") gives the chat away.
+			continue
+		}
 		distinct := Distinct(it, here, names)
 		var hits []string
 		for _, w := range distinct {
@@ -450,7 +519,13 @@ func Leak(in LeakInput) []string {
 				hits = append(hits, w)
 			}
 		}
-		if len(hits) >= 2 || (len(hits) == 1 && len(distinct) <= 2) {
+		// One rare word is enough for a short fact ("allergic to cats"), a
+		// name ("Wix"), a detail of something already being talked about here
+		// ("…by February" once she mentioned her marathon) or a promise tied to
+		// its person; a vague topic line needs two.
+		short := len(distinct) <= 2 && it.Kind != KindTopic
+		one := len(hits) == 1 && (short || it.Kind == KindCommitment || hasProper(hits, it) || (it.Kind != KindTopic && liveTopic(it, here)))
+		if len(hits) >= 2 || one {
 			for _, h := range hits {
 				add(h)
 			}
@@ -477,6 +552,12 @@ func Leak(in LeakInput) []string {
 		}
 	}
 	return out
+}
+
+// namesPerson reports whether the reply names the item's person (first name).
+func namesPerson(replyToks map[string]bool, person string) bool {
+	f := strings.ToLower(firstWord(strings.TrimSpace(person)))
+	return f != "" && replyToks[f]
 }
 
 // stemHit: "shifts" vs "shift", "marathons" vs "marathon", "training" vs "trained".
@@ -540,7 +621,7 @@ func trigrams(text string, here map[string]bool) []string {
 		g := toks[i : i+3]
 		fresh := false
 		for _, w := range g {
-			if !here[w] && !genericWords[w] && utf8.RuneCountInString(w) >= 4 {
+			if !here[w] && !genericWords[w] && utf8.RuneCountInString(w) >= 3 && !common3[w] {
 				fresh = true
 			}
 		}

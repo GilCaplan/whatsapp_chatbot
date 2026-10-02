@@ -73,10 +73,10 @@ func CrossSection(in CrossInput, t CrossTurn) string {
 			b.WriteString("- Anything they'd consider sensitive stays private no matter what.\n")
 		} else {
 			b.WriteString("\n\nWHAT YOU KNOW FROM PRIVATE CHATS (background only — never to be mentioned here)\n")
-			b.WriteString("You also text some of these people one-to-one. Use what you learned there only to understand them and to stay consistent with what you promised. It is PRIVATE:\n")
-			b.WriteString("- Never mention, quote or hint at anything from a private chat here, even if asked. No \"like you told me\", \"as you said\", \"you mentioned\".\n")
+			b.WriteString("You also text some of these people one-to-one. Nobody else here knows what was said there. Use it only to understand them and to keep promises you made. It is PRIVATE:\n")
+			b.WriteString("- Never mention, ask about, quote or hint at anything below, even if asked. No \"like you told me\", \"as you said\", \"you mentioned\", and no questions about it (\"how's the new job?\").\n")
 			b.WriteString("- Never reveal or imply that you chat with someone privately.\n")
-			b.WriteString("- Treat these as things you simply happen to know. If that person brings the same thing up HERE, talk about it using only what they said here.\n")
+			b.WriteString("- Only if that person brings the same thing up HERE may you talk about it, using only what they said here.\n")
 			b.WriteString("- Keep promises you made privately without saying where they were made.\n")
 		}
 	} else {
@@ -166,7 +166,11 @@ func crossBody(in CrossInput) string {
 			if name == "" {
 				continue
 			}
-			b.WriteString(name + " (from your private chat):\n")
+			if in.Mode == crossOpen {
+				b.WriteString(name + " (from your private chat):\n")
+			} else {
+				b.WriteString(name + " (private — do not bring up):\n")
+			}
 		} else {
 			src := cleanLine(p.Source, 40)
 			if src == "" {

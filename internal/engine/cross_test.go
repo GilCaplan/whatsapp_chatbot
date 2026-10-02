@@ -105,7 +105,7 @@ func TestCrossGroupUsesPrivateChat(t *testing.T) {
 	if len(sys) != 1 {
 		t.Fatalf("reply requests = %d (%v)", len(sys), h.actTypes())
 	}
-	if !strings.Contains(sys[0], crossHeadGroup+" (background only") || !strings.Contains(sys[0], "Dana (from your private chat):\n- "+nightFact) {
+	if !strings.Contains(sys[0], crossHeadGroup+" (background only") || !strings.Contains(sys[0], "Dana (private — do not bring up):\n- "+nightFact) {
 		t.Fatalf("section missing:\n%s", sys[0])
 	}
 	var stage map[string]any

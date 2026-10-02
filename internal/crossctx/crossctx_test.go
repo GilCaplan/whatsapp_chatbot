@@ -212,6 +212,11 @@ func TestLeak(t *testing.T) {
 		{"open present", model.CrossOpen, []Item{marathon}, "like you said the other day, the marathon is close!", nil, map[string]bool{"972500000001": true, "dana": true}, false},
 		{"open present but private chat named in group", model.CrossOpen, []Item{marathon}, "as we said in our private chat", nil, map[string]bool{"dana": true}, true},
 		{"open absent", model.CrossOpen, []Item{marathon}, "Dana's training for the Tel Aviv marathon btw", nil, map[string]bool{"josh": true}, true},
+		{"short proper noun", model.CrossDiscreet, []Item{{Kind: KindMemory, Person: "Dana", Text: "started a new job at Wix"}}, "how's that new job at Wix treating you?", nil, nil, true},
+		{"three-letter place", model.CrossDiscreet, []Item{marathon}, "can't believe you're running in Tel Aviv!", []string{"Dana: signed up for my first marathon"}, nil, true},
+		{"common short words", model.CrossDiscreet, []Item{{Kind: KindMemory, Person: "Dana", Text: "started a new job at Wix"}}, "how was your day? anything new?", nil, nil, false},
+		{"detail of a live topic", model.CrossDiscreet, []Item{{Kind: KindMemory, Person: "Dana", Text: "training for the Tel Aviv marathon in February"}}, "legs will be begging for mercy by February", []string{"Dana: signed up for my first marathon", "few months of training lol"}, nil, true},
+		{"lone name", model.CrossDiscreet, []Item{{Kind: KindMemory, Person: "Dana", Text: "started a new job at Wix"}}, "Wix should fix their coffee machine", nil, nil, true},
 		{"off", model.CrossOff, []Item{night}, "night shifts at Ichilov", nil, nil, false},
 	}
 	for _, c := range cases {
@@ -219,6 +224,17 @@ func TestLeak(t *testing.T) {
 		if (len(got) > 0) != c.leak {
 			t.Errorf("%s: leak=%v (%v), want %v", c.name, len(got) > 0, got, c.leak)
 		}
+	}
+	// Keeping a private promise is fine; tying it to the person is not.
+	wine := Item{Kind: KindCommitment, Person: "Dana", Text: "bring wine to Josh's dinner on Saturday"}
+	if got := group(model.CrossDiscreet, []Item{wine}, "I'll bring the wine!", []string{"who's bringing wine?"}, nil); len(got) > 0 {
+		t.Errorf("own promise flagged: %v", got)
+	}
+	if got := group(model.CrossDiscreet, []Item{wine}, "I'll bring wine, Josh", nil, nil); len(got) > 0 {
+		t.Errorf("own promise (not asked) flagged: %v", got)
+	}
+	if got := group(model.CrossDiscreet, []Item{wine}, "Dana and I already sorted the wine", nil, nil); len(got) == 0 {
+		t.Error("promise tied to Dana not flagged")
 	}
 	// DM, Open: the contact's own group lines may come up; "like you said" is fine.
 	dm := Leak(LeakInput{Items: []Item{{Kind: KindGroupNote, Person: "Dana", Text: "pushed for Saturday brunch"}}, Reply: "you really pushed for brunch lol, like you said", Mode: model.CrossOpen, Present: map[string]bool{"dana": true}})
