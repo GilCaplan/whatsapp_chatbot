@@ -49,7 +49,7 @@
   background: linear-gradient(135deg, var(--c1), var(--c2)); box-shadow: 0 6px 14px -8px var(--c2); }
 .vd-ic .ic { width: 14px; height: 14px; }
 .vd-tuned {
-  display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: var(--r-pill);
   font-size: 11px; font-weight: 700; color: var(--tuned-text); background: color-mix(in srgb, var(--amber) 16%, transparent);
   animation: pop-in .4s var(--spring) both; cursor: help;
 }
@@ -102,7 +102,7 @@
 
 /* Coloured dial label on Advanced form rows */
 .dial-dot {
-  display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px 0 6px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px 0 6px; border-radius: var(--r-pill);
   font-size: 10.5px; font-weight: 700; letter-spacing: .01em; color: var(--c);
   background: color-mix(in srgb, var(--c) 12%, transparent); cursor: help;
 }
