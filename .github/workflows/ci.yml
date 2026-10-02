@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The app targets macOS; cgo SQLite and the launcher are exercised there.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Vet and format
+        run: make vet
+
+      - name: Unit tests (race detector)
+        run: make test
+
+      - name: Check web UI JavaScript syntax
+        run: find web -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: End-to-end smoke test (fake WhatsApp + fake LLM)
+        run: make smoke

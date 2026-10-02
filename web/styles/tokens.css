@@ -1,0 +1,203 @@
+/* ─────────────────────────────────────────────────────────────
+   Design tokens — "Liquid Glass"
+   Light by default, dark via prefers-color-scheme, and a manual
+   override through <html data-theme="light|dark">.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Inter, Roboto, sans-serif;
+  --font-display: -apple-system-headline, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+  --spring-soft: cubic-bezier(.22, 1.25, .36, 1);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+
+  --r-xs: 8px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+
+  --sidebar-w: 244px;
+
+  /* Brand */
+  --brand-1: #25d366;
+  --brand-2: #14b8c4;
+  --brand-3: #8b5cf6;
+  --brand-grad: linear-gradient(135deg, var(--brand-1) 0%, var(--brand-2) 52%, var(--brand-3) 100%);
+  --accent-grad: linear-gradient(135deg, #1cc27a 0%, #0fa8b8 100%);
+
+  /* System colors (Apple-ish) */
+  --blue: #0a84ff;
+  --green: #28c254;
+  --mint: #00c7be;
+  --teal: #14b8c4;
+  --cyan: #32ade6;
+  --indigo: #5e5ce6;
+  --violet: #8b5cf6;
+  --pink: #ff4f8b;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --amber: #f5a60a;
+  --yellow: #ffcc00;
+  --gray: #8e8e93;
+
+  /* ── Light ── */
+  --bg: #eef2f7;
+  --text: #0d1117;
+  --text-2: rgba(13, 17, 23, .64);
+  --text-3: rgba(13, 17, 23, .42);
+  --text-inv: #fff;
+
+  --glass-bg: rgba(255, 255, 255, .56);
+  --glass-strong: rgba(255, 255, 255, .80);
+  --glass-solid: rgba(250, 251, 253, .94);
+  --glass-border: rgba(255, 255, 255, .72);
+  --glass-edge: rgba(15, 23, 42, .07);
+  --glass-hi: rgba(255, 255, 255, .95);
+  --sheen: rgba(255, 255, 255, .55);
+
+  --fill-1: rgba(118, 128, 150, .09);
+  --fill-2: rgba(118, 128, 150, .15);
+  --fill-3: rgba(118, 128, 150, .24);
+  --hairline: rgba(15, 23, 42, .09);
+  --hairline-strong: rgba(15, 23, 42, .15);
+
+  --input-bg: rgba(255, 255, 255, .62);
+  --input-bg-focus: rgba(255, 255, 255, .92);
+
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, .05), 0 10px 30px -12px rgba(16, 24, 40, .20);
+  --shadow-2: 0 2px 8px rgba(16, 24, 40, .07), 0 26px 60px -22px rgba(16, 24, 40, .34);
+  --shadow-3: 0 4px 12px rgba(16, 24, 40, .10), 0 40px 90px -30px rgba(16, 24, 40, .45);
+
+  --accent: #0ea86a;
+  --accent-text: #08804f;
+  --accent-soft: rgba(16, 185, 129, .13);
+  --focus: rgba(20, 184, 196, .45);
+
+  --bubble-them: rgba(255, 255, 255, .92);
+  --bubble-them-text: #111b21;
+  --bubble-me: #d9fdd3;
+  --bubble-me-text: #0b2e13;
+  --chat-wall: rgba(239, 234, 226, .55);
+
+  --scrim: rgba(12, 16, 26, .22);
+  --switch-on: #34c759;
+
+  --blob-1: #34d399;
+  --blob-2: #22d3ee;
+  --blob-3: #a78bfa;
+  --blob-4: #f9a8d4;
+  --blob-opacity: .85;
+  --grain-opacity: .05;
+
+  color-scheme: light;
+}
+
+/* ── Dark (system) ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #05070c;
+    --text: #f2f4f8;
+    --text-2: rgba(242, 244, 248, .66);
+    --text-3: rgba(242, 244, 248, .42);
+    --text-inv: #0d1117;
+
+    --glass-bg: rgba(28, 32, 42, .50);
+    --glass-strong: rgba(30, 34, 45, .80);
+    --glass-solid: rgba(26, 29, 38, .96);
+    --glass-border: rgba(255, 255, 255, .10);
+    --glass-edge: rgba(0, 0, 0, .45);
+    --glass-hi: rgba(255, 255, 255, .16);
+    --sheen: rgba(255, 255, 255, .07);
+
+    --fill-1: rgba(255, 255, 255, .06);
+    --fill-2: rgba(255, 255, 255, .10);
+    --fill-3: rgba(255, 255, 255, .18);
+    --hairline: rgba(255, 255, 255, .08);
+    --hairline-strong: rgba(255, 255, 255, .14);
+
+    --input-bg: rgba(0, 0, 0, .22);
+    --input-bg-focus: rgba(0, 0, 0, .34);
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .30), 0 12px 32px -12px rgba(0, 0, 0, .60);
+    --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 26px 60px -22px rgba(0, 0, 0, .75);
+    --shadow-3: 0 4px 12px rgba(0, 0, 0, .40), 0 40px 90px -30px rgba(0, 0, 0, .85);
+
+    --accent: #2bd68e;
+    --accent-text: #4be3a2;
+    --accent-soft: rgba(43, 214, 142, .14);
+
+    --bubble-them: rgba(38, 44, 54, .94);
+    --bubble-them-text: #e9edef;
+    --bubble-me: #005c4b;
+    --bubble-me-text: #e9fff7;
+    --chat-wall: rgba(10, 14, 20, .35);
+
+    --scrim: rgba(0, 0, 0, .45);
+    --switch-on: #30d158;
+
+    --blob-1: #10a874;
+    --blob-2: #0e86a8;
+    --blob-3: #6346e0;
+    --blob-4: #9d2f6b;
+    --blob-opacity: .58;
+    --grain-opacity: .06;
+
+    color-scheme: dark;
+  }
+}
+
+/* ── Dark (forced) ── keep in sync with the block above */
+:root[data-theme="dark"] {
+  --bg: #05070c;
+  --text: #f2f4f8;
+  --text-2: rgba(242, 244, 248, .66);
+  --text-3: rgba(242, 244, 248, .42);
+  --text-inv: #0d1117;
+
+  --glass-bg: rgba(28, 32, 42, .50);
+  --glass-strong: rgba(30, 34, 45, .80);
+  --glass-solid: rgba(26, 29, 38, .96);
+  --glass-border: rgba(255, 255, 255, .10);
+  --glass-edge: rgba(0, 0, 0, .45);
+  --glass-hi: rgba(255, 255, 255, .16);
+  --sheen: rgba(255, 255, 255, .07);
+
+  --fill-1: rgba(255, 255, 255, .06);
+  --fill-2: rgba(255, 255, 255, .10);
+  --fill-3: rgba(255, 255, 255, .18);
+  --hairline: rgba(255, 255, 255, .08);
+  --hairline-strong: rgba(255, 255, 255, .14);
+
+  --input-bg: rgba(0, 0, 0, .22);
+  --input-bg-focus: rgba(0, 0, 0, .34);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .30), 0 12px 32px -12px rgba(0, 0, 0, .60);
+  --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 26px 60px -22px rgba(0, 0, 0, .75);
+  --shadow-3: 0 4px 12px rgba(0, 0, 0, .40), 0 40px 90px -30px rgba(0, 0, 0, .85);
+
+  --accent: #2bd68e;
+  --accent-text: #4be3a2;
+  --accent-soft: rgba(43, 214, 142, .14);
+
+  --bubble-them: rgba(38, 44, 54, .94);
+  --bubble-them-text: #e9edef;
+  --bubble-me: #005c4b;
+  --bubble-me-text: #e9fff7;
+  --chat-wall: rgba(10, 14, 20, .35);
+
+  --scrim: rgba(0, 0, 0, .45);
+  --switch-on: #30d158;
+
+  --blob-1: #10a874;
+  --blob-2: #0e86a8;
+  --blob-3: #6346e0;
+  --blob-4: #9d2f6b;
+  --blob-opacity: .58;
+  --grain-opacity: .06;
+
+  color-scheme: dark;
+}
