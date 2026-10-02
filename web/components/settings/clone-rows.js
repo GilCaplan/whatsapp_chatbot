@@ -31,7 +31,7 @@ export function cloneRows(h) {
     if (v) {
       const ok = await confirmSheet({
         title: 'Keep a sample of your messages?',
-        body: 'From now on Doppel keeps a private copy of messages you type yourself on WhatsApp (links, e-mail addresses and phone numbers removed), up to the last 500. They stay on this Mac and are only used when you tap Clone yourself. You can delete them any time.',
+        body: 'From now on Doppel keeps a private copy of messages you type yourself on WhatsApp (links, e-mail addresses and phone numbers removed), up to the last 500. They stay on this computer and are only used when you tap Clone yourself. You can delete them any time.',
         confirm: 'Yes, keep a sample', iconName: 'lock',
       });
       if (!ok) { h.update(); return; }
@@ -48,7 +48,7 @@ export function cloneRows(h) {
     <div class="field-row" data-key="clone-consent">
       <div class="grow">
         <div class="field-label row gap-4">Keep a sample of my messages ${helpTip('clone')}</div>
-        <div class="field-help">For <b>Clone yourself</b> on the Personas page: a private sample of messages you type yourself, so Doppel can learn how you text. Stored only on this Mac; links and numbers are removed. Off by default.</div>
+        <div class="field-help">For <b>Clone yourself</b> on the Personas page: a private sample of messages you type yourself, so Doppel can learn how you text. Stored only on this computer; links and numbers are removed. Off by default.</div>
         ${on || count ? html`<div class="tiny faint mt-4">${count ? `${count} message${count === 1 ? '' : 's'} kept${d && d.since ? ` since ${relTime(d.since)}` : ''}` : 'Nothing kept yet — chat as usual on your phone.'}</div>` : ''}
       </div>
       ${toggle(on, setOn, { label: 'Keep a sample of my messages' })}

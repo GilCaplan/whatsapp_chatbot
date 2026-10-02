@@ -23,7 +23,7 @@ export function recapRows(h) {
     ${r.enabled ? html`<div class="sub-rows">
       ${fieldRow({
         label: 'Time',
-        help: "In this Mac's time zone. Chats with fewer than three new messages are skipped.",
+        help: "In this computer's time zone. Chats with fewer than three new messages are skipped.",
         control: html`<input class="input input-sm time-input" type="time" aria-label="Recap time" .value=${r.time || '21:00'}
           @change=${(e) => { if (/^\d{2}:\d{2}$/.test(e.target.value)) save({ time: e.target.value }); }}>`,
       })}

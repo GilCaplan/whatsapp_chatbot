@@ -62,7 +62,7 @@ export function createMemoryTab(ctx) {
             <div class="field-label row gap-4">Learn about ${who} ${helpTip('memory')}
               ${own ? html`<span class="inherit-chip custom" title="Set for this chat only">This chat</span>` : html`<span class="inherit-chip" title="Follows Settings › Memory & recap">Default</span>`}</div>
             <div class="field-help">${enabled
-              ? `${name} picks up the little things people mention — plans, favourite things, big days — and brings them up when it fits. Stored only on this Mac.`
+              ? `${name} picks up the little things people mention — plans, favourite things, big days — and brings them up when it fits. Stored only on this computer.`
               : `Off: ${name} doesn't learn anything new here and doesn't use what it remembers.`}</div>
           </div>
           ${toggle(enabled, (v) => setMemory(c, v), { label: 'Learn about people in this chat' })}

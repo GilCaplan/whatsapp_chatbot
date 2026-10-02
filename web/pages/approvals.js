@@ -9,7 +9,7 @@ import { avatarStack } from '../components/avatar.js';
 import { bubbles } from '../components/chat-drawer.js';
 import { emptyState } from '../components/art.js';
 import { providerLabel } from '../components/status.js';
-import { rowsFor } from '../util.js';
+import { rowsFor, modKey } from '../util.js';
 import { taggedIn } from '../components/mentions.js';
 import { TONES, catGlyph, modeOf, catLabel } from '../components/handoff-meta.js';
 
@@ -142,7 +142,7 @@ export default function Approvals(ctx) {
       <footer class="ap-actions">
         <button class=${'btn btn-ghost btn-sm danger-text ' + (busy === 'discard' ? 'loading' : '')} ?disabled=${!!busy} @click=${() => discard(p)}>${icon('trash')}Discard</button>
         <span class="grow"></span>
-        <span class="tiny faint hide-sm"><kbd>⌘</kbd> <kbd>↵</kbd> to send</span>
+        <span class="tiny faint hide-sm"><kbd>${modKey()}</kbd> <kbd>↵</kbd> to send</span>
         <button class=${'btn btn-glass btn-sm ' + (busy === 'regen' ? 'loading' : '')} ?disabled=${!!busy} @click=${() => regenerate(p)}>${icon('refresh')}${copilot ? 'More ideas' : 'Regenerate'}</button>
         <button class=${'btn btn-primary ' + (busy === 'approve' ? 'loading' : '')} ?disabled=${!!busy} @click=${() => approve(p)}>${icon('send')}${edited ? 'Send edited' : drafts ? 'Send this one' : 'Approve & send'}</button>
       </footer>

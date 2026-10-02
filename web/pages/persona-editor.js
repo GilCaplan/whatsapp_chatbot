@@ -11,7 +11,7 @@ import { glyph, GLYPHS, GLYPH_IDS } from '../components/glyphs.js';
 import { duplicatePersona, deletePersona, resetPersona } from './personas.js';
 import { providerLabel } from '../components/status.js';
 import { personaGoalControls } from '../components/goal-controls.js';
-import { GRADIENTS, debounce, rowsFor, copyText, initials } from '../util.js';
+import { GRADIENTS, debounce, rowsFor, copyText, initials, modKey } from '../util.js';
 import { worldCard } from '../components/world-card.js';
 
 const FAV_SUGGEST = ['😂', '🤣', '😅', '🙏', '❤️', '🔥', '✨', '💅', '👀', '😭', '🥲', '😎', '👍', '🙌', '🤔', '💀', '😘', '🥰', '🍻', '🎉'];
@@ -390,7 +390,7 @@ export default function PersonaEditor(ctx) {
           update();
         }}>
           <option value="" ?selected=${!provider}>Use default (${defaultTxt})</option>
-          <option value="ollama" ?selected=${provider === 'ollama'}>Ollama — on this Mac</option>
+          <option value="ollama" ?selected=${provider === 'ollama'}>Ollama — on this computer</option>
           <option value="anthropic" ?selected=${provider === 'anthropic'}>Claude</option>
           <option value="openai" ?selected=${provider === 'openai'}>OpenAI</option>
         </select>
@@ -471,7 +471,7 @@ export default function PersonaEditor(ctx) {
       </div>
       ${!isNew() ? html`<a class="btn btn-glass btn-sm hide-sm" href=${'#/playground?persona=' + encodeURIComponent(st.id)}>${icon('playground')}Try it</a>
         <button class="btn btn-ghost btn-icon btn-sm" aria-label="More" @click=${menu}>${icon('more')}</button>` : ''}
-      <button class=${'btn btn-primary ' + (st.saving ? 'loading' : '')} ?disabled=${!dirty() && !isNew()} @click=${save} title="Save (⌘S)">${icon('check')}${isNew() ? 'Create' : 'Save'}</button>
+      <button class=${'btn btn-primary ' + (st.saving ? 'loading' : '')} ?disabled=${!dirty() && !isNew()} @click=${save} title=${`Save (${modKey()}${modKey() === '⌘' ? '' : '+'}S)`}>${icon('check')}${isNew() ? 'Create' : 'Save'}</button>
     </div>`;
   }
 

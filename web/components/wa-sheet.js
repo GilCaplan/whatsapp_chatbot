@@ -14,7 +14,7 @@ import { duration, toDate } from '../util.js';
 export async function logoutAndRelink() {
   const ok = await confirmSheet({
     title: 'Log out of WhatsApp?',
-    body: 'Doppel will stop replying and this Mac will be removed from your phone\'s Linked devices. You can link again right away with a new QR code.',
+    body: 'Doppel will stop replying and this computer will be removed from your phone\'s Linked devices. You can link again right away with a new QR code.',
     confirm: 'Log out',
     danger: true,
     iconName: 'logout',

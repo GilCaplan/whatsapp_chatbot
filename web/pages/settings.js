@@ -9,7 +9,7 @@ import { seg, fieldRow, toast, confirmSheet, progressRing, spinner, busy, toggle
 import { statusDot, waMeta, providerLabel } from '../components/status.js';
 import { openWASheet, logoutAndRelink } from '../components/wa-sheet.js';
 import { movingTo, showStopped } from '../system.js';
-import { debounce, fmtMs, fmtBytes, copyText, prettyPhone } from '../util.js';
+import { debounce, fmtMs, fmtBytes, copyText, prettyPhone, openFolderLabel } from '../util.js';
 import { behaviourForm } from '../components/behaviour-form.js';
 import { presetCards } from '../components/preset-cards.js';
 import { createTimeline } from '../components/reply-timeline.js';
@@ -144,9 +144,9 @@ export default function Settings(ctx) {
     const url = `${location.protocol}//${location.hostname}:${port || location.port}`;
     const ports = st.ports;
     return html`<section class="card section" id="sec-server" data-section="server">
-      ${sectionHead('server', 'Server', 'Doppel runs a small private web server on this Mac.', 'linear-gradient(135deg,#64748b,#334155)')}
+      ${sectionHead('server', 'Server', 'Doppel runs a small private web server on this computer.', 'linear-gradient(135deg,#64748b,#334155)')}
       <div class="field-row">
-        <div><div class="field-label">Address</div><div class="field-help">Only this Mac can open it.</div></div>
+        <div><div class="field-label">Address</div><div class="field-help">Only this computer can open it.</div></div>
         <div class="row gap-6"><code class="url-pill">${url}</code>
           <button class="btn btn-ghost btn-icon btn-sm" aria-label="Copy address" @click=${() => copyText(url).then(() => toast('Copied', { type: 'success' }))}>${icon('copy')}</button></div>
       </div>
@@ -270,7 +270,7 @@ export default function Settings(ctx) {
         ${sec.set ? html`<button class="btn btn-glass btn-sm" @click=${() => test(provider)}>${icon('bolt')}Test</button>
           <button class="btn btn-ghost btn-sm danger-text" @click=${() => removeKey(provider)}>Remove</button>` : ''}
       </div>
-      <div class="field-help">Stored only on this Mac, never shown again after saving.</div>
+      <div class="field-help">Stored only on this computer, never shown again after saving.</div>
       ${testLine(provider)}
     </div>`;
   }
@@ -305,7 +305,7 @@ export default function Settings(ctx) {
       </div>
 
       <div class="provider-card glass" data-key="p-ollama">
-        <div class="pc-head">${icon('cpu')}<b>Ollama</b><span class="faint small">on this Mac · free & private</span><span class="grow"></span>
+        <div class="pc-head">${icon('cpu')}<b>Ollama</b><span class="faint small">on this computer · free & private</span><span class="grow"></span>
           ${L.defaultProvider === 'ollama' ? html`<span class="chip chip-sm chip-green">default</span>` : ''}</div>
         <div class="field-row">
           <div><div class="field-label">Status</div>
@@ -481,7 +481,7 @@ export default function Settings(ctx) {
   function appearanceSection() {
     return html`<section class="card section" id="sec-appearance" data-section="appearance">
       ${sectionHead('appearance', 'Appearance', '', 'linear-gradient(135deg,#fbbf24,#f472b6)')}
-      ${fieldRow({ label: 'Theme', help: 'System follows your Mac’s light/dark setting.',
+      ${fieldRow({ label: 'Theme', help: 'System follows your computer’s light/dark setting.',
         control: seg([
           { value: 'system', label: 'System', icon: 'system' },
           { value: 'light', label: 'Light', icon: 'sun' },
@@ -517,10 +517,10 @@ export default function Settings(ctx) {
   function dataSection() {
     const h = store.state.health || {};
     return html`<section class="card section" id="sec-data" data-section="data">
-      ${sectionHead('data', 'Data', 'Personas, chats, memories, keys and your WhatsApp session live in one folder on this Mac.', 'linear-gradient(135deg,#60a5fa,#a78bfa)')}
+      ${sectionHead('data', 'Data', 'Personas, chats, memories, keys and your WhatsApp session live in one folder on this computer.', 'linear-gradient(135deg,#60a5fa,#a78bfa)')}
       <div class="field-row">
         <div class="grow" style="min-width:0"><div class="field-label">Data folder</div><div class="field-help mono ellipsis" title=${h.dataDir || ''}>${h.dataDir || '—'}</div></div>
-        <button class="btn btn-glass btn-sm" @click=${busy(() => api.system.openDataDir())}>${icon('folder')}Open in Finder</button>
+        <button class="btn btn-glass btn-sm" @click=${busy(() => api.system.openDataDir())}>${icon('folder')}${openFolderLabel(h)}</button>
       </div>
       ${cloneRows(sectionCtx) /* Clone yourself consent (settings/clone-rows.js) */}
     </section>`;
