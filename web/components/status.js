@@ -50,6 +50,7 @@ export const ACT = {
   'waiting':            { label: 'Waiting for more', color: 'var(--amber)', group: 'timing', icon: 'hourglass' },
   'thinking':           { label: 'Thinking', color: 'var(--violet)', group: 'timing', icon: 'brain' },
   'planning':           { label: 'Planning', color: 'var(--violet)', group: 'timing', icon: 'target' },
+  'crossing':           { label: 'Other chats', color: 'var(--indigo)', group: 'timing', icon: 'link' },
   'goal.reached':       { label: 'Goal reached', color: 'var(--green)', group: 'decisions', icon: 'target' },
   'distracted':         { label: 'Distracted', color: 'var(--orange)', group: 'timing', icon: 'coffee' },
   'typing':             { label: 'Typing', color: 'var(--teal)', group: 'timing', icon: 'typing' },

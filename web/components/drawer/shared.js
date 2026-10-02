@@ -46,7 +46,7 @@ export function bubbles(messages, { group = false } = {}) {
     const same = prev && prev.speaker === m.speaker && (prev.name || '') === (m.name || '');
     prev = m;
     return html`<div class=${'bubble-row ' + (me ? 'me ' : '') + (same ? 'same' : '')} data-key=${'m' + (m.id || m.ts)}>
-      <div class="bubble">${group && !me && m.name && !same ? html`<span class="who">${m.name}</span>` : ''}${mentionNodes(m.text, m.mentions)}<span class="meta">${m.kind === 'edited' ? html`<span class="edited-mark" title="Fixed a typo by editing the message">Edited</span>` : ''}${m.fromBot ? icon('sparkles', 'ic-sm') : ''}${clockTime(m.ts)}</span></div>
+      <div class="bubble">${group && !me && m.name && !same ? html`<span class="who">${m.name}</span>` : ''}${mentionNodes(m.text, m.mentions)}<span class="meta">${m.crossUsed && m.crossUsed.length ? html`<span class="cross-mark" title=${'Used what it knows about ' + m.crossUsed.join(', ') + ' from other chats'} aria-label="Used context from other chats">${icon('link', 'ic-sm')}</span>` : ''}${m.kind === 'edited' ? html`<span class="edited-mark" title="Fixed a typo by editing the message">Edited</span>` : ''}${m.fromBot ? icon('sparkles', 'ic-sm') : ''}${clockTime(m.ts)}</span></div>
     </div>`;
   });
 }

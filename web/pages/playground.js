@@ -4,7 +4,7 @@ import { html } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { store, personaById } from '../store.js';
-import { toggle, spinner } from '../ui.js';
+import { toggle, spinner, seg } from '../ui.js';
 import { personaAvatar } from '../components/avatar.js';
 import { personaPicker } from '../components/persona-picker.js';
 import { emptyState } from '../components/art.js';
@@ -32,6 +32,8 @@ export default function Playground(ctx) {
     error: '',
     goal: '', // optional "Goal for this test" (overrides the persona's goal)
     goalOpen: false,
+    source: '', // group mode: a private chat of this persona that "Dana" stands for
+    crossMode: '', // '' = the app default for groups
   };
   let gen = 0;
 
@@ -100,7 +102,8 @@ export default function Playground(ctx) {
     st.waiting = true;
     update(); scrollDown();
     try {
-      const r = await api.playground.send(st.sessionId, text, st.group, { quiet: true, timeout: 180000 }, st.goal.trim());
+      const r = await api.playground.send(st.sessionId, text, st.group, { quiet: true, timeout: 180000 }, st.goal.trim(),
+        st.group ? { source: st.source, crossMode: st.crossMode } : { source: '' });
       if (my !== gen) return;
       if (r && r.speaker) {
         // Group mode: the server attributes each message to a member of a small cast.
@@ -148,6 +151,7 @@ export default function Playground(ctx) {
         ${m.latencyMs ? html`<span class="chip chip-sm" title="How long the AI took">${icon('clock')}${fmtMs(m.latencyMs)}</span>` : ''}
         ${m.provider ? html`<span class="chip chip-sm">${icon('cpu')}${providerLabel(m.provider)}${m.model ? ' · ' + m.model : ''}</span>` : ''}
         ${goalChips(m, prev)}
+        ${crossChips(m)}
       </div>
       ${m.goal && m.goal.plan ? html`<div class="pg-plan small muted" title="Private plan-ahead note — only shown here, never sent on WhatsApp">${icon('brain', 'ic-sm')}<span>Plan: ${m.goal.plan}</span></div>` : ''}
     </div>`;
@@ -162,6 +166,32 @@ export default function Playground(ctx) {
     const newlyReached = g.reached && !(before && before.goal.reached && before.goal.text === g.text);
     return html`${opener}${newlyReached ? html`<span class="chip chip-sm chip-green" title=${g.evidence ? `“${g.evidence}”` : ''}>${icon('check')}Goal reached</span>` : ''}
       ${g.rewritten ? html`<span class="chip chip-sm chip-amber" title="The first draft gave the goal away, so it was rewritten">${icon('shield')}Rewritten to keep the goal secret</span>` : ''}`;
+  }
+
+  /** Cross-chat chips under a persona reply (never the notes themselves). */
+  function crossChips(m) {
+    const c = m.cross;
+    if (!c) return '';
+    const who = (c.people || []).join(', ');
+    return html`<span class="chip chip-sm" title=${`Used ${c.items} note${c.items === 1 ? '' : 's'} from the private chat — ${c.mode}`}>${icon('link')}Knows ${who} privately · ${c.mode}</span>
+      ${c.rewritten ? html`<span class="chip chip-sm chip-amber" title=${c.dropped ? 'Even the rewrite gave it away, so it was written without the private chat' : 'The first draft gave away something from the private chat, so it was rewritten'}>${icon('shield')}${c.dropped ? 'Written without the private chat' : 'Rewritten to keep it private'}</span>` : ''}`;
+  }
+
+  /** Group mode: "Pretend this group includes…" one of this persona's private chats. */
+  function crossBar(p) {
+    const dms = (store.state.chats || []).filter((c) => c.kind !== 'group' && c.personaId === p.id);
+    if (!dms.length) return '';
+    const first = (n) => ((n || '').trim().split(/\s+/)[0] || 'them');
+    return html`<div class="pg-goal pg-cross">
+      <label class="pg-goal-label small" for="pg-cross">${icon('link', 'ic-sm')}Pretend this group includes</label>
+      <select id="pg-cross" class="select select-sm" .value=${st.source} @change=${(e) => { st.source = e.target.value; update(); }}>
+        <option value="">Nobody from a real chat</option>
+        ${dms.map((c) => html`<option value=${c.key} ?selected=${c.key === st.source}>${c.name || c.key} (as Dana)</option>`)}
+      </select>
+      ${st.source ? seg([{ value: '', label: 'Default' }, { value: 'discreet', label: 'Discreet' }, { value: 'open', label: 'Open' }], st.crossMode,
+        (v) => { st.crossMode = v; update(); }, { cls: 'seg-sm', label: 'How the private chat is used' }) : ''}
+      ${st.source ? html`<span class="tiny faint">Messages from Dana count as ${first((dms.find((c) => c.key === st.source) || {}).name)}: ${p.name} draws on that private chat like in a real group.</span>` : ''}
+    </div>`;
   }
 
   function goalBar(p) {
@@ -209,6 +239,7 @@ export default function Playground(ctx) {
         </header>
 
         ${p ? goalBar(p) : ''}
+        ${p && st.group ? crossBar(p) : ''}
 
         <div class="pg-wall chat-wall" aria-live="polite">
           ${st.error ? html`<div class="banner danger">${icon('warning')}<div><strong>Couldn't start a session.</strong> ${st.error} <button class="link-btn" @click=${() => start(st.personaId)}>Retry</button></div></div>` : ''}

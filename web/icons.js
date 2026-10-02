@@ -77,6 +77,7 @@ const ICONS = {
   warning: '<path d="M10.3 4.3 2.9 17.1a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.6v4"/>' + dot(12, 17, 1.1),
   info: '<circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4"/>' + dot(12, 7.9, 1.15),
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.6"/><path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/>',
+  unlock: '<rect x="5" y="10.5" width="14" height="10" rx="2.6"/><path d="M8 10.5V7.6a4 4 0 0 1 7.7-1.6"/>',
   external: '<path d="M14 4h6v6M20 4l-8.5 8.5"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
   sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.1"/><circle cx="9" cy="17" r="2.1"/>',
   message: '<path d="M5.6 4.5h12.8A2.6 2.6 0 0 1 21 7.1v7.8a2.6 2.6 0 0 1-2.6 2.6H10L5.5 21v-3.5A2.6 2.6 0 0 1 3 14.9V7.1a2.6 2.6 0 0 1 2.6-2.6Z"/>',

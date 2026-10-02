@@ -106,6 +106,7 @@ export const GUIDE_SECTIONS = [
     blocks: [
       { points: [
         'Memories are kept per chat. See, pin, change or delete them in the chat\'s Memory tab, or turn learning off.',
+        '**Across chats:** a persona can use what someone told it privately to stay consistent in a group — **discreetly by default**: it never brings private things up unless that person does. Private chats can mention what happened in groups you share. Sensitive topics (money, health, relationships, secrets) never cross over, and you can lock any memory to one chat in the Memory tab.',
         'Everything lives on this computer in Doppel\'s data folder: settings, personas, chats, history and memories.',
         'With **Ollama**, nothing leaves your computer. With **Claude** or **OpenAI**, the chat text needed for a reply is sent to that company.',
         'Clear a chat\'s history or memories from its panel any time. Removing a chat also deletes what it remembered.',
@@ -168,6 +169,8 @@ export const TIPS = {
     text: 'When someone brings up something serious (money, health, meeting up, distress, legal trouble) or asks if it is a bot, the persona goes quiet and Doppel asks you to take over.' },
   memory: { title: 'Memory', section: 'memory',
     text: 'Lets the persona remember small facts people mention and bring them up later. Stored only on this computer; you can see and delete every memory.' },
+  cross: { title: 'Context from other chats', section: 'memory',
+    text: '**Discreet** knows but never tells. **Open** may refer to it with that person only. **Off** keeps chats separate. Sensitive things never cross.' },
   reveal: { title: 'Reveal', section: 'safety',
     text: 'Sends a friendly message that it was an AI persona all along, then pauses the chat. You can edit the message in Settings › Safety.' },
   clone: { title: 'Clone yourself', section: 'memory',
