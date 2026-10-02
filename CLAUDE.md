@@ -65,7 +65,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/events` | `Hub`: publish/subscribe for SSE with replay ring (Last-Event-ID) + activity ring buffer + file sink |
 | `internal/contract` | interfaces `WhatsApp`, `Engine`, `LLM`, `Playground`, `Builder` — the server only talks to these |
 | `internal/model` | shared plain types (JSON tags are the API field names); `behavior.go` = `BehaviorProfile`/`BehaviorOverrides` |
-| `web/` | vanilla ES modules + CSS, no build step; `web/embed.go` embeds it (`//go:embed *` — every subfolder must contain a file). `pages/` (one module per route), `components/` (shared views; `drawer/` = the chat panel's tabs Overview · People/Contact · Goal · Behaviour · Memory around the `chat-drawer.js` shell; `settings/` = Settings sections), `guide-content.js` (every word of the Guide, help tips and tour), `styles/` (`tokens` → `base` → `components` → `pages` → `control` → `animations` → `fun`) |
+| `web/` | vanilla ES modules + CSS, no build step; `web/embed.go` embeds it (`//go:embed *` — every subfolder must contain a file). `pages/` (one module per route), `components/` (shared views; `drawer/` = the chat panel's tabs Overview · People/Contact · Goal · Behaviour · Memory around the `chat-drawer.js` shell; `settings/` = Settings sections), `guide-content.js` (every word of the Guide, help tips and tour), `styles/` (`tokens` → `base` → `components` → `pages` → `control` → `animations` → `fun` → `realism` → `skins`), `skins.js` (the looks registry + `applyAppearance`) |
 | `scripts/` | Mac: `build_app.sh`, `install_app.sh`, `uninstall_app.sh`; all: `dist.sh`, `smoke.sh` (bash + curl + jq/plutil), `install-from-source.sh`/`.ps1`, `dev.ps1`; `linux/` and `windows/` = the installers shipped in the archives; `geniconn/` (stdlib icon renderer, also `-ico`) |
 | `assets/icon/icon.svg` | editable icon source; the shipped icon is rendered by `scripts/geniconn` |
 | `docs/API.md` | **the authoritative HTTP/SSE contract** — keep server, frontend and this doc in sync |
@@ -108,6 +108,12 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   counts) and publishes `missions.changed`; media missions are reached in `engine.goalMedia` (from `goalIncoming`,
   `Incoming.Media`). Achievements are computed from `missions.json`, never stored. Hand-editing the goal text drops
   `missionId`.
+- Looks ("skins", `settings.skin`): colours, blurs, radii and shadows only via tokens (`styles/tokens.css` = Liquid Glass
+  defaults, `styles/skins.css` = overrides per `<html data-skin>`); never hard-code a colour in a component. `data-theme` on
+  `<html>` is always the *resolved* mode (boot.js before paint, then `skins.js applyAppearance`); Midnight/Neon are dark-only
+  and Daylight light-only without rewriting `settings.theme`. `web/skins.js` mirrors `config.Skins` and the ONLY map in
+  `boot.js`. Illustrations read `var(--art-*, <glass colour>)`; data colours (avatars, medals, dials) are tinted per look
+  with `--avatar-filter`/`--art-filter`. Settings › Appearance previews use the real tokens (`.skin-preview[data-skin]`).
 - Copy and pictures: user-facing words are plain English for non-technical people; **no emoji anywhere** in UI or
   activity text — pictures are inline SVG (`art.js`, `glyphs.js`, `guide-art.js`, `dial-face.js`, `badges.js`). Guide,
   help-tip and tour copy lives only in `web/guide-content.js` (`GUIDE_SECTIONS`, `TIPS`, `TOUR_STEPS`, `PAGE_SECTION`);
