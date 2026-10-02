@@ -288,6 +288,7 @@ func (e *Engine) ClearHistory(chatKey string) error {
 		r.history = nil
 		r.mu.Unlock()
 	}
+	e.forgetBrief(chatKey)
 	return e.store.ClearHistory(chatKey)
 }
 
@@ -319,7 +320,7 @@ func (e *Engine) SendManual(ctx context.Context, chatKey, text string) error {
 		e.act(model.ActError, c, "", "Manual send failed: "+err.Error(), nil)
 		return err
 	}
-	e.recordSent(r, c, text, wire, names)
+	e.recordSent(r, c, text, wire, names, nil)
 	now := e.clock.Now()
 	e.updateState(c.Key, func(st *store.RunnerState) { st.LastYouRepliedAt = now })
 	e.act(model.ActSent, c, "", text, mentionMeta(map[string]any{"manual": true, "jid": jid}, names))

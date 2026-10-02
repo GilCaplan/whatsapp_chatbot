@@ -499,6 +499,10 @@ func (s *Server) handlePlaygroundSend(w http.ResponseWriter, r *http.Request) {
 		Goal  *string `json:"goal"` // optional "Goal for this test"; "" = the persona's goal
 		// Initiate: the persona speaks first (text is then an optional topic hint).
 		Initiate bool `json:"initiate"`
+		// Cross-chat context: "Pretend this group includes…" — a private chat
+		// of the same persona ("" = none) and the mode ("" = the default).
+		Source    *string `json:"source"`
+		CrossMode *string `json:"crossMode"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -512,6 +516,23 @@ func (s *Server) handlePlaygroundSend(w http.ResponseWriter, r *http.Request) {
 	if body.Goal != nil {
 		if err := s.d.Playground.SetGoal(r.PathValue("id"), *body.Goal); err != nil {
 			writeError(w, playgroundStatus(err), "playground_error", err.Error())
+			return
+		}
+	}
+	if body.Source != nil || body.CrossMode != nil {
+		src, mode := "", ""
+		if body.Source != nil {
+			src = strings.TrimSpace(*body.Source)
+		}
+		if body.CrossMode != nil {
+			mode = strings.TrimSpace(*body.CrossMode)
+		}
+		if err := s.d.Playground.SetCross(r.PathValue("id"), src, mode); err != nil {
+			if playgroundStatus(err) == http.StatusNotFound {
+				writeError(w, http.StatusNotFound, "playground_error", err.Error())
+			} else {
+				writeError(w, http.StatusBadRequest, "invalid_cross", err.Error())
+			}
 			return
 		}
 	}

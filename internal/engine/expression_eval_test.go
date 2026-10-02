@@ -197,7 +197,7 @@ func wordCount(s string) int {
 // evalReply runs one reply through the engine path (as pipeline.generate)
 // and returns the result, the model's raw draft and the people tagged.
 func evalReply(ctx context.Context, e *Engine, mode string, p model.Persona, c model.ChatAssignment, bp model.BehaviorProfile, hist []model.Message, dir *mention.Directory, answered pendingMsg) (genResult, string, []mention.Entry, error) {
-	opts := e.promptOptions(c, bp, dir, hist)
+	opts, _ := e.promptOptions(c, bp, dir, hist)
 	isGroup := c.Kind == "group"
 	last := hist[len(hist)-1].Text
 	build := func(t prompt.GoalTurn) llm.Request {

@@ -101,6 +101,9 @@ type ChatAssignment struct {
 	Handoff *HandoffState `json:"handoff"`
 	// MissionID is the mission template behind goalOverride ("" = free-form goal).
 	MissionID string `json:"missionId"`
+	// Cross is how this chat uses (and shares) context from the same
+	// persona's other chats; zero value = the app defaults.
+	Cross CrossContext `json:"cross"`
 	// RevealedAt is when you told this chat it was talking to a persona.
 	RevealedAt     *time.Time `json:"revealedAt"`
 	LastActivityAt *time.Time `json:"lastActivityAt"`
@@ -128,6 +131,9 @@ type Message struct {
 	Corrected string `json:"corrected,omitempty"`
 	// WAID is the WhatsApp message id of a persona bubble (SendResult.ID).
 	WAID string `json:"waId,omitempty"`
+	// CrossUsed names the people whose context from other chats informed
+	// this persona bubble (cross-chat context).
+	CrossUsed []string `json:"crossUsed,omitempty"`
 }
 
 // Message kinds (Message.Kind).
@@ -200,6 +206,8 @@ type PendingReply struct {
 	// Drafts are the co-pilot alternatives (Text == Drafts[0].Text); empty
 	// outside co-pilot mode.
 	Drafts []Draft `json:"drafts,omitempty"`
+	// CrossUsed names the people whose context from other chats informed it.
+	CrossUsed []string `json:"crossUsed,omitempty"`
 }
 
 // ─── Activity ────────────────────────────────────────────────
@@ -388,6 +396,19 @@ type PlaygroundReply struct {
 	Goal *PlaygroundGoal `json:"goal,omitempty"`
 	// Drafts: co-pilot alternatives when the playground asked for them.
 	Drafts []Draft `json:"drafts,omitempty"`
+	// Cross: what the persona drew on from a real private chat ("Pretend
+	// this group includes…"); nil when none.
+	Cross *PlaygroundCross `json:"cross,omitempty"`
+}
+
+// PlaygroundCross reports the cross-chat context of a playground reply
+// (never the notes themselves).
+type PlaygroundCross struct {
+	Mode      string   `json:"mode"`
+	People    []string `json:"people"`
+	Items     int      `json:"items"`
+	Rewritten bool     `json:"rewritten"`
+	Dropped   bool     `json:"dropped"`
 }
 
 // ExpressionPreview is POST /api/personas/{id}/expression-preview: sample

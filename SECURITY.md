@@ -14,6 +14,7 @@ Everything lives in one folder: `~/Library/Application Support/WhatsappDoppel/` 
 | `secrets.json` | Claude / OpenAI API keys (file mode `0600` on macOS/Linux, your private profile folder on Windows; never sent back to the browser in full). |
 | `config.json`, `personas.json`, `chats.json` | Your settings, personas and which chats they answer. |
 | `history/` | The text of conversations in assigned chats, used as context for replies. |
+| `memories/`, `briefs/`, `recaps.json` | What personas learned about the people in each chat, short summaries of each assigned chat (topics, promises) used so the same persona stays consistent across chats, and daily recaps. Sensitive topics never cross between chats. |
 | `runtime.json`, `approvals.json`, `logs/` | Reply timing state, replies waiting for approval, activity logs. |
 
 To wipe everything: quit the app, unlink "WhatsApp Doppel" under WhatsApp → Settings → Linked devices,

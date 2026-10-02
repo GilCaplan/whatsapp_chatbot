@@ -28,6 +28,13 @@ type personView struct {
 	Notes         string     `json:"notes"`
 	LastSpokeAt   *time.Time `json:"lastSpokeAt"`
 	Left          bool       `json:"left"` // has preferences but is no longer in the group
+	// Cross-chat context (groups): use the same persona's private chat with
+	// this person here (effective; source person|default), that chat's key
+	// ("" = none) and whether it shares.
+	Cross       bool   `json:"cross"`
+	CrossSource string `json:"crossSource"`
+	DMChatKey   string `json:"dmChatKey"`
+	DMShares    bool   `json:"dmShares"`
 }
 
 type peopleView struct {
@@ -115,6 +122,9 @@ func (s *Server) chatPeopleView(ctx context.Context, c model.ChatAssignment) peo
 			}
 		}
 		pv.Respond, pv.RespondSource = behavior.Answerable(c.People, v.MemberCount, v.Threshold, ids...)
+		if !p.IsSelf {
+			s.personCross(c, &pv, ids...)
+		}
 		for _, id := range ids {
 			if t, ok := spoke[behavior.UserOf(id)]; ok && (pv.LastSpokeAt == nil || t.After(*pv.LastSpokeAt)) {
 				t := t
@@ -132,6 +142,7 @@ func (s *Server) chatPeopleView(ctx context.Context, c model.ChatAssignment) peo
 			pv.Phone = behavior.UserOf(pp.JID)
 		}
 		pv.Respond, pv.RespondSource = behavior.Answerable(c.People, v.MemberCount, v.Threshold, pp.JID)
+		s.personCross(c, &pv, pp.JID)
 		if t, ok := spoke[behavior.UserOf(pp.JID)]; ok {
 			pv.LastSpokeAt = &t
 		}
@@ -203,10 +214,11 @@ type personPatch struct {
 	respond  *json.RawMessage // present: null clears, bool sets
 	priority *bool
 	notes    *string
+	cross    *json.RawMessage // present: null clears, bool sets
 }
 
 // parsePeoplePatch decodes and validates `people` of PATCH /api/chats/{key}:
-// {mode?, people?: [{jid, name?, respond?: bool|null, priority?, notes?}]}.
+// {mode?, people?: [{jid, name?, respond?: bool|null, priority?, notes?, cross?: bool|null}]}.
 func parsePeoplePatch(raw json.RawMessage) (peoplePatch, error) {
 	var pp peoplePatch
 	var top map[string]json.RawMessage
@@ -250,6 +262,12 @@ func parsePeoplePatch(raw json.RawMessage) (peoplePatch, error) {
 					}
 					vv := v
 					e.respond = &vv
+				case "cross":
+					if t := string(bytes.TrimSpace(v)); t != "null" && t != "true" && t != "false" {
+						err = fmt.Errorf("cross must be true, false or null")
+					}
+					vv := v
+					e.cross = &vv
 				case "priority":
 					e.priority = new(bool)
 					err = json.Unmarshal(v, e.priority)
@@ -317,6 +335,16 @@ func (pp peoplePatch) apply(cur model.PeopleConfig) model.PeopleConfig {
 		}
 		if e.priority != nil {
 			p.Priority = *e.priority
+		}
+		if e.cross != nil {
+			switch string(bytes.TrimSpace(*e.cross)) {
+			case "true":
+				p.Cross = boolPtr(true)
+			case "false":
+				p.Cross = boolPtr(false)
+			default:
+				p.Cross = nil
+			}
 		}
 		if e.notes != nil {
 			p.Notes = *e.notes

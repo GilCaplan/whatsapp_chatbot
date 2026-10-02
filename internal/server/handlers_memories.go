@@ -2,12 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"whatsappdoppel/internal/crossctx"
 	"whatsappdoppel/internal/events"
 	"whatsappdoppel/internal/memory"
 	"whatsappdoppel/internal/model"
@@ -61,7 +63,15 @@ func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st := s.d.Store.RunnerState(c.Key)
-	v := model.MemoriesView{Enabled: s.memoryEnabled(c), Items: nonNilSlice(items), Pending: st.MemoryPending}
+	rules := s.crossRules()
+	cross := s.chatShares(c, rules)
+	now := time.Now()
+	list := make([]model.MemoryItem, 0, len(items))
+	for _, m := range items {
+		ok, _ := crossctx.Carries(m, rules, now)
+		list = append(list, model.MemoryItem{Memory: m, Shares: cross && ok, EffectiveSensitive: crossctx.EffectiveSensitive(m)})
+	}
+	v := model.MemoriesView{Enabled: s.memoryEnabled(c), CrossEnabled: cross, Items: list, Pending: st.MemoryPending}
 	if !st.MemoryCursor.IsZero() {
 		t := st.MemoryCursor
 		v.LastExtractedAt = &t
@@ -79,6 +89,8 @@ func (s *Server) handleAddMemory(w http.ResponseWriter, r *http.Request) {
 		Person    string `json:"person"`
 		PersonJID string `json:"personJid"`
 		Pinned    bool   `json:"pinned"`
+		Scope     string `json:"scope"`
+		Sensitive string `json:"sensitive"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -91,11 +103,19 @@ func (s *Server) handleAddMemory(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !validScope(body.Scope) || !crossctx.ValidSensitive(body.Sensitive) {
+		writeError(w, http.StatusBadRequest, "invalid_memory", "scope must be local or shared; sensitive must be a known topic")
+		return
+	}
+	sens := body.Sensitive
+	if sens == "" {
+		sens = crossctx.Classify(text)
+	}
 	now := time.Now()
 	m, err := s.d.Store.UpsertMemory(model.Memory{
 		ChatKey: c.Key, Person: strings.TrimSpace(body.Person), PersonJID: strings.TrimSpace(body.PersonJID),
 		Text: text, Kind: model.MemoryFact, Source: model.MemorySourceUser, Pinned: body.Pinned,
-		Confidence: 100, CreatedAt: now, UpdatedAt: now,
+		Confidence: 100, CreatedAt: now, UpdatedAt: now, Scope: body.Scope, Sensitive: sens,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "save_failed", err.Error())
@@ -111,11 +131,29 @@ func (s *Server) handlePatchMemory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Text   *string `json:"text"`
-		Pinned *bool   `json:"pinned"`
-		Person *string `json:"person"`
+		Text      *string         `json:"text"`
+		Pinned    *bool           `json:"pinned"`
+		Person    *string         `json:"person"`
+		Scope     json.RawMessage `json:"scope"`     // "local"|"shared"|null (null = follow the settings)
+		Sensitive *string         `json:"sensitive"` // ""|category
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	var scope *string
+	if len(body.Scope) > 0 {
+		var sc *string
+		if err := json.Unmarshal(body.Scope, &sc); err != nil || (sc != nil && (*sc == "" || !validScope(*sc))) {
+			writeError(w, http.StatusBadRequest, "invalid_memory", "scope must be \"local\", \"shared\" or null")
+			return
+		}
+		if sc == nil {
+			sc = new(string)
+		}
+		scope = sc
+	}
+	if body.Sensitive != nil && !crossctx.ValidSensitive(*body.Sensitive) {
+		writeError(w, http.StatusBadRequest, "invalid_memory", "sensitive must be empty or one of "+strings.Join(model.SensitiveCategories, ", "))
 		return
 	}
 	c, ok := s.requireChat(w, r.PathValue("key"))
@@ -146,6 +184,12 @@ func (s *Server) handlePatchMemory(w http.ResponseWriter, r *http.Request) {
 			if body.Person != nil {
 				m.Person = strings.TrimSpace(*body.Person)
 			}
+			if scope != nil {
+				m.Scope = *scope
+			}
+			if body.Sensitive != nil {
+				m.Sensitive = *body.Sensitive
+			}
 			m.UpdatedAt = time.Now()
 			out = *m
 			return mems, nil
@@ -162,6 +206,11 @@ func (s *Server) handlePatchMemory(w http.ResponseWriter, r *http.Request) {
 	}
 	s.memoriesChanged(c.Key)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// validScope: "" (follow the settings), "local" or "shared".
+func validScope(sc string) bool {
+	return sc == "" || sc == model.MemoryScopeLocal || sc == model.MemoryScopeShared
 }
 
 func (s *Server) handleDeleteMemory(w http.ResponseWriter, r *http.Request) {

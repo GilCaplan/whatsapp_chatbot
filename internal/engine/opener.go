@@ -109,7 +109,7 @@ func (pg *playground) Initiate(ctx context.Context, id string, group bool, hint 
 	opts := prompt.Options{LengthBias: rp.LengthBias, Opener: e.openerFor(prompt.Opener{Manual: true, Hint: strings.TrimSpace(guard.Truncate(hint, prompt.MaxOpenerHint))}, hist)}
 	start := time.Now()
 	gcfg, gturn := e.playgroundGoalTurn(ctx, p, chat, &s.goalStatus, hist, group, "", true)
-	res, err := e.expressiveReply(ctx, p, rp, hist, true, gcfg, gturn, func(t prompt.GoalTurn) llm.Request {
+	res, err := e.expressiveReply(ctx, p, rp, hist, true, gcfg, gturn, nil, func(t prompt.GoalTurn, _ prompt.CrossTurn) llm.Request {
 		opts.Goal = t
 		return prompt.Initiate(p, chat, hist, group, opts)
 	})

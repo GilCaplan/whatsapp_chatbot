@@ -43,6 +43,9 @@ const META_LABELS = {
   evidence: 'What they said',
   afterReached: 'Afterwards',
   goalRewritten: 'Rewritten to keep the goal secret',
+  crossContext: 'Context from other chats',
+  crossRewritten: 'Rewritten to keep other chats private',
+  crossDropped: 'Written without context from other chats',
   lengthRetried: 'Asked again for a shorter reply',
   trimmed: 'Trimmed to the length setting',
   emojiRemoved: 'Emoji removed (emoji setting)',
@@ -107,7 +110,7 @@ const HANDOFF_HOW = { keyword: 'Matched a keyword', ai: 'The AI double-checked i
 // Activity types whose text is a chat message (tags are shown as chips).
 const MESSAGE_TYPES = new Set(['incoming', 'sent', 'approval.sent', 'approval.queued', 'approval.discarded']);
 
-const STAGES = { scheduled: 'Scheduled', starting: 'Writing the opener', sent: 'Sent', queued: 'Waiting for approval', skipped: 'Skipped', plan: 'Planning the next move', manual: 'You asked for it' };
+const STAGES = { scheduled: 'Scheduled', starting: 'Writing the opener', sent: 'Sent', queued: 'Waiting for approval', skipped: 'Skipped', plan: 'Planning the next move', manual: 'You asked for it', cross: 'Using context from other chats' };
 const GOAL_HOW = { said_word: 'They said the word', ai: 'Spotted in the conversation', media: 'They sent it' };
 const GOAL_AFTER = { relax: 'Stops pursuing it and just chats', continue: 'Keeps gently pursuing it' };
 
@@ -140,6 +143,14 @@ function metaValue(k, v, meta) {
     case 'edited': return v ? 'Yes' : 'No';
     case 'drafts': return typeof v === 'number' ? `${v} to choose from` : String(v);
     case 'afterReached': return GOAL_AFTER[v] || String(v);
+    case 'crossContext': {
+      const n = Number(v.items) || 0;
+      const people = Array.isArray(v.people) && v.people.length ? ` about ${v.people.join(', ')}` : '';
+      const how = { discreet: 'discreet', open: 'open' }[v.mode] || String(v.mode || '');
+      return `${n} ${n === 1 ? 'note' : 'notes'}${people}${how ? ` (${how})` : ''}`;
+    }
+    case 'crossRewritten':
+    case 'crossDropped':
     case 'goalRewritten':
     case 'lengthRetried':
     case 'trimmed':
@@ -195,7 +206,8 @@ function quickLine(ev) {
 export function feedRow(ev, opts = {}) {
   // A distraction is reported as a "thinking" event flagged meta.distracted.
   const m = actMeta(ev.type === 'thinking' && ev.meta && ev.meta.distracted ? 'distracted'
-    : ev.type === 'thinking' && ev.meta && ev.meta.stage === 'plan' ? 'planning' : ev.type);
+    : ev.type === 'thinking' && ev.meta && ev.meta.stage === 'plan' ? 'planning'
+    : ev.type === 'thinking' && ev.meta && ev.meta.stage === 'cross' ? 'crossing' : ev.type);
   const entries = metaEntries(ev.meta);
   const canExpand = !opts.compact && entries.length > 0;
   const quick = quickLine(ev);

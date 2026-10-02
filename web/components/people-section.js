@@ -107,6 +107,32 @@ export function createPeopleSection({ key, update }) {
       value == null ? 'Everyone follows the group setting again' : value ? 'Answering everyone in this group' : 'Answering nobody unless you pick them');
   }
 
+  /** Cross-chat context: use the persona's private chat with this person here. */
+  function setCross(m, on) {
+    m.cross = on;
+    m.crossSource = on ? 'default' : 'person';
+    redraw();
+    patch({ people: [{ jid: m.jid, name: m.name || '', cross: on ? null : false }] },
+      on ? `Using what ${displayName(m)} says privately here, discreetly` : `Keeping the private chat with ${displayName(m)} out of this group`);
+  }
+
+  function crossRow(m) {
+    const name = displayName(m);
+    const first = name.split(/\s+/)[0];
+    if (!m.dmChatKey) {
+      return html`<div class="person-cross tiny faint">${icon('link', 'ic-sm')}No private chat with ${first} as this persona yet.</div>`;
+    }
+    return html`<div class="field-row person-cross" data-key=${'cross-' + m.jid}>
+      <div class="grow">
+        <div class="field-label">${icon('link', 'ic-sm')}Use my private chat with ${first} here ${helpTip('cross')}</div>
+        <div class="field-help">${m.dmShares
+          ? 'What they tell the persona one-to-one informs replies here — discreetly by default.'
+          : 'The private chat has sharing turned off, so nothing from it is used.'}</div>
+      </div>
+      ${toggle(!!m.cross, (v) => setCross(m, v), { small: true, label: `Use my private chat with ${first} here`, disabled: !m.dmShares })}
+    </div>`;
+  }
+
   function saveNotes(m, text) {
     st.drafts.set(m.jid, text);
     clearTimeout(timers.get(m.jid));
@@ -157,6 +183,7 @@ export function createPeopleSection({ key, update }) {
     else sub.push('quiet lately');
     if (m.priority) sub.push('always gets a reply');
     else if (custom) sub.push(m.respond ? 'picked' : 'not answered');
+    if (m.dmChatKey && !m.left) sub.push(m.cross && m.dmShares ? 'knows them privately' : 'private chat not used');
     return html`<div class=${'person ' + (m.respond ? 'is-on ' : 'is-off ') + (m.left ? 'is-left' : '')} data-key=${'p-' + m.jid}>
       <div class="person-row">
         ${chatAvatar({ jid: m.left ? '' : m.jid, name }, 34)}
@@ -176,7 +203,7 @@ export function createPeopleSection({ key, update }) {
           ${toggle(m.respond, (v) => setRespond(m, v), { small: true, label: (m.respond ? 'Answering ' : 'Not answering ') + name })}
         </span>
       </div>
-      ${open ? notesBox(m, `What should the persona know about ${name}?`) : ''}
+      ${open ? html`${notesBox(m, `What should the persona know about ${name}?`)}${crossRow(m)}` : ''}
     </div>`;
   }
 

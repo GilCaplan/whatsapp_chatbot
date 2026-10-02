@@ -3,6 +3,7 @@ package prompt
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -66,7 +67,13 @@ type FoundMemory struct {
 	Kind     string `json:"kind"`
 	Expires  string `json:"expires"` // YYYY-MM-DD or ""
 	Evidence string `json:"evidence"`
+	// Sensitive is "" or the sensitive topic the note touches (money,
+	// health, meeting, distress, legal, romance, secret).
+	Sensitive string `json:"sensitive"`
 }
+
+// sensitiveEnum are the extractor's sensitive values (model.SensitiveCategories minus "bot").
+var sensitiveEnum = []string{"money", "health", "meeting", "distress", "legal", "romance", "secret"}
 
 var memorySchema = json.RawMessage(`{
   "type": "object",
@@ -80,9 +87,10 @@ var memorySchema = json.RawMessage(`{
           "evidence": {"type": "string"},
           "text": {"type": "string"},
           "kind": {"type": "string", "enum": ["fact", "preference", "event", "relationship"]},
-          "expires": {"type": "string"}
+          "expires": {"type": "string"},
+          "sensitive": {"type": "string", "enum": ["", "money", "health", "meeting", "distress", "legal", "romance", "secret"]}
         },
-        "required": ["person", "evidence", "text", "kind", "expires"],
+        "required": ["person", "evidence", "text", "kind", "expires", "sensitive"],
         "additionalProperties": false
       }
     }
@@ -116,9 +124,10 @@ func ExtractMemories(personaName string, isGroup bool, contact string, known []s
 	fmt.Fprintf(&sys, "- Today is %s. Turn relative dates (\"tomorrow\", \"next Friday\") into real dates written like \"Fri 9 Oct\" in the text. For events set \"expires\" to the event date as YYYY-MM-DD, else \"\".\n", now.Format("Monday 2 January 2006"))
 	sys.WriteString("- \"evidence\": copy the exact words from the message it comes from.\n")
 	sys.WriteString("- \"person\": the name exactly as shown before their message.\n")
+	sys.WriteString("- \"sensitive\": \"\" unless the note is about money or debts, health or medical matters, meeting up in person, someone struggling emotionally, legal trouble, a relationship, dating or breakup, or something they asked to keep quiet — then that one word: money, health, meeting, distress, legal, romance or secret.\n")
 	sys.WriteString("- Skip anything already in the notebook unless it changed (then write the new version).\n")
 	sys.WriteString("- Most messages contain nothing worth noting. An empty list is the usual answer.\n\n")
-	sys.WriteString(`Answer with JSON only: {"memories": [{"person": "...", "evidence": "...", "text": "...", "kind": "fact|preference|event|relationship", "expires": ""}]}`)
+	sys.WriteString(`Answer with JSON only: {"memories": [{"person": "...", "evidence": "...", "text": "...", "kind": "fact|preference|event|relationship", "expires": "", "sensitive": ""}]}`)
 
 	var u strings.Builder
 	u.WriteString("Already in the notebook:\n")
@@ -202,6 +211,9 @@ func ParseMemories(raw string) ([]FoundMemory, error) {
 			Kind:     strings.ToLower(str(o, "kind", "type", "category")),
 			Expires:  str(o, "expires", "date", "expiresAt"),
 			Evidence: oneLine(str(o, "evidence", "quote"), 200),
+		}
+		if sv := strings.ToLower(str(o, "sensitive", "private", "topic")); slices.Contains(sensitiveEnum, sv) {
+			f.Sensitive = sv
 		}
 		if f.Text == "" {
 			continue

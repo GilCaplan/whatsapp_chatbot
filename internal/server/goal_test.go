@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 // fakePlayground records the goal set before each message.
 type fakePlayground struct {
 	goals []string
+	cross []string
 }
 
 func (f *fakePlayground) Start(personaID string) (string, error) { return "s1", nil }
@@ -32,6 +34,13 @@ func (f *fakePlayground) Initiate(ctx context.Context, id string, group bool, hi
 	return model.PlaygroundReply{Reply: "opener:" + hint}, nil
 }
 func (f *fakePlayground) End(string) {}
+func (f *fakePlayground) SetCross(id, source, mode string) error {
+	if mode == "loud" {
+		return fmt.Errorf("cross mode %q: invalid cross-chat source", mode)
+	}
+	f.cross = append(f.cross, source+"|"+mode)
+	return nil
+}
 
 func TestChatGoalSettingsAndStatus(t *testing.T) {
 	e := newEnv(t)

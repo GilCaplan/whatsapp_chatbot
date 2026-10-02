@@ -40,9 +40,10 @@ func (r *Runner) planTypo(cyc *cycle, c model.ChatAssignment, bubbles []behavior
 
 // recordSentBubble appends a sent persona bubble to history: text is what
 // went out, intended what was meant (≠ text after a typo), kind "" or
-// "fix". It returns the history message id.
-func (e *Engine) recordSentBubble(r *Runner, c model.ChatAssignment, text, intended, wire string, mentions []string, waID, kind string) string {
-	msg := model.Message{ID: store.NewID(), TS: e.clock.Now(), Speaker: "me", Text: text, FromBot: true, Mentions: mentions, WAID: waID, Kind: kind}
+// "fix"; crossUsed names the people whose context from other chats
+// informed it. It returns the history message id.
+func (e *Engine) recordSentBubble(r *Runner, c model.ChatAssignment, text, intended, wire string, mentions []string, waID, kind string, crossUsed []string) string {
+	msg := model.Message{ID: store.NewID(), TS: e.clock.Now(), Speaker: "me", Text: text, FromBot: true, Mentions: mentions, WAID: waID, Kind: kind, CrossUsed: crossUsed}
 	if intended != "" && intended != text {
 		msg.Corrected = intended
 	}
@@ -52,6 +53,9 @@ func (e *Engine) recordSentBubble(r *Runner, c model.ChatAssignment, text, inten
 		_ = e.store.AppendHistory(c.Key, msg, e.effective(c).Profile.HistoryMessages)
 	}
 	e.store.TouchChat(c.Key, time.Now())
+	if kind == "" {
+		e.briefTick(c) // the persona's own words feed the brief (brief.go)
+	}
 	return msg.ID
 }
 
@@ -117,7 +121,7 @@ func (r *Runner) fixTypo(cyc *cycle, c model.ChatAssignment, p model.Persona, t 
 	if err != nil {
 		return cyc.ctx.Err() == nil // the reply itself went out; a lost correction is fine
 	}
-	e.recordSentBubble(r, c, fix, "", wire, nil, res.ID, model.MsgKindFix)
+	e.recordSentBubble(r, c, fix, "", wire, nil, res.ID, model.MsgKindFix, nil)
 	e.act(model.ActSent, c, p.Name, fix, map[string]any{"fix": true, "jid": jid, "typo": t.Wrong})
 	return true
 }

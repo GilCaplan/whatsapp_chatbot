@@ -13,6 +13,7 @@ import (
 	"whatsappdoppel/internal/behavior"
 	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/events"
+	"whatsappdoppel/internal/model"
 )
 
 // settingsView is Settings plus the masked secrets (GET/PUT /api/settings).
@@ -140,6 +141,15 @@ func validateSettings(s config.Settings) error {
 	checks = append(checks,
 		inRange("recap.keepDays", s.Recap.KeepDays, 1, 365),
 		inRange("clone.maxSamples", s.SelfClone.MaxSamples, 50, 5000),
+	)
+	// v5: cross-chat context.
+	cr := s.Memory.Cross
+	checks = append(checks,
+		oneOf("memory.cross.groupMode", cr.GroupMode, model.CrossModes...),
+		oneOf("memory.cross.dmMode", cr.DMMode, model.CrossModes...),
+		inRange("memory.cross.freshDays", cr.FreshDays, 1, 90),
+		inRange("memory.cross.maxPeople", cr.MaxPeople, 1, 8),
+		inRange("memory.cross.maxItems", cr.MaxItems, 1, 16),
 	)
 	if utf8.RuneCountInString(s.Safety.Reveal.Template) > config.MaxRevealTemplate {
 		checks = append(checks, fmt.Errorf("safety.reveal.template must be at most %d characters", config.MaxRevealTemplate))
