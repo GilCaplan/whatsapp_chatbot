@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -46,7 +47,8 @@ func TestInstanceRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	fi, err := os.Stat(p.InstanceFile())
-	if err != nil || fi.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits (the per-user profile folder protects the files).
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Fatalf("instance.json perm = %v %v", fi.Mode(), err)
 	}
 	got, err := ReadInstance(p)
