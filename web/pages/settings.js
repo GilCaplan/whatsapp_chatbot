@@ -20,6 +20,7 @@ import { notificationsSection } from '../components/settings/notifications.js';
 import { safetySection } from '../components/settings/safety.js';
 import { memorySection } from '../components/settings/memory.js';
 import { cloneRows } from '../components/settings/clone-rows.js';
+import { SKINS, skinById, resolveMode, systemDark } from '../skins.js';
 
 const SECTIONS = [
   { id: 'server', label: 'Server', icon: 'server' },
@@ -478,18 +479,74 @@ export default function Settings(ctx) {
   // Context for sections that live in their own modules (components/settings/*).
   const sectionCtx = { s, save, sectionHead, update, savedTick };
 
+  // ── Appearance: looks gallery (live mini previews) + light/dark ──
+  async function pickAppearance(partial) {
+    store.set({ settings: { ...s(), ...partial } }); // app.js re-applies the look at once
+    if (!(await save(partial, 'appearance'))) loadSettings().catch(() => {});
+  }
+
+  function skinPreview(id, mode) {
+    return html`<span class="skin-preview" data-skin=${id} data-theme=${mode} aria-hidden="true">
+      <span class="sp-side"><i class="on"></i><i></i><i></i><i></i></span>
+      <span class="sp-card">
+        <span class="sp-title">Aa</span>
+        <span class="sp-line"></span>
+        <span class="sp-bubbles"><i class="them"></i><i class="me"></i></span>
+        <span class="sp-foot"><i class="sp-chip"></i><i class="sp-btn"></i></span>
+      </span>
+    </span>`;
+  }
+
+  function onSkinKey(e) {
+    const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    if (!(e.key in keys)) return;
+    e.preventDefault();
+    const cards = [...e.currentTarget.querySelectorAll('.skin-card')];
+    const at = cards.indexOf(document.activeElement);
+    const next = cards[(Math.max(0, at) + keys[e.key] + cards.length) % cards.length];
+    next.focus();
+    next.click();
+  }
+
   function appearanceSection() {
+    const cur = skinById(s().skin);
+    const theme = s().theme || 'system';
+    const dark = systemDark();
+    const oneMode = cur.modes.length === 1 ? cur.modes[0] : '';
+    const moreContrast = window.matchMedia && window.matchMedia('(prefers-contrast: more)').matches;
     return html`<section class="card section" id="sec-appearance" data-section="appearance">
-      ${sectionHead('appearance', 'Appearance', '', 'linear-gradient(135deg,#fbbf24,#f472b6)')}
-      ${fieldRow({ label: 'Theme', help: 'System follows your computer’s light/dark setting.',
-        control: seg([
+      ${sectionHead('appearance', 'Appearance', 'How Doppel looks. Changes apply at once and are remembered.', 'linear-gradient(135deg,#fbbf24,#f472b6)')}
+      ${moreContrast && cur.id !== 'contrast' ? html`<div class="banner info small mb-12">${icon('info')}
+        <div class="grow">Your computer asks for more contrast. The High contrast look may be easier to read.
+          <button class="link-btn" @click=${() => pickAppearance({ skin: 'contrast' })}>Use High contrast</button></div></div>` : ''}
+      <div class="eyebrow mb-8 row gap-4">Look ${helpTip('looks')}</div>
+      <div class="skin-grid" role="radiogroup" aria-label="Look" @keydown=${onSkinKey}>
+        ${SKINS.map((k) => {
+          const mode = resolveMode(k.id, theme, dark);
+          const on = k.id === cur.id;
+          const name = k.darkName && mode === 'dark' ? k.darkName : k.name;
+          const tag = k.modes.length === 2 ? 'Light & dark' : k.modes[0] === 'dark' ? 'Dark only' : 'Light only';
+          return html`<button type="button" class="skin-card" role="radio" aria-checked=${String(on)} tabindex=${on ? '0' : '-1'}
+              data-key=${'skin-' + k.id} aria-label=${name + '. ' + k.blurb + ' ' + tag}
+              @click=${() => { if (!on) pickAppearance({ skin: k.id }); }}>
+            ${skinPreview(k.id, mode)}
+            <span class="skin-meta">
+              <span class="skin-name">${name}</span>
+              <span class="skin-blurb">${k.blurb}</span>
+              <span class="skin-tag">${tag}</span>
+            </span>
+            ${on ? html`<span class="t-check">${icon('check')}</span>` : ''}
+          </button>`;
+        })}
+      </div>
+      ${fieldRow({ label: 'Light or dark',
+        help: oneMode ? `${cur.name} is always ${oneMode}. Choose another look to use ${oneMode === 'dark' ? 'light' : 'dark'} mode.`
+          : 'System follows your computer’s light/dark setting.',
+        control: html`<div class=${oneMode ? 'is-disabled' : ''} aria-disabled=${oneMode ? 'true' : 'false'}>${seg([
           { value: 'system', label: 'System', icon: 'system' },
           { value: 'light', label: 'Light', icon: 'sun' },
           { value: 'dark', label: 'Dark', icon: 'moon' },
-        ], s().theme || 'system', (v) => {
-          store.set({ settings: { ...s(), theme: v } });
-          save({ theme: v }, 'appearance');
-        }, { label: 'Theme' }) })}
+        ], oneMode || theme, (v) => { if (!oneMode) pickAppearance({ theme: v }); }, { label: 'Light or dark' })}</div>` })}
     </section>`;
   }
 
