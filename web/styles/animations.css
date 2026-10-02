@@ -43,6 +43,11 @@
 @keyframes vt-out { to { opacity: 0; transform: translateY(-6px) scale(.995); } }
 @keyframes vt-in { from { opacity: 0; transform: translateY(12px); } }
 
+/* Switching looks (web/skins.js): one quiet cross-fade of the whole window */
+html.skin-switch::view-transition-old(root) { animation: fade-out .22s var(--ease) both; }
+html.skin-switch::view-transition-new(root) { animation: fade-in .32s var(--ease) both; }
+html.skin-switch::view-transition-old(page), html.skin-switch::view-transition-new(page) { animation: none; }
+
 .leaving { animation: leave .28s var(--ease) both; pointer-events: none; }
 .row-new { animation: row-in .45s var(--spring) both; }
 

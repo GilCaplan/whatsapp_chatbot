@@ -172,6 +172,7 @@ type Settings struct {
 	Version             int              `json:"version"`
 	Port                int              `json:"port"`
 	Theme               string           `json:"theme"` // system|light|dark
+	Skin                string           `json:"skin"`  // one of Skins; the UI forces the mode for one-mode skins
 	OnboardingCompleted bool             `json:"onboardingCompleted"`
 	LLM                 LLMSettings      `json:"llm"`
 	Behavior            BehaviorSettings `json:"behavior"`
@@ -203,11 +204,26 @@ func (s Settings) Clone() Settings {
 	return s
 }
 
+// Skins are the looks the UI offers (settings.skin). Keep in sync with web/skins.js
+// and the one-mode map in web/boot.js.
+var Skins = []string{"glass", "midnight", "daylight", "classic", "vintage", "ocean", "forest", "neon", "contrast"}
+
+// ValidSkin reports whether s is one of Skins.
+func ValidSkin(s string) bool {
+	for _, k := range Skins {
+		if k == s {
+			return true
+		}
+	}
+	return false
+}
+
 func Defaults() Settings {
 	return Settings{
 		Version: SettingsVersion,
 		Port:    7788,
 		Theme:   "system",
+		Skin:    "glass",
 		LLM: LLMSettings{
 			DefaultProvider: "ollama",
 			DefaultModel:    "llama3.1:8b",
@@ -316,6 +332,9 @@ func (m *Manager) normalize() {
 	}
 	if s.Theme == "" {
 		s.Theme = d.Theme
+	}
+	if !ValidSkin(s.Skin) { // empty (older file) or unknown (newer build) → the default look
+		s.Skin = d.Skin
 	}
 	if s.LLM.DefaultProvider == "" {
 		s.LLM.DefaultProvider = d.LLM.DefaultProvider

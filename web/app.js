@@ -14,6 +14,7 @@ import { sleep } from './util.js';
 import { movingTo, showStopped } from './system.js';
 import { PAGE_SECTION } from './guide-content.js';
 import { startTour, tourDone } from './components/tour.js';
+import { applyAppearance, watchSystemMode } from './skins.js';
 
 import Onboarding from './pages/onboarding.js';
 import Dashboard from './pages/dashboard.js';
@@ -55,18 +56,6 @@ const NAV = [
 
 const appEl = document.getElementById('app');
 const pageHost = document.getElementById('page');
-
-// ── Theme ──────────────────────────────────────────────────────────────
-let lastTheme = null;
-function applyTheme(theme) {
-  const t = theme === 'light' || theme === 'dark' ? theme : 'system';
-  if (t === lastTheme) return;
-  lastTheme = t;
-  const root = document.documentElement;
-  if (t === 'system') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', t);
-  try { localStorage.setItem('doppel.theme', t); } catch { /* ignore */ }
-}
 
 // ── Shell views ────────────────────────────────────────────────────────
 function sidebarView() {
@@ -179,14 +168,15 @@ async function boot() {
   if (!hasToken() && health.token) setToken(health.token);
 
   await refreshAll();
-  applyTheme(store.state.settings && store.state.settings.theme);
+  applyAppearance(store.state.settings || {}, { animate: false });
+  watchSystemMode(() => store.state.settings || {}, () => { const cur = currentPage(); if (cur) cur.view.update(); });
   store.set({ booted: true });
 
   sidebar = mountView(document.getElementById('sidebar'), sidebarView);
   topbar = mountView(document.getElementById('topbar'), topbarView);
 
   store.subscribe((s) => {
-    applyTheme(s.settings && s.settings.theme);
+    if (s.settings) applyAppearance(s.settings);
     updateShell();
     const cur = currentPage();
     if (cur) cur.view.update();
