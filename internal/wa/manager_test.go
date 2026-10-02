@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,8 @@ func TestMigrateLegacy(t *testing.T) {
 	if b, _ := os.ReadFile(dst); string(b) != "session" {
 		t.Errorf("dst content = %q", b)
 	}
-	if st, _ := os.Stat(dst); st.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits (the per-user profile folder protects the files).
+	if st, _ := os.Stat(dst); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("dst mode = %v", st.Mode().Perm())
 	}
 	if _, err := os.Stat(src); err != nil {

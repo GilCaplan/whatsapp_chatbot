@@ -4,6 +4,7 @@
 #   ~/.local/share/applications/whatsapp-doppel.desktop  app menu entry
 #   ~/.local/share/icons/hicolor/*/apps/whatsapp-doppel.png
 #   ~/Desktop/whatsapp-doppel.desktop                    Desktop shortcut (if you have a Desktop folder)
+#   ~/.local/share/whatsapp-doppel/uninstall.sh           to remove all of the above later
 # Run it from the extracted folder:  ./install.sh [--launch | --no-launch] [--no-desktop-shortcut]
 # Safe to run again (updates in place). Your data (~/.config/WhatsappDoppel) is never touched.
 set -euo pipefail
@@ -72,6 +73,14 @@ chmod 644 "$APPS_DIR/$DESKTOP_FILE"
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
 command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t -f "$ICON_DIR" >/dev/null 2>&1 || true
 
+if [[ -f "$HERE/uninstall.sh" ]]; then
+  mkdir -p "$DATA_HOME/whatsapp-doppel"
+  if [[ "$HERE/uninstall.sh" != "$DATA_HOME/whatsapp-doppel/uninstall.sh" ]]; then
+    cp -f "$HERE/uninstall.sh" "$DATA_HOME/whatsapp-doppel/uninstall.sh"
+  fi
+  chmod 755 "$DATA_HOME/whatsapp-doppel/uninstall.sh"
+fi
+
 if [[ "$DESKTOP_SHORTCUT" == 1 ]]; then
   desk="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
   [[ -n "$desk" && "$desk" != "$HOME" ]] || desk="$HOME/Desktop"
@@ -93,6 +102,7 @@ case ":$PATH:" in
 esac
 
 step "Installed. Open WhatsApp Doppel from your app menu or your Desktop."
+echo "To uninstall later: $DATA_HOME/whatsapp-doppel/uninstall.sh"
 
 if [[ "$LAUNCH" == "ask" ]]; then
   if [[ -t 0 && -t 1 ]]; then

@@ -5,7 +5,7 @@ Install (no administrator rights needed):
   1. Extract this zip: right-click it > Extract All > Extract.
   2. In the extracted folder, double-click install.cmd.
      If Windows says "Windows protected your PC", click "More info", then "Run anyway"
-     (the app is free and open source but not code-signed).
+     (the app is free but not code-signed, so Windows doesn't know it yet).
   3. Open "WhatsApp Doppel" from the Start menu or your Desktop. Your browser opens the
      app; scan the QR code with WhatsApp on your phone
      (Settings > Linked devices > Link a device).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Removes what install.sh created. Your data (settings, personas, WhatsApp
+# Removes what install.sh created (a copy lives in ~/.local/share/whatsapp-doppel/). Your data (settings, personas, WhatsApp
 # link) is kept unless you pass --purge or answer "y" when asked.
 #   ./uninstall.sh [--purge | --keep-data]
 set -euo pipefail
@@ -34,6 +34,8 @@ for f in "$DATA_HOME/applications/whatsapp-doppel.desktop" "$desk/whatsapp-doppe
   fi
 done
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DATA_HOME/applications" >/dev/null 2>&1 || true
+# The copy of this script kept by install.sh (bash has already opened it; removing is fine).
+rm -rf "$DATA_HOME/whatsapp-doppel"
 
 if [[ -d "$DATA_DIR" ]]; then
   if [[ "$MODE" == "ask" && -t 0 ]]; then

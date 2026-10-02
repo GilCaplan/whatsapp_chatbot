@@ -21,4 +21,5 @@ Good to know:
   - In a terminal: whatsapp-doppel status | quit | version
   - On Windows with WSL, use the Windows download instead.
 
-Uninstall:  ./uninstall.sh   (asks before deleting your data; --keep-data / --purge)
+Uninstall:  ~/.local/share/whatsapp-doppel/uninstall.sh   (or ./uninstall.sh from this folder)
+            It asks before deleting your data; --keep-data / --purge skip the question.

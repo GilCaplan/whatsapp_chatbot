@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -30,7 +31,8 @@ func TestMemoriesRoundTrip(t *testing.T) {
 	if len(ms) != 2 || ms[0].ID != b.ID || ms[1].Text != "works as a night nurse" {
 		t.Fatalf("list: %+v", ms)
 	}
-	if st, err := os.Stat(s.memoriesFile("dm:1")); err != nil || st.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits (the per-user profile folder protects the files).
+	if st, err := os.Stat(s.memoriesFile("dm:1")); err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) {
 		t.Errorf("file mode: %v %v", st, err)
 	}
 	if err := s.DeleteMemory("dm:1", "nope"); !errors.Is(err, ErrNotFound) {
@@ -76,7 +78,7 @@ func TestSelfSamples(t *testing.T) {
 	if n != 5 || since == nil || !since.Equal(base.Add(2*time.Minute)) {
 		t.Errorf("stats %d %v", n, since)
 	}
-	if st, err := os.Stat(p.SelfSamplesFile()); err != nil || st.Mode().Perm() != 0o600 {
+	if st, err := os.Stat(p.SelfSamplesFile()); err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) {
 		t.Errorf("mode %v %v", st, err)
 	}
 	if err := s.ClearSelfSamples(); err != nil {
