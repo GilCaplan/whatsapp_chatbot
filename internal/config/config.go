@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"whatsappdoppel/internal/behavior"
+	"whatsappdoppel/internal/crossctx"
 	"whatsappdoppel/internal/model"
 )
 
@@ -55,7 +56,8 @@ type (
 // v3 added the mention and "who it answers" behaviour fields (V3Fields).
 // v4 added the typo behaviour fields (V4Fields) and the notifications,
 // safety, memory, recap and clone blocks.
-const SettingsVersion = 4
+// v5 added memory.cross (cross-chat context; no behaviour fields).
+const SettingsVersion = 5
 
 // V3Fields are the behaviour fields added in settings v3. Older files get them
 // from the preset each profile is labelled with, so "Natural" stays Natural.
@@ -104,7 +106,47 @@ type SafetySettings struct {
 
 // MemorySettings: learn about the people in chats (per chat: ChatAssignment.Memory).
 type MemorySettings struct {
-	Enabled bool `json:"enabled"`
+	Enabled bool          `json:"enabled"`
+	Cross   CrossSettings `json:"cross"` // v5
+}
+
+// CrossSettings: personas use what they learned in their other chats with
+// the same people (per chat: ChatAssignment.Cross; per person:
+// PersonPrefs.Cross; per memory: Memory.Scope).
+type CrossSettings struct {
+	Enabled   bool           `json:"enabled"`
+	GroupMode string         `json:"groupMode"` // off|discreet|open: how groups use private chats
+	DMMode    string         `json:"dmMode"`    // off|discreet|open: how private chats use shared groups
+	Sensitive CrossSensitive `json:"sensitive"` // topics that never cross on their own
+	FreshDays int            `json:"freshDays"` // 1–90: older unpinned things are not carried
+	MaxPeople int            `json:"maxPeople"` // 1–8 people per reply
+	MaxItems  int            `json:"maxItems"`  // 1–16 things per reply
+}
+
+// CrossSensitive: true = that topic never crosses into other chats.
+type CrossSensitive struct {
+	Money    bool `json:"money"`
+	Health   bool `json:"health"`
+	Meeting  bool `json:"meeting"`
+	Distress bool `json:"distress"`
+	Bot      bool `json:"bot"`
+	Legal    bool `json:"legal"`
+	Romance  bool `json:"romance"`
+	Secret   bool `json:"secret"`
+}
+
+// Rules converts the settings for crossctx.
+func (c CrossSettings) Rules() crossctx.Rules {
+	return crossctx.Rules{
+		Enabled: c.Enabled, GroupMode: c.GroupMode, DMMode: c.DMMode,
+		Sensitive: map[string]bool{
+			model.HandoffMoney: c.Sensitive.Money, model.HandoffHealth: c.Sensitive.Health,
+			model.HandoffMeeting: c.Sensitive.Meeting, model.HandoffDistress: c.Sensitive.Distress,
+			model.HandoffBot: c.Sensitive.Bot, model.HandoffLegal: c.Sensitive.Legal,
+			model.SensitiveRomance: c.Sensitive.Romance, model.SensitiveSecret: c.Sensitive.Secret,
+		},
+		FreshDays: c.FreshDays, MaxPeople: c.MaxPeople, MaxItems: c.MaxItems,
+	}
 }
 
 // RecapSettings: the daily recap of every active chat.
@@ -188,7 +230,11 @@ func Defaults() Settings {
 			Handoff: HandoffSettings{Enabled: true, Money: true, Health: true, Meeting: true, Distress: true, Bot: true, Legal: true, AICheck: true},
 			Reveal:  RevealSettings{Template: DefaultRevealTemplate},
 		},
-		Memory:    MemorySettings{Enabled: true},
+		Memory: MemorySettings{Enabled: true, Cross: CrossSettings{
+			Enabled: true, GroupMode: model.CrossDiscreet, DMMode: model.CrossOpen,
+			Sensitive: CrossSensitive{Money: true, Health: true, Meeting: true, Distress: true, Bot: true, Legal: true, Romance: true, Secret: true},
+			FreshDays: 14, MaxPeople: 4, MaxItems: 8,
+		}},
 		Recap:     RecapSettings{Enabled: false, Time: "21:00", KeepDays: 30},
 		SelfClone: CloneSettings{CollectSamples: false, MaxSamples: 500},
 	}
@@ -309,7 +355,12 @@ func (m *Manager) normalize() {
 		s.Notifications, s.Safety, s.Memory = d.Notifications, d.Safety, d.Memory
 		s.Recap, s.SelfClone = d.Recap, d.SelfClone
 	}
+	if loaded > 0 && loaded < 5 {
+		// v5 added memory.cross: its bools can't be told apart from unset either.
+		s.Memory.Cross = d.Memory.Cross
+	}
 	normalizeV4(s, d)
+	normalizeV5(s, d)
 	behavior.Normalize(&s.Behavior.Private, behavior.KindDM)
 	behavior.Normalize(&s.Behavior.Group, behavior.KindGroup)
 	// Keep DefaultModel in sync with the per-provider model.
@@ -332,6 +383,26 @@ func normalizeV4(s *Settings, d Settings) {
 	}
 	if s.SelfClone.MaxSamples <= 0 {
 		s.SelfClone.MaxSamples = d.SelfClone.MaxSamples
+	}
+}
+
+// normalizeV5 fills zero non-bool values of memory.cross.
+func normalizeV5(s *Settings, d Settings) {
+	c, dc := &s.Memory.Cross, d.Memory.Cross
+	if c.GroupMode == "" {
+		c.GroupMode = dc.GroupMode
+	}
+	if c.DMMode == "" {
+		c.DMMode = dc.DMMode
+	}
+	if c.FreshDays <= 0 {
+		c.FreshDays = dc.FreshDays
+	}
+	if c.MaxPeople <= 0 {
+		c.MaxPeople = dc.MaxPeople
+	}
+	if c.MaxItems <= 0 {
+		c.MaxItems = dc.MaxItems
 	}
 }
 

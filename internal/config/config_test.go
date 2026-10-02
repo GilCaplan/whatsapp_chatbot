@@ -77,7 +77,7 @@ func TestLoadMigratesLegacyConfig(t *testing.T) {
 	raw, _ := os.ReadFile(p.ConfigFile())
 	var top map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &top)
-	if _, ok := top["replies"]; ok || top["approvals"] != nil || !strings.Contains(string(raw), `"version": 4`) {
+	if _, ok := top["replies"]; ok || top["approvals"] != nil || !strings.Contains(string(raw), `"version": 5`) {
 		t.Errorf("config.json not rewritten:\n%s", raw)
 	}
 	// Re-loading the migrated file is a no-op.
