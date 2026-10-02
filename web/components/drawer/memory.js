@@ -16,11 +16,13 @@ import { toggle, toast } from '../../ui.js';
 import { recapBlock } from '../recap-card.js';
 import { helpTip } from '../help-tip.js';
 import { createMemoryStore, memoryList } from '../memory-list.js';
+import { createCrossStore, crossBlock } from '../cross-block.js';
 import { patchChat } from './shared.js';
 
 export function createMemoryTab(ctx) {
   const mem = createMemoryStore(ctx.key, ctx.update);
   ctx.memories = mem;
+  const cross = createCrossStore(ctx.key, ctx.update);
   const ui = { filter: '', editing: '', editText: '', newText: '', newPerson: '', adding: false, extracting: false };
 
   async function setMemory(c, on) {
@@ -68,6 +70,7 @@ export function createMemoryTab(ctx) {
           ${toggle(enabled, (v) => setMemory(c, v), { label: 'Learn about people in this chat' })}
         </div>
         ${enabled && pending ? html`<div class="tiny faint mem-pending">${pending} new message${pending === 1 ? '' : 's'} since the last look — it checks every few messages.</div>` : ''}
+        ${enabled ? crossBlock({ cross, chat: c, persona: p, onUpdate: ctx.update }) : ''}
         ${memoryList({ mem, chat: c, persona: p, ui, onUpdate: ctx.update })}
       </section>
       ${recapBlock(ctx, c, p) /* Engineer B: daily recap block (recap-card.js) */}`;
@@ -76,13 +79,14 @@ export function createMemoryTab(ctx) {
   return {
     id: 'memory',
     view,
-    load: () => mem.load(),
+    load: () => { mem.load(); cross.load(); },
     onBus(type, data) {
       if (type === 'memories.changed' && (!data || !data.chatKey || data.chatKey === ctx.key)) mem.reloadSoon();
-      if (type === 'chats.changed' || type === 'settings.changed') mem.reloadSoon();
+      if (type === 'memories.changed') cross.reloadSoon(); // other chats' notes change what this one draws on
+      if (type === 'chats.changed' || type === 'settings.changed') { mem.reloadSoon(); cross.reloadSoon(); }
     },
     /** People tab → "3 things remembered" opens this tab filtered by person. */
     memoryFilter(person) { ui.filter = person || ''; ctx.update(); },
-    destroy() { mem.destroy(); },
+    destroy() { mem.destroy(); cross.destroy(); },
   };
 }

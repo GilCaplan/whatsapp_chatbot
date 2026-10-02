@@ -16,6 +16,8 @@ const GLYPHS = {
   distress: '<path d="M12 19.6s-7.4-4.3-7.4-9.6A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.4 2.4c0 5.3-7.4 9.6-7.4 9.6Z"/><path d="m12.6 9.4-1.7 3h2.4l-1.6 3"/>',
   bot: '<rect x="5" y="8" width="14" height="11" rx="3.4"/><path d="M12 8V4.8"/><circle cx="12" cy="3.9" r="1"/><circle cx="9.3" cy="13.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.7" cy="13.2" r="1.1" fill="currentColor" stroke="none"/><path d="M9.8 16.3h4.4M3.2 12.6v2.6M20.8 12.6v2.6"/>',
   legal: '<path d="M12 4v15.6M7.6 19.6h8.8M5.4 7.2h13.2"/><path d="m6.6 7.2-2.8 6.2a3 3 0 0 0 5.6 0Z"/><path d="m17.4 7.2-2.8 6.2a3 3 0 0 0 5.6 0Z"/>',
+  romance: '<path d="M12 19.6s-7.4-4.3-7.4-9.6A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.4 2.4c0 5.3-7.4 9.6-7.4 9.6Z"/><path d="M4.4 19.4 19.6 5.2"/>',
+  secret: '<rect x="5" y="10.5" width="14" height="10" rx="2.6"/><path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/><path d="M12 14.4v2.4"/>',
   brief: '<path d="M4.5 12h9"/><path d="m15.2 7.4 4.3 4.6-4.3 4.6"/>',
   warm: '<path d="M12 19.2s-7-4-7-9.2A3.9 3.9 0 0 1 12 7.8a3.9 3.9 0 0 1 7 2.2c0 5.2-7 9.2-7 9.2Z"/>',
   playful: '<circle cx="12" cy="12" r="8.4"/><path d="M8.6 14.2c.8 1.4 2 2.1 3.4 2.1s2.6-.7 3.4-2.1"/><path d="M8.4 10.2c.4-.6 1.2-.6 1.6 0M14 10.2c.4-.6 1.2-.6 1.6 0"/>',
@@ -32,6 +34,19 @@ export const HANDOFF_CATS = [
   { id: 'distress', label: 'Someone struggling', line: 'Sadness, crisis or talk of hurting themselves.' },
   { id: 'bot', label: 'Is it a bot?', line: 'Asking if they are talking to an AI or the real you.' },
   { id: 'legal', label: 'Legal', line: 'Lawyers, police, courts or contracts.' },
+];
+
+/** Topics that never cross into other chats (cross-chat context): the
+ * hand-off topics plus relationships and secrets. */
+export const SENSITIVE_CATS = [
+  { id: 'money', label: 'Money', line: 'Debts, rent, pay, losing a job.' },
+  { id: 'health', label: 'Health', line: 'Illness, therapy, hospital, medication.' },
+  { id: 'meeting', label: 'Meeting up', line: 'Plans to meet in person, addresses.' },
+  { id: 'distress', label: 'Someone struggling', line: 'Someone having a hard time.' },
+  { id: 'bot', label: 'Is it a bot?', line: 'Questions about talking to an AI.' },
+  { id: 'legal', label: 'Legal', line: 'Lawyers, police, courts.' },
+  { id: 'romance', label: 'Relationships', line: 'Dating, partners, breakups.' },
+  { id: 'secret', label: 'Secrets', line: 'Anything they asked to keep quiet.' },
 ];
 
 export const catLabel = (id) => (HANDOFF_CATS.find((c) => c.id === id) || { label: 'Something sensitive' }).label;
