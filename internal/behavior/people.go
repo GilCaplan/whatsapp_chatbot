@@ -120,7 +120,7 @@ func NormalizePeople(pc model.PeopleConfig) model.PeopleConfig {
 		p.JID = strings.TrimSpace(p.JID)
 		p.Name = strings.TrimSpace(p.Name)
 		p.Notes = strings.TrimSpace(p.Notes)
-		if p.Respond == nil && !p.Priority && p.Notes == "" {
+		if p.Respond == nil && !p.Priority && p.Notes == "" && p.Cross == nil {
 			continue
 		}
 		out = append(out, p)
