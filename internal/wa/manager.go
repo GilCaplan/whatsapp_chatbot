@@ -15,7 +15,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store"
@@ -135,7 +134,7 @@ func New(opts Options) (*Manager, error) {
 	}
 
 	store.DeviceProps.Os = proto.String("WhatsApp Doppel") // name shown under "Linked devices" on the phone
-	container, err := sqlstore.New(m.baseCtx, "sqlite3", "file:"+dbPath+"?_foreign_keys=on&_busy_timeout=5000", m.libLog.Sub("DB"))
+	container, err := sqlstore.New(m.baseCtx, sqlDriver, sessionDSN(dbPath), m.libLog.Sub("DB"))
 	if err != nil {
 		m.cancel()
 		return nil, fmt.Errorf("open WhatsApp session store: %w", err)
