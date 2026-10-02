@@ -27,7 +27,7 @@ really want it), and use the realistic timing presets rather than instant replie
 
 ## Privacy of the people you chat with
 
-Conversations in assigned chats are stored on your Mac and, if you pick Claude or OpenAI, sent to that
+Conversations in assigned chats are stored on your computer and, if you pick Claude or OpenAI, sent to that
 provider to write replies. Use the local Ollama option for maximum privacy, and clear a chat's history
 from its panel when you're done. See [SECURITY.md](../SECURITY.md) for exactly what is stored where.
 

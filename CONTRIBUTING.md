@@ -11,8 +11,10 @@ cd whatsapp_chatbot
 make dev-fake      # runs the app with a simulated WhatsApp and a scripted AI — no phone or model needed
 ```
 
-Requirements: macOS, Go (version in `go.mod`), Xcode command-line tools (for cgo SQLite),
-optionally [Ollama](https://ollama.com) for real AI replies.
+Requirements: macOS, Linux or Windows with Go (version in `go.mod`; Go 1.21+ fetches it). No C
+compiler is needed (SQLite is pure Go); `go test -race` alone needs cgo. Optionally
+[Ollama](https://ollama.com) for real AI replies, `jq` for `make smoke` and Node.js for `node --check`.
+On Windows use `scripts\dev.ps1` (`build`, `dev-fake`, `test`, `vet`, …) instead of `make`.
 
 ## Before opening a pull request
 
@@ -21,7 +23,9 @@ make vet test smoke
 find web -name '*.js' -print0 | xargs -0 -n1 node --check
 ```
 
-All four must pass (CI runs the same).
+All four must pass. CI runs the same on Linux, macOS and Windows, cross-compiles every release
+target and runs each OS's installer end to end. If you touch anything OS-specific, keep it in
+`internal/platform` (one file per OS) and run `GOOS=windows go vet ./...` and `GOOS=linux go vet ./...`.
 
 ## Ground rules
 
@@ -38,5 +42,7 @@ All four must pass (CI runs the same).
 
 ## Reporting bugs and ideas
 
-Use the issue templates. For bugs, include the relevant lines from the **Activity** page and
-`~/Library/Application Support/WhatsappDoppel/logs/server.log` — but remove names, numbers and message text first.
+Use the issue templates. For bugs, include your OS, the relevant lines from the **Activity** page and
+`logs/server.log` from the data folder (`~/Library/Application Support/WhatsappDoppel` on a Mac,
+`%APPDATA%\WhatsappDoppel` on Windows, `~/.config/WhatsappDoppel` on Linux) — but remove names,
+numbers and message text first.
