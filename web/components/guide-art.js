@@ -34,7 +34,7 @@ const ARTS = {
     <g fill="url(#ga-a)"><circle cx="178" cy="24" r="3.4"/><circle cx="190" cy="24" r="3.4" opacity=".7"/><circle cx="202" cy="24" r="3.4" opacity=".45"/></g>
     ${spark(214, 66, 7, '#fbbf24')}${spark(30, 40, 5, '#a78bfa')}${spark(206, 104, 4, '#34d399')}`),
 
-  // Phone ↔ Mac link, a brain writing the reply.
+  // Phone ↔ computer link, a brain writing the reply.
   how: svg(`${shadow()}
     <g filter="url(#ga-sh)">
       <rect x="30" y="26" width="52" height="96" rx="14" fill="url(#ga-a)"/>

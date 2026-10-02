@@ -64,7 +64,7 @@ export function createMemoryStore(key, update) {
   };
 }
 
-/** The AI that writes memories for this chat ("" = runs on this Mac). */
+/** The AI that writes memories for this chat ("" = runs on this computer). */
 function cloudProvider(persona) {
   const s = store.state.settings && store.state.settings.llm;
   const prov = (persona && persona.llm && persona.llm.provider) || (s && s.defaultProvider) || 'ollama';
@@ -165,7 +165,7 @@ export function memoryList({ mem, chat, persona, ui, onUpdate }) {
   }
 
   return html`<div class="memory-list">
-    ${cloud ? html`<div class="banner warn small mem-cloud">${icon('lock')}<div>Memories here are written by <b>${cloud}</b>, which reads the messages it learns from. Switch this persona's Brain to Ollama to keep everything on this Mac.</div></div>` : ''}
+    ${cloud ? html`<div class="banner warn small mem-cloud">${icon('lock')}<div>Memories here are written by <b>${cloud}</b>, which reads the messages it learns from. Switch this persona's Brain to Ollama to keep everything on this computer.</div></div>` : ''}
     ${groups.length > 1 ? html`<div class="chip-row mem-filter" role="group" aria-label="Show memories about">
       <button type="button" class=${'chip chip-sm ' + (!filter ? 'on' : '')} aria-pressed=${String(!filter)} @click=${() => { ui.filter = ''; onUpdate(); }}>Everyone</button>
       ${groups.map((g) => html`<button type="button" class=${'chip chip-sm ' + (filter === g.person ? 'on' : '')} aria-pressed=${String(filter === g.person)}

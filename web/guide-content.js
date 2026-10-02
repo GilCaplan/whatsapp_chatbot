@@ -11,7 +11,7 @@ export const GUIDE_SECTIONS = [
     blocks: [
       { p: 'Think of it as a puppet show where you write the puppet. Leo the surfer, a dramatic opera singer, a calmer version of you: each persona has a name, a backstory and its own way of texting.' },
       { points: [
-        '**It runs on your Mac.** Nothing gets installed on your phone.',
+        '**It runs on your computer.** Nothing gets installed on your phone.',
         '**It only answers in chats you pick.** Every other chat is left alone.',
         '**You stay in charge.** Read along, approve replies first, or take over whenever you like.',
       ] },
@@ -23,11 +23,11 @@ export const GUIDE_SECTIONS = [
     blocks: [
       { steps: [
         '**Link WhatsApp.** Scan a QR code with your phone (WhatsApp › Settings › Linked devices). You can unlink any time from your phone.',
-        '**Pick a brain.** Ollama runs a free AI model right on this Mac. Or use Claude or OpenAI with your own key.',
+        '**Pick a brain.** Ollama runs a free AI model right on this computer. Or use Claude or OpenAI with your own key.',
         '**Choose a persona.** Use a ready-made one, or describe a character in a sentence and let the AI builder draft it.',
         '**Assign it to a chat.** From then on it notices, reads, thinks, types and replies there, at a human pace.',
       ] },
-      { note: 'Replies only go out while your Mac is awake and Doppel is running. Closing the browser tab is fine; Doppel keeps working in the background.' },
+      { note: 'Replies only go out while your computer is awake and Doppel is running. Closing the browser tab is fine; Doppel keeps working in the background.' },
     ],
   },
   {
@@ -106,8 +106,8 @@ export const GUIDE_SECTIONS = [
     blocks: [
       { points: [
         'Memories are kept per chat. See, pin, change or delete them in the chat\'s Memory tab, or turn learning off.',
-        'Everything lives on this Mac in Doppel\'s data folder: settings, personas, chats, history and memories.',
-        'With **Ollama**, nothing leaves your Mac. With **Claude** or **OpenAI**, the chat text needed for a reply is sent to that company.',
+        'Everything lives on this computer in Doppel\'s data folder: settings, personas, chats, history and memories.',
+        'With **Ollama**, nothing leaves your computer. With **Claude** or **OpenAI**, the chat text needed for a reply is sent to that company.',
         'Clear a chat\'s history or memories from its panel any time. Removing a chat also deletes what it remembered.',
       ] },
     ],
@@ -117,11 +117,11 @@ export const GUIDE_SECTIONS = [
     lead: 'Quick answers to the things people ask most.',
     blocks: [
       { qa: [
-        ['Ollama, Claude or OpenAI?', 'Ollama is free and private: the AI runs on your Mac (16 GB of memory or more works best, and llama3.1:8b is a good first model). Claude and OpenAI usually write more natural replies; they need an API key, charge per use and see the messages they answer.'],
-        ['Does my phone have to stay on?', 'No. Linked devices keep working while your phone is off for a while. Doppel itself needs your Mac awake and the app running.'],
+        ['Ollama, Claude or OpenAI?', 'Ollama is free and private: the AI runs on your computer (16 GB of memory or more works best, and llama3.1:8b is a good first model). Claude and OpenAI usually write more natural replies; they need an API key, charge per use and see the messages they answer.'],
+        ['Does my phone have to stay on?', 'No. Linked devices keep working while your phone is off for a while. Doppel itself needs your computer awake and the app running.'],
         ['How do I quit?', 'Settings › About › Quit Doppel. Personas stop replying until you open the app again, and nothing is deleted.'],
         ['The page says the port is in use.', 'Settings › Server › Find free ports, pick one and press the button to switch. The page moves to the new address by itself and remembers it.'],
-        ['Where is my data?', 'In your home folder under Library › Application Support › WhatsappDoppel. Settings › Data › Open in Finder takes you there. Deleting that folder starts completely fresh.'],
+        ['Where is my data?', 'In one folder in your home folder. Settings › Data shows exactly where and opens it for you (on a Mac it is Library › Application Support › WhatsappDoppel, on Windows AppData › Roaming › WhatsappDoppel, on Linux .config › WhatsappDoppel). Deleting that folder starts completely fresh.'],
         ['Will people notice it is not me?', 'They might, and with friends who are in on it that is half the fun. Doppel takes its time, types like a person and stays in character, but it is still an AI. The reveal message ends things nicely.'],
         ['Is this allowed by WhatsApp?', 'Automated messaging can break WhatsApp\'s terms, and accounts that act like bots can be restricted. Keep volume low, use realistic timing, leave check-ins off, and keep it to friends. The risk is yours.'],
       ] },
@@ -167,11 +167,11 @@ export const TIPS = {
   handoff: { title: 'Hand-off', section: 'safety',
     text: 'When someone brings up something serious (money, health, meeting up, distress, legal trouble) or asks if it is a bot, the persona goes quiet and Doppel asks you to take over.' },
   memory: { title: 'Memory', section: 'memory',
-    text: 'Lets the persona remember small facts people mention and bring them up later. Stored only on this Mac; you can see and delete every memory.' },
+    text: 'Lets the persona remember small facts people mention and bring them up later. Stored only on this computer; you can see and delete every memory.' },
   reveal: { title: 'Reveal', section: 'safety',
     text: 'Sends a friendly message that it was an AI persona all along, then pauses the chat. You can edit the message in Settings › Safety.' },
   clone: { title: 'Clone yourself', section: 'memory',
-    text: 'With your OK, Doppel keeps a private sample of messages **you** write, so it can draft a persona that texts like you. Stored only on this Mac; delete it any time.' },
+    text: 'With your OK, Doppel keeps a private sample of messages **you** write, so it can draft a persona that texts like you. Stored only on this computer; delete it any time.' },
   'plan-ahead': { title: 'Plan ahead', section: 'goals',
     text: 'Before each reply the AI privately thinks about the next step towards the goal. Smarter steering, slightly slower replies.' },
   'who-answers': { title: 'Who it answers', section: 'chats',
