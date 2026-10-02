@@ -76,7 +76,7 @@ func TestApproveDraftParam(t *testing.T) {
 func TestSettingsV4(t *testing.T) {
 	e := newEnv(t)
 	var sv settingsView
-	if code := e.do("GET", "/api/settings", nil, &sv); code != 200 || sv.Version != 4 || !sv.Notifications.Enabled || !sv.Safety.Handoff.Bot || sv.Recap.Time != "21:00" || sv.SelfClone.MaxSamples != 500 {
+	if code := e.do("GET", "/api/settings", nil, &sv); code != 200 || sv.Version != 5 || !sv.Notifications.Enabled || !sv.Safety.Handoff.Bot || sv.Recap.Time != "21:00" || sv.SelfClone.MaxSamples != 500 {
 		t.Fatalf("settings = %d %+v", code, sv.Settings)
 	}
 	if pr := sv.Behavior.Private; pr.TypoPercent != 5 || pr.TypoFixStyle != "correction" {

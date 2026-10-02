@@ -144,6 +144,9 @@ func fakeDefault(req Request, n int) string {
 			"goalProgress": "", "toKnow": []string{"They asked about Saturday: nothing is agreed yet"}, "mood": "upbeat",
 		})
 		return string(b)
+	case req.JSON && strings.Contains(req.System, "private brief"):
+		// Chat brief for other chats (prompt.Brief).
+		return `{"topics":["weekend plans"],"commitments":["bring wine on Saturday"],"tone":"warm","people":[],"sensitive":[]}`
 	case req.JSON && strings.Contains(req.System, "private notebook"):
 		// Memory extraction (prompt.ExtractMemories): remember the last
 		// thing someone else said, so the Memory tab has something to show.

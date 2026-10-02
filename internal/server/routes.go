@@ -90,6 +90,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PATCH /api/chats/{key}/memories/{id}", s.handlePatchMemory)
 	mux.HandleFunc("DELETE /api/chats/{key}/memories/{id}", s.handleDeleteMemory)
 	mux.HandleFunc("DELETE /api/chats/{key}/memories", s.handleClearMemories)
+	// Cross-chat context (handlers_cross.go)
+	mux.HandleFunc("GET /api/chats/{key}/cross", s.handleChatCross)
+	mux.HandleFunc("POST /api/chats/{key}/cross/refresh", s.handleRefreshBrief)
 
 	// Hand-off and reveal (handlers_handoff.go, handlers_reveal.go)
 	mux.HandleFunc("POST /api/chats/{key}/handoff/resume", s.handleResumeHandoff)

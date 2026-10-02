@@ -110,7 +110,8 @@ func (e *Engine) Reveal(ctx context.Context, chatKey, text string, force bool) (
 	}); err == nil {
 		c = updated
 	}
-	e.Reload() // the chat is paused: its runner stops
+	e.Reload()           // the chat is paused: its runner stops
+	e.forgetBrief(c.Key) // a revealed chat is never a source for other chats
 	who := p.Name
 	if who == "" {
 		who = "the persona"

@@ -158,6 +158,21 @@ func (e *fakeEngine) ExtractMemories(ctx context.Context, chatKey string) (model
 	}
 	return model.MemoryExtractResult{Added: 1}, nil
 }
+func (e *fakeEngine) CrossView(ctx context.Context, chatKey string) (model.CrossView, error) {
+	e.record("cross|" + chatKey)
+	if e.wave3Err != nil {
+		return model.CrossView{}, e.wave3Err
+	}
+	return model.CrossView{Enabled: true, Kind: "group", Mode: model.CrossDiscreet, ModeSource: "default", Share: true, ShareSource: "default",
+		Sources: []model.CrossSource{{ChatKey: "dm:972500000001", Name: "Dana", Kind: "dm", Person: "Dana", Items: 2}}}, nil
+}
+func (e *fakeEngine) RefreshBrief(ctx context.Context, chatKey string) (model.Brief, error) {
+	e.record("brief|" + chatKey)
+	if e.wave3Err != nil {
+		return model.Brief{}, e.wave3Err
+	}
+	return model.Brief{ChatKey: chatKey, Topics: []string{"weekend plans"}}, nil
+}
 func (e *fakeEngine) Regenerate(ctx context.Context, id string) (model.PendingReply, error) {
 	return model.PendingReply{ID: id, Text: "again"}, nil
 }

@@ -75,6 +75,7 @@ func (e *Engine) fillPending(pend *model.PendingReply, res genResult, hist []mod
 	pend.Opener = res.Opener
 	pend.Stale = false
 	pend.Provider, pend.Model = res.Provider, res.Model
+	pend.CrossUsed = res.crossUsed()
 	pend.Context = hist[max(0, len(hist)-contextSize):]
 	pend.AutoSendAt = nil
 	if secs := autoSendSeconds; secs > 0 {
@@ -217,7 +218,11 @@ func (e *Engine) SendApproved(ctx context.Context, id, text string, draft int) e
 			e.hub.Publish(events.TypeApproval, events.ApprovalEvent{Action: "removed", Pending: removed})
 		}
 		tags := bubbleMentions(b.Text, d)
-		e.recordSent(r, c, b.Text, wire, tags)
+		var crossUsed []string
+		if !edited {
+			crossUsed = p.CrossUsed
+		}
+		e.recordSent(r, c, b.Text, wire, tags, crossUsed)
 		e.act(model.ActApprovalSent, c, p.PersonaName, b.Text, mentionMeta(map[string]any{
 			"approvalId": id, "edited": edited, "jid": jid, "provider": p.Provider, "model": p.Model, "part": i + 1, "parts": n,
 		}, tags))
@@ -273,14 +278,14 @@ func (e *Engine) Regenerate(ctx context.Context, id string) (model.PendingReply,
 	}
 	bp := e.effective(c).Profile
 	dir := e.directory(ctx, c, hist)
-	opts := e.promptOptions(c, bp, dir, hist)
+	opts, cross := e.promptOptions(c, bp, dir, hist)
 	if p.Opener {
 		opts.Opener = e.openerFor(prompt.Opener{Manual: true}, hist) // regenerate an opener as an opener
 	}
 	gcfg, gturn := e.chatGoalTurn(ctx, c, per, hist, c.Kind == "group", p.Opener)
 	copilot := c.Mode == model.ChatModeCopilot && !p.Opener // "More ideas" in co-pilot mode
-	res, err := e.replyFor(ctx, copilot, per, bp, hist, false, gcfg, gturn, func(t prompt.GoalTurn) llm.Request {
-		opts.Goal = t
+	res, err := e.replyFor(ctx, copilot, per, bp, hist, false, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+		opts.Goal, opts.CrossTurn = t, x
 		if p.Opener {
 			return prompt.Initiate(per, c, hist, c.Kind == "group", opts)
 		}

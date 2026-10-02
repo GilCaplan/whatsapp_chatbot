@@ -667,15 +667,18 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 		ctx, cancel := context.WithTimeout(cyc.ctx, generateLimit)
 		isGroup := c.Kind == "group"
 		dir = e.directory(ctx, c, hist)
-		opts := e.promptOptions(c, eff.Profile, dir, hist)
+		opts, cross := e.promptOptions(c, eff.Profile, dir, hist)
+		if cross.active() {
+			e.act(model.ActThinking, c, p.Name, crossActivityText(cross), map[string]any{"stage": "cross", "crossContext": cross.meta()})
+		}
 		if cyc.proactive {
 			opts.Opener = e.openerFor(cyc.opener, hist) // opener.go
 		} else {
 			opts.Late = e.lateNote(p, hist, e.clock.Now()) // "sorry, was at the gym" (routine.go)
 		}
 		gcfg, gturn := e.chatGoalTurn(ctx, c, p, hist, isGroup, cyc.proactive)
-		res, err = e.replyFor(ctx, cyc.copilot, p, eff.Profile, hist, cyc.proactive, gcfg, gturn, func(t prompt.GoalTurn) llm.Request {
-			opts.Goal = t
+		res, err = e.replyFor(ctx, cyc.copilot, p, eff.Profile, hist, cyc.proactive, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+			opts.Goal, opts.CrossTurn = t, x
 			if cyc.proactive {
 				return prompt.Initiate(p, c, hist, isGroup, opts)
 			}
@@ -811,7 +814,7 @@ func (r *Runner) send(cyc *cycle, c model.ChatAssignment, p model.Persona, res g
 			return
 		}
 		tags := bubbleMentions(b.Text, dir)
-		msgID := e.recordSentBubble(r, c, text, b.Text, wire, tags, sres.ID, "")
+		msgID := e.recordSentBubble(r, c, text, b.Text, wire, tags, sres.ID, "", res.crossUsed())
 		m := mentionMeta(res.meta(), tags)
 		if i == typoAt {
 			m["typo"] = true

@@ -165,6 +165,12 @@ type genResult struct {
 	Fallback bool
 	// GoalRewritten: the first draft gave the goal away and was rewritten (goal.go).
 	GoalRewritten bool
+	// Cross-chat context (cross.go): what informed the reply; CrossRewritten
+	// = a draft gave away something from another chat and was rewritten;
+	// CrossDropped = in the end it was written without the other chats.
+	Cross          *crossUse
+	CrossRewritten bool
+	CrossDropped   bool
 	// Opener: written by prompt.Initiate (check-in / manual start), see opener.go.
 	Opener bool
 	// Expression rules (expression.go): asked again because far too long,
@@ -173,6 +179,15 @@ type genResult struct {
 	Trimmed       bool
 	EmojiRemoved  int
 	EmojiAdded    string
+}
+
+// crossUsed names the people whose other-chat context the reply was written
+// with (nil when none, or when it was written without it in the end).
+func (g genResult) crossUsed() []string {
+	if !g.Cross.active() || g.CrossDropped {
+		return nil
+	}
+	return g.Cross.People
 }
 
 func (g genResult) meta() map[string]any {
@@ -186,6 +201,15 @@ func (g genResult) meta() map[string]any {
 	}
 	if g.GoalRewritten {
 		m["goalRewritten"] = true
+	}
+	if g.Cross.active() {
+		m["crossContext"] = g.Cross.meta()
+	}
+	if g.CrossRewritten {
+		m["crossRewritten"] = true
+	}
+	if g.CrossDropped {
+		m["crossDropped"] = true
 	}
 	if g.LengthRetried {
 		m["lengthRetried"] = true
