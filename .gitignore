@@ -1,19 +1,39 @@
-# Ignore everything
+# Whitelist style: ignore everything, then re-include what we track.
 *
+!*/
+!/.gitignore
+!/.gitattributes
+!/.env.example
+!/Makefile
+!/README.md
+!/CLAUDE.md
+!/LICENSE
+!/CHANGELOG.md
+!/CONTRIBUTING.md
+!/SECURITY.md
+!/INSTALL_FOR_AGENTS.md
+!/.github/**
+!/go.mod
+!/go.sum
+!/main.go
+!/internal/**
+!/web/**
+!/assets/**
+!/scripts/**
+!/docs/**
 
-# Whitelist these specific files (keep them)
-!bot.go
-!.gitignore
-!go.mod
-!go.sum
-!README.md
-!persona.go
-!exported_contacts.go
-!.env.example
-
-# Double-check safety for these
-bot.db
-target_cache.json
+# Never commit (even if re-included above)
+/data/
+/build/
+/dist/
+*.syso
+*.db
+*.db-*
+*.db.bak
 .env
+/WhatsappDoppel.app
+/bot
+/bot_draft/
 whatsapp_contacts.json
-CLAUDE.md
+target_cache.json
+.DS_Store
