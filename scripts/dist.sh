@@ -91,7 +91,8 @@ dist_mac() {
     "$ROOT/scripts/build_app.sh"
   local zip="$DIST/WhatsappDoppel-$VERSION-macos-universal.zip"
   rm -f "$zip"
-  ditto -c -k --keepParent "$out/WhatsappDoppel.app" "$zip"
+  # No resource forks / xattrs / ACLs: otherwise the zip carries ._* AppleDouble files.
+  ditto -c -k --norsrc --noextattr --noacl --keepParent "$out/WhatsappDoppel.app" "$zip"
   step "Wrote $zip"
 }
 
