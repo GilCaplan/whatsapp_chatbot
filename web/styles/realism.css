@@ -1,0 +1,169 @@
+/* realism.css — wave 3 (Engineer A): World & routine card, routine editor,
+   Memory tab, Clone yourself. Liquid Glass look from tokens.css; works in
+   light and dark. */
+
+/* ── World & routine card (persona editor) ── */
+.world-card { padding-top: 14px; padding-bottom: 14px; }
+.world-head {
+  gap: 12px; padding: 4px 0; font-weight: 500;
+}
+.world-head .s-icon {
+  width: 34px; height: 34px; flex: none; border-radius: 11px; display: grid; place-items: center;
+  color: #fff; background: var(--c, var(--brand-grad));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 14px -6px rgba(0, 0, 0, .35);
+}
+.world-head .s-icon .ic { width: 18px; height: 18px; }
+.world-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.world-head-text .small { color: var(--text-2); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.world-head:hover .world-head-text .small { color: var(--text-2); }
+.h2-like { font: 700 17px/1.2 var(--font-display); letter-spacing: -.018em; color: var(--text); }
+.world-body { margin-top: 14px; animation: fade-up .3s var(--ease-out) both; }
+
+.zone-pick { display: flex; flex-direction: column; gap: 8px; }
+.zone-search { position: relative; display: flex; align-items: center; }
+.zone-search > .ic { position: absolute; left: 11px; color: var(--text-3); pointer-events: none; }
+.zone-search .input { padding-left: 32px; }
+.zone-results {
+  display: flex; flex-direction: column; padding: 4px; border-radius: var(--r-md);
+  background: var(--glass-strong); box-shadow: inset 0 0 0 .5px var(--glass-border), var(--shadow-1);
+}
+.zone-opt {
+  appearance: none; border: 0; background: none; color: var(--text); text-align: left; display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--r-sm); font-size: 13.5px; cursor: pointer;
+}
+.zone-opt:hover, .zone-opt:focus-visible { background: var(--fill-2); outline: none; }
+.zone-opt .mono { color: var(--text-2); }
+.zone-chosen {
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--teal) 10%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--teal) 35%, transparent);
+}
+.zone-chosen > .ic { color: var(--teal); }
+.zone-chosen .faint { margin-left: 4px; }
+
+.world-preview {
+  display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 12px 14px; border-radius: var(--r-lg);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--blue) 10%, transparent), color-mix(in srgb, var(--green) 9%, transparent));
+  box-shadow: inset 0 0 0 .5px var(--glass-border);
+}
+.wp-clock svg { display: block; }
+.wp-face { fill: var(--glass-solid); stroke: var(--hairline-strong); stroke-width: 1; }
+.wp-clock svg.night .wp-face { fill: #1e2a44; stroke: #3b4a6b; }
+.wp-tick { fill: var(--text-3); }
+.wp-hand { fill: none; stroke: var(--text); stroke-linecap: round; }
+.wp-clock svg.night .wp-hand, .wp-clock svg.night .wp-tick { stroke: #e6ecff; fill: #e6ecff; }
+.wp-hand.h { stroke-width: 2.6; }
+.wp-hand.m { stroke-width: 1.8; }
+.wp-pin { fill: var(--accent); }
+.wp-main { font-size: 15px; }
+.wp-main b { font-family: var(--font-display); font-size: 16px; }
+.wp-sub { margin-top: 2px; }
+.wp-now { margin-top: 6px; display: flex; align-items: center; gap: 6px; color: var(--text); }
+.reach-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--green); }
+.reach-dot.r-slow { background: var(--amber); }
+.reach-dot.r-unreachable { background: var(--red); }
+
+/* ── Routine editor ── */
+.routine-editor { display: flex; flex-direction: column; gap: 10px; }
+.re-templates { align-items: center; }
+.re-list { display: flex; flex-direction: column; gap: 8px; }
+.re-row {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--fill-1); box-shadow: inset 0 0 0 .5px var(--hairline);
+}
+.re-top, .re-bottom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.re-bottom { justify-content: space-between; }
+.re-label { flex: 1 1 140px; min-width: 110px; font-weight: 600; }
+.re-time { display: inline-flex; align-items: center; gap: 2px; }
+.re-days { display: inline-flex; gap: 3px; }
+.re-day {
+  appearance: none; border: 0; width: 26px; height: 26px; border-radius: 50%; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  background: var(--fill-2); color: var(--text-3); transition: background .15s var(--ease), color .15s var(--ease);
+}
+.re-day.on { background: color-mix(in srgb, var(--indigo) 22%, transparent); color: var(--indigo); }
+.re-day:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.re-reach { flex: none; }
+.re-empty { padding: 10px 12px; border-radius: var(--r-md); background: var(--fill-1); }
+.re-foot { align-items: center; }
+
+/* Drawer › Behaviour: "Also follows Leo's routine" */
+.bh-routine { display: flex; align-items: flex-start; gap: 6px; }
+.bh-routine .ic { margin-top: 2px; flex: none; }
+.bh-routine .link-btn { margin-left: 4px; }
+
+/* Bubbles: a typo fixed by editing */
+.edited-mark { font-size: 10px; font-style: italic; opacity: .75; margin-right: 4px; }
+
+/* ── Memory tab ── */
+.mem-toggle { padding-top: 0; }
+.mem-pending { margin: -4px 0 8px; }
+.memory-list { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.mem-filter { margin-bottom: -2px; }
+.mem-empty {
+  display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: var(--r-lg);
+  background: var(--fill-1); box-shadow: inset 0 0 0 .5px var(--hairline); font-size: 13.5px;
+}
+.mem-empty-art { flex: none; }
+.mem-group { display: flex; flex-direction: column; gap: 6px; }
+.mem-person { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.mem-dot {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #818cf8, #22d3ee); flex: none;
+}
+.mem-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mem-row {
+  display: flex; align-items: center; gap: 8px; padding: 9px 10px 9px 12px; border-radius: var(--r-md);
+  background: var(--glass-bg); box-shadow: inset 0 0 0 .5px var(--glass-border);
+}
+.mem-row.pinned { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--indigo) 45%, transparent); background: color-mix(in srgb, var(--indigo) 7%, var(--glass-bg)); }
+.mem-main { flex: 1; min-width: 0; }
+.mem-text { font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.mem-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 3px; }
+.mem-kind { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px; padding: 1px 6px; border-radius: 6px; background: var(--fill-2); color: var(--text-2); }
+.mem-kind.k-event { background: color-mix(in srgb, var(--orange) 16%, transparent); color: var(--orange); }
+.mem-kind.k-preference { background: color-mix(in srgb, var(--pink) 15%, transparent); color: var(--pink); }
+.mem-kind.k-relationship { background: color-mix(in srgb, var(--violet) 15%, transparent); color: var(--violet); }
+.mem-kind.k-fact { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
+.mem-evidence { display: inline-flex; align-items: center; gap: 3px; cursor: help; }
+.mem-actions { display: flex; gap: 2px; flex: none; opacity: .7; transition: opacity .15s var(--ease); }
+.mem-row:hover .mem-actions, .mem-row:focus-within .mem-actions, .mem-row.pinned .mem-actions { opacity: 1; }
+.mem-actions .btn.on { color: var(--indigo); }
+.mem-edit { display: flex; gap: 6px; width: 100%; align-items: center; }
+.mem-edit .input { flex: 1; }
+.mem-add {
+  display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: var(--r-lg);
+  background: var(--fill-1); box-shadow: inset 0 0 0 .5px var(--hairline);
+}
+.mem-add-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mem-add-row .grow { flex: 1 1 180px; min-width: 0; }
+.mem-who { width: 120px; flex: none; }
+.mem-foot { align-items: center; }
+.mem-cloud { margin-bottom: 0; }
+
+/* People tab: "Leo remembers: Dana 3 things" */
+.mem-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 14px; }
+.mem-strip-label { display: inline-flex; align-items: center; gap: 4px; margin-right: 2px; }
+.mem-chip { cursor: pointer; }
+.mem-count { font-weight: 500; color: var(--text-2); margin-left: 4px; }
+
+/* ── Clone yourself ── */
+.sheet-icon.clone-icon { background: linear-gradient(135deg, #34d399, #0ea5e9); box-shadow: 0 8px 20px -8px rgba(14, 165, 233, .7); }
+.clone-intro { display: flex; flex-direction: column; gap: 14px; }
+.clone-art { display: grid; place-items: center; color: var(--text-2); }
+.clone-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; }
+.clone-steps b { font-weight: 650; }
+.clone-progress { display: flex; align-items: center; gap: 16px; padding: 14px; border-radius: var(--r-lg); background: var(--fill-1); margin-bottom: 12px; }
+.clone-busy { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 0 12px; text-align: center; }
+.clone-busy .clone-art svg { animation: clone-bob 1.6s var(--ease) infinite alternate; }
+@keyframes clone-bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .clone-busy .clone-art svg { animation: none; } }
+.clone-samples { margin-top: 6px; }
+.clone-wall { max-height: 220px; overflow: auto; padding: 10px; border-radius: var(--r-md); margin: 6px 0; }
+.clone-card .pav { box-shadow: 0 10px 22px -10px rgba(14, 165, 233, .8); }
+
+@media (max-width: 560px) {
+  .world-body .seg > button { padding: 7px 9px; gap: 4px; }
+  .re-reach > button { padding: 6px 8px; }
+  .re-bottom { flex-direction: column; align-items: flex-start; }
+  .mem-who { width: 100%; }
+  .world-preview { align-items: flex-start; }
+}
