@@ -16,6 +16,8 @@ import { debounce, relTime, plural } from '../util.js';
 import { providerLabel } from './status.js';
 
 export const KIND_LABEL = { fact: 'Fact', preference: 'Likes', event: 'Coming up', relationship: 'People', other: 'Note' };
+/** Sensitive topics that never cross into other chats on their own. */
+export const SENSITIVE_LABEL = { money: 'Money', health: 'Health', meeting: 'Meeting up', distress: 'Struggling', bot: 'Bot question', legal: 'Legal', romance: 'Relationships', secret: 'Told in confidence' };
 const MAX_TEXT = 160;
 
 export function createMemoryStore(key, update) {
@@ -133,6 +135,49 @@ export function memoryList({ mem, chat, persona, ui, onUpdate }) {
     mem.reloadSoon();
   }
 
+  const crossOn = !!(data && data.crossEnabled);
+  const elsewhere = isGroup ? 'private chats' : 'groups';
+  /** One badge about where a memory may be used (local, sensitive, unlocked, shared). */
+  function crossBadge(m) {
+    const sens = m.effectiveSensitive || '';
+    if (m.scope === 'local') return html`<span class="mem-badge local" title="Never used in other chats">${icon('lock', 'ic-sm')}Private to this chat</span>`;
+    if (sens && m.scope !== 'shared') {
+      return html`<span class="chip chip-sm chip-amber mem-badge" title="Sensitive things stay in this chat unless you unlock them">${icon('lock', 'ic-sm')}Sensitive · ${SENSITIVE_LABEL[sens] || 'Private'}</span>`;
+    }
+    if (m.scope === 'shared') return html`<span class="mem-badge unlocked" title="You let other chats use this">${icon('unlock', 'ic-sm')}Unlocked by you</span>`;
+    if (m.shares) return html`<span class="mem-badge shares" title=${`${name} may use this in its ${elsewhere} with ${m.person || 'them'}`}>${icon('link', 'ic-sm')}Shared with ${elsewhere}</span>`;
+    return '';
+  }
+  async function toggleLock(m) {
+    const sens = m.effectiveSensitive || '';
+    if (m.scope === 'local' || m.scope === 'shared') {
+      await patchMem(m, { scope: null }, m.scope === 'local' ? (sens ? 'Sensitive: it still stays in this chat' : 'Other chats may use this again') : 'Kept in this chat again');
+      return;
+    }
+    if (sens) {
+      const who = (m.person || chat.name || 'they').trim().split(/\s+/)[0];
+      const ok = await confirmSheet({
+        title: 'Share this with other chats?',
+        body: `This looks like it is about ${(SENSITIVE_LABEL[sens] || 'something private').toLowerCase()}. If you unlock it, ${name} may use it in other chats with ${who} — discreetly by default. Only do this if ${who} wouldn't mind.`,
+        confirm: 'Unlock', danger: true, iconName: 'lock',
+      });
+      if (ok) await patchMem(m, { scope: 'shared' }, 'Unlocked: other chats may use it');
+      return;
+    }
+    await patchMem(m, { scope: 'local' }, 'Kept in this chat only');
+  }
+  function lockButton(m) {
+    if (!crossOn && !m.scope) return '';
+    const sens = m.effectiveSensitive || '';
+    const locked = m.scope === 'local' || (sens && m.scope !== 'shared');
+    const title = m.scope === 'local' ? 'Private to this chat. Click to let other chats use it'
+      : locked ? 'Sensitive: kept in this chat. Click to share it anyway'
+      : m.scope === 'shared' ? 'Unlocked by you. Click to keep it in this chat'
+      : 'Keep this in this chat only';
+    return html`<button class=${'btn btn-ghost btn-icon btn-sm ' + (locked ? 'on' : '')} aria-pressed=${String(!!locked)} title=${title} aria-label=${title}
+      @click=${() => toggleLock(m)}>${icon(locked ? 'lock' : 'unlock')}</button>`;
+  }
+
   const cloud = cloudProvider(persona);
   const people = groups.map((g) => g.person).filter(Boolean);
 
@@ -152,12 +197,14 @@ export function memoryList({ mem, chat, persona, ui, onUpdate }) {
             <span class=${'mem-kind k-' + (m.kind || 'other')}>${KIND_LABEL[m.kind] || 'Note'}</span>
             <span>${whenText(m)}</span>
             ${m.evidence ? html`<span class="mem-evidence" title=${`From: “${m.evidence}”`}>${icon('quote', 'ic-sm')}source</span>` : ''}
+            ${crossOn || m.scope ? crossBadge(m) : ''}
           </div>
         </div>
         <div class="mem-actions">
           <button class=${'btn btn-ghost btn-icon btn-sm ' + (m.pinned ? 'on' : '')} aria-pressed=${String(!!m.pinned)}
             title=${m.pinned ? 'Pinned — always kept and always in mind. Click to unpin' : 'Pin: always keep this and always keep it in mind'}
             aria-label=${m.pinned ? 'Unpin' : 'Pin'} @click=${() => patchMem(m, { pinned: !m.pinned }, m.pinned ? 'Unpinned' : 'Pinned')}>${icon('pin')}</button>
+          ${lockButton(m)}
           <button class="btn btn-ghost btn-icon btn-sm" title="Edit" aria-label="Edit" @click=${() => { ui.editing = m.id; ui.editText = m.text; onUpdate(); requestAnimationFrame(() => { const el = document.querySelector('.mem-edit input'); if (el) el.focus(); }); }}>${icon('edit')}</button>
           <button class="btn btn-ghost btn-icon btn-sm" title="Forget this" aria-label="Forget this" @click=${() => remove(m)}>${icon('trash')}</button>
         </div>`}

@@ -37,7 +37,7 @@ func TestV3ConfigGetsV4FieldsAndBlocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := m.Get()
-	if s.Version != 4 {
+	if s.Version != SettingsVersion {
 		t.Errorf("version = %d", s.Version)
 	}
 	if pr := s.Behavior.Private; pr.Preset != behavior.PresetNatural || pr.TypoPercent != 5 || pr.TypoFixStyle != "correction" {

@@ -35,6 +35,9 @@ type PersonPrefs struct {
 	Respond  *bool  `json:"respond"`  // nil = follow the chat's mode
 	Priority bool   `json:"priority"` // "always reply": skips the reply-chance / chime-in / AI rolls
 	Notes    string `json:"notes"`    // ≤ 300 runes, given to the persona
+	// Cross (groups): use the same persona's private chat with this person
+	// here; nil = on (when the chat uses private chats at all).
+	Cross *bool `json:"cross"`
 }
 
 // PeopleConfig chooses who the persona answers in a chat (groups) and holds

@@ -34,6 +34,7 @@ type Candidate struct {
 	Kind      string
 	Evidence  string
 	ExpiresAt *time.Time
+	Sensitive string // "" or a model.SensitiveCategories value
 }
 
 // NewID returns a random memory id.
@@ -144,13 +145,16 @@ func Merge(existing []model.Memory, found []Candidate, chatKey string, now time.
 			if m.PersonJID == "" {
 				m.PersonJID = c.PersonJID
 			}
+			if c.Sensitive != "" && m.Sensitive == "" {
+				m.Sensitive = c.Sensitive // never quietly made less sensitive
+			}
 			touched[m.ID] = true
 			updated = append(updated, *m)
 		default:
 			m := model.Memory{
 				ID: NewID(), ChatKey: chatKey, PersonJID: c.PersonJID, Person: c.Person,
 				Text: c.Text, Kind: ValidKind(c.Kind), Source: model.MemorySourceLearned,
-				Confidence: LearnedConf, Evidence: c.Evidence, CreatedAt: now, UpdatedAt: now,
+				Confidence: LearnedConf, Evidence: c.Evidence, CreatedAt: now, UpdatedAt: now, Sensitive: c.Sensitive,
 			}
 			if c.ExpiresAt != nil {
 				t := *c.ExpiresAt

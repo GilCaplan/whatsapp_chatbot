@@ -69,6 +69,7 @@ func (p Paths) LockFile() string     { return filepath.Join(p.Dir, "server.lock"
 
 // Wave 3 files (created lazily by their store helpers).
 func (p Paths) MemoriesDir() string     { return filepath.Join(p.Dir, "memories") }
+func (p Paths) BriefsDir() string       { return filepath.Join(p.Dir, "briefs") }
 func (p Paths) RecapsFile() string      { return filepath.Join(p.Dir, "recaps.json") }
 func (p Paths) MissionsFile() string    { return filepath.Join(p.Dir, "missions.json") }
 func (p Paths) SelfSamplesFile() string { return filepath.Join(p.Dir, "cache", "self-samples.jsonl") }

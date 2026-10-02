@@ -171,16 +171,20 @@ export const api = {
     people: (key, o) => get(`/api/chats/${enc(key)}/people`, o),
 
     // ── Wave 3 (501 not_implemented until each feature lands) ──
-    /** { enabled, items:[Memory], pending, lastExtractedAt } */
+    /** { enabled, crossEnabled, items:[Memory + shares, effectiveSensitive], pending, lastExtractedAt } */
     memories: (key, o) => get(`/api/chats/${enc(key)}/memories`, o),
     /** body: { text, person?, personJid?, pinned? } → Memory */
     addMemory: (key, body, o) => post(`/api/chats/${enc(key)}/memories`, body, o),
-    /** body: { text?, pinned?, person? } → Memory */
+    /** body: { text?, pinned?, person?, scope?: 'local'|'shared'|null, sensitive? } → Memory */
     patchMemory: (key, id, body, o) => patch(`/api/chats/${enc(key)}/memories/${enc(id)}`, body, o),
     deleteMemory: (key, id, o) => del(`/api/chats/${enc(key)}/memories/${enc(id)}`, o),
     clearMemories: (key, o) => del(`/api/chats/${enc(key)}/memories`, o),
     /** → { added, updated } */
     extractMemories: (key, o) => post(`/api/chats/${enc(key)}/memories/extract`, {}, { timeout: 120000, ...o }),
+    /** Cross-chat context → { enabled, kind, mode, modeSource, share, shareSource, sources:[…], brief, briefPending } */
+    cross: (key, o) => get(`/api/chats/${enc(key)}/cross`, o),
+    /** Rewrite this chat's summary for other chats now → Brief */
+    refreshBrief: (key, o) => post(`/api/chats/${enc(key)}/cross/refresh`, {}, { timeout: 120000, ...o }),
     /** → ChatAssignment (hand-off cleared) */
     resumeHandoff: (key, o) => post(`/api/chats/${enc(key)}/handoff/resume`, {}, o),
     /** body: { text?, force? } → { ok, text } */
@@ -241,7 +245,8 @@ export const api = {
 
   playground: {
     start: (personaId, o) => post('/api/playground', { personaId }, o),
-    send: (id, text, group, o, goal) => post(`/api/playground/${enc(id)}/messages`, goal == null ? { text, group: !!group } : { text, group: !!group, goal }, o),
+    /** extra: { source?, crossMode? } — "Pretend this group includes…" (a private chat of this persona; '' = none). */
+    send: (id, text, group, o, goal, extra) => post(`/api/playground/${enc(id)}/messages`, { text, group: !!group, ...(goal == null ? {} : { goal }), ...(extra || {}) }, o),
     initiate: (id, group, hint, goal, o) => post(`/api/playground/${enc(id)}/messages`, { initiate: true, text: hint || '', group: !!group, ...(goal == null ? {} : { goal }) }, o),
     end: (id, o) => del(`/api/playground/${enc(id)}`, o),
   },

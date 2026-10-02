@@ -32,6 +32,11 @@ type RunnerState struct {
 	MemoryCursor  time.Time `json:"memoryCursor"`
 	MemoryPending int       `json:"memoryPending"`
 	LastRecapAt   time.Time `json:"lastRecapAt"`
+
+	// Cross-chat context: the brief cursor (history after this is not in
+	// the brief yet) and the messages since the last brief.
+	BriefCursor  time.Time `json:"briefCursor"`
+	BriefPending int       `json:"briefPending"`
 }
 
 // Prune drops reply/check-in timestamps older than 24 h before now.

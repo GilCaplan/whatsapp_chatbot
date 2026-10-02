@@ -139,6 +139,7 @@ func (e *Engine) triggerHandoff(r *Runner, c model.ChatAssignment, p model.Perso
 	}
 	r.keepAsContext(in, text, mentions, bp, now)
 	e.holdApprovals(c.Key)
+	e.forgetBrief(c.Key) // its window held the sensitive message: nothing of it crosses (brief.go)
 	meta := map[string]any{"category": hit.Category, "excerpt": hs.Excerpt, "how": how, "sender": who}
 	if hit.Match != "" {
 		meta["match"] = hit.Match

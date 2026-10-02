@@ -24,24 +24,25 @@ const maxDraftsTokens = 900
 // replyFor writes a cycle's reply: co-pilot drafts (copilot and not an
 // opener) or one reply (expressiveReply).
 func (e *Engine) replyFor(ctx context.Context, copilot bool, p model.Persona, bp model.BehaviorProfile, hist []model.Message, opening bool,
-	cfg goals.Config, turn prompt.GoalTurn, build func(prompt.GoalTurn) llm.Request) (genResult, error) {
+	cfg goals.Config, turn prompt.GoalTurn, cross *crossUse, build buildFn) (genResult, error) {
 	if copilot && !opening {
-		return e.goalDrafts(ctx, p, bp, hist, cfg, turn, build)
+		return e.goalDrafts(ctx, p, bp, hist, cfg, turn, cross, build)
 	}
-	return e.expressiveReply(ctx, p, bp, hist, opening, cfg, turn, build)
+	return e.expressiveReply(ctx, p, bp, hist, opening, cfg, turn, cross, build)
 }
 
 // goalDrafts writes the co-pilot alternatives in one call. Drafts that break
-// character, give the goal away or speak as someone else are dropped; the
-// rest get the expression rules (word budget, emoji level).
+// character, give the goal away, give away something from another chat or
+// speak as someone else are dropped; the rest get the expression rules
+// (word budget, emoji level).
 func (e *Engine) goalDrafts(ctx context.Context, p model.Persona, bp model.BehaviorProfile, hist []model.Message,
-	cfg goals.Config, turn prompt.GoalTurn, build func(prompt.GoalTurn) llm.Request) (genResult, error) {
+	cfg goals.Config, turn prompt.GoalTurn, cross *crossUse, build buildFn) (genResult, error) {
 	prov, mdl, err := e.llm.Resolve(p.LLM)
 	if err != nil {
 		return genResult{}, err
 	}
 	s := e.cfg.Get().LLM
-	base := build(turn)
+	base := build(turn, prompt.CrossTurn{})
 	req := prompt.Drafts(base)
 	req.Model, req.Temperature = mdl, s.Temperature
 	req.MaxTokens = min(max(3*s.ReplyMaxTokens, 240), maxDraftsTokens)
@@ -60,7 +61,7 @@ func (e *Engine) goalDrafts(ctx context.Context, p model.Persona, bp model.Behav
 		for _, d := range prompt.ParseDrafts(resp.Text) {
 			d.Text = cleanReply(d.Text, p.Name)
 			if d.Text == "" || guard.BrokeCharacter(d.Text, p.Name) || len(goals.Leak(cfg, d.Text)) > 0 ||
-				prompt.SpeaksAs(d.Text, p.Name, speakers) != "" {
+				len(cross.leaks(d.Text)) > 0 || prompt.SpeaksAs(d.Text, p.Name, speakers) != "" {
 				continue
 			}
 			d.Text = e.expressDraft(ctx, p, bp, hist, false, genResult{Text: d.Text}, nil).Text
@@ -72,11 +73,14 @@ func (e *Engine) goalDrafts(ctx context.Context, p model.Persona, bp model.Behav
 	}
 	if len(drafts) < 2 {
 		// Not enough good ideas: one normal reply, shown on its own.
-		single, err := e.expressiveReply(ctx, p, bp, hist, false, cfg, turn, build)
+		single, err := e.expressiveReply(ctx, p, bp, hist, false, cfg, turn, cross, build)
 		single.Latency += res.Latency
 		return single, err
 	}
 	res.Text, res.Drafts = drafts[0].Text, drafts
+	if cross.active() {
+		res.Cross = cross
+	}
 	return res, nil
 }
 

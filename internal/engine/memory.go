@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"whatsappdoppel/internal/crossctx"
 	"whatsappdoppel/internal/events"
 	"whatsappdoppel/internal/memory"
 	"whatsappdoppel/internal/model"
@@ -64,6 +65,7 @@ func (e *Engine) memoryLines(c model.ChatAssignment, hist []model.Message, now t
 // memoryTick counts a new message from them and (re)arms the extraction job
 // once enough have arrived.
 func (e *Engine) memoryTick(c model.ChatAssignment) {
+	e.briefTick(c) // the brief for other chats counts every message (brief.go)
 	if !e.memoryOn(c) {
 		return
 	}
@@ -280,9 +282,37 @@ func (e *Engine) checkMemories(c model.ChatAssignment, p model.Persona, msgs []m
 		if exp != nil && kind != model.MemoryEvent {
 			kind = model.MemoryEvent
 		}
-		out = append(out, memory.Candidate{Person: w.name, PersonJID: w.jid, Text: text, Kind: kind, Evidence: f.Evidence, ExpiresAt: exp})
+		sens := f.Sensitive
+		if !crossctx.ValidSensitive(sens) {
+			sens = ""
+		}
+		if sens == "" {
+			sens = crossctx.Classify(text + " . " + f.Evidence) // the model misses some; never crosses either way
+		}
+		if sens == "" {
+			sens = sourceSensitive(msgs, f.Evidence) // learned from a sensitive message (e.g. a hand-off)
+		}
+		out = append(out, memory.Candidate{Person: w.name, PersonJID: w.jid, Text: text, Kind: kind, Evidence: f.Evidence, ExpiresAt: exp, Sensitive: sens})
 	}
 	return out
+}
+
+// sourceSensitive is the sensitive category of the message evidence was
+// quoted from ("" when none or not found): a memory learned from a
+// sensitive message stays in its chat even when its own words look harmless.
+func sourceSensitive(msgs []model.Message, evidence string) string {
+	ev := memory.Tokens(evidence)
+	if len(ev) == 0 {
+		return ""
+	}
+	for _, m := range msgs {
+		if m.Speaker == "them" && memory.Contained(ev, memory.Tokens(m.Text)) >= 0.6 {
+			if cat := crossctx.Classify(m.Text); cat != "" {
+				return cat
+			}
+		}
+	}
+	return ""
 }
 
 // transient spots memories about the moment ("was at school all day",

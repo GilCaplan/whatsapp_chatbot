@@ -355,6 +355,50 @@ func (e *Engine) goalReply(ctx context.Context, p model.Persona, cfg goals.Confi
 	return res, nil
 }
 
+// buildFn renders a reply request for a goal turn and a cross-chat turn
+// (prompt.Compose / prompt.Initiate with the chat's options).
+type buildFn func(prompt.GoalTurn, prompt.CrossTurn) llm.Request
+
+// guardedReply is goalReply plus the cross-chat leak guard: a draft that
+// gives away something from another chat it should keep to itself
+// (crossctx.Leak) is written again with a reminder, then — if it still
+// leaks — without the other chats at all. The leaky draft is never returned
+// as a success. cross nil = no context (just goalReply).
+func (e *Engine) guardedReply(ctx context.Context, p model.Persona, cfg goals.Config, turn prompt.GoalTurn, cross *crossUse, build buildFn) (genResult, error) {
+	with := func(x prompt.CrossTurn) func(prompt.GoalTurn) llm.Request {
+		return func(t prompt.GoalTurn) llm.Request { return build(t, x) }
+	}
+	res, err := e.goalReply(ctx, p, cfg, turn, with(prompt.CrossTurn{}))
+	if !cross.active() {
+		return res, err
+	}
+	res.Cross = cross
+	if err != nil || res.Fallback || len(cross.leaks(res.Text)) == 0 {
+		return res, err
+	}
+	first := res
+	again, err := e.goalReply(ctx, p, cfg, turn, with(prompt.CrossTurn{Retry: true}))
+	if err == nil && !again.Fallback && len(cross.leaks(again.Text)) == 0 {
+		again.Cross, again.CrossRewritten = cross, true
+		again.GoalRewritten = again.GoalRewritten || first.GoalRewritten
+		again.Latency += first.Latency
+		return again, nil
+	}
+	if ctx.Err() != nil {
+		return first, ctx.Err()
+	}
+	// Last resort: no other chats this time. If even that fails, send
+	// nothing rather than the draft that gave something away.
+	off, err := e.goalReply(ctx, p, cfg, turn, with(prompt.CrossTurn{Off: true}))
+	if err != nil {
+		return first, err
+	}
+	off.Cross, off.CrossRewritten, off.CrossDropped = cross, true, true
+	off.GoalRewritten = off.GoalRewritten || first.GoalRewritten
+	off.Latency += first.Latency + again.Latency
+	return off, nil
+}
+
 // senderName is who wrote an incoming message (push name; the chat name in DMs).
 func senderName(in model.Incoming, c model.ChatAssignment, isGroup bool) string {
 	if in.PushName != "" || isGroup {

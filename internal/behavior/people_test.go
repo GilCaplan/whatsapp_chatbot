@@ -65,6 +65,11 @@ func TestValidateAndNormalizePeople(t *testing.T) {
 	if n.Mode != "" || len(n.People) != 2 || n.People[0].JID != "2@lid" || n.People[1].Notes != "x" {
 		t.Errorf("normalize = %+v", n)
 	}
+	off := false
+	n = NormalizePeople(model.PeopleConfig{People: []model.PersonPrefs{{JID: "4@lid", Cross: &off}}})
+	if len(n.People) != 1 || n.People[0].Cross == nil || *n.People[0].Cross {
+		t.Errorf("cross kept = %+v", n)
+	}
 }
 
 func TestMatchWord(t *testing.T) {

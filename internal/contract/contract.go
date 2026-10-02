@@ -102,6 +102,11 @@ type Engine interface {
 	GenerateRecap(ctx context.Context, chatKey string) ([]model.Recap, error)
 	// ExtractMemories runs memory extraction for a chat now.
 	ExtractMemories(ctx context.Context, chatKey string) (model.MemoryExtractResult, error)
+	// CrossView reports a chat's cross-chat context: mode, sharing, the
+	// chats it may draw on (and why some are not used) and its own brief.
+	CrossView(ctx context.Context, chatKey string) (model.CrossView, error)
+	// RefreshBrief writes a chat's brief (what other chats may use) now.
+	RefreshBrief(ctx context.Context, chatKey string) (model.Brief, error)
 }
 
 // LLM is the provider registry facade used by the server.
@@ -120,6 +125,11 @@ type Playground interface {
 	Send(ctx context.Context, sessionID, text string, group bool) (model.PlaygroundReply, error)
 	// SetGoal sets the session's "Goal for this test" ("" = the persona's goal).
 	SetGoal(sessionID, goal string) error
+	// SetCross makes the group cast member "Dana" stand for the contact of a
+	// real private chat of the same persona (source = its chat key, "" = off),
+	// so the persona draws on it as it would in a real group; mode "" = the
+	// app default for groups.
+	SetCross(sessionID, source, mode string) error
 	// Initiate asks the persona to speak first (an opener); hint is optional.
 	Initiate(ctx context.Context, sessionID string, group bool, hint string) (model.PlaygroundReply, error)
 	End(sessionID string)
