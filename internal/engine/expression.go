@@ -29,14 +29,14 @@ const lengthRetryMaxLatency = 20 * time.Second
 // history the request was built from; opening is true for check-ins and
 // openers (nothing to answer: neutral tone, base word budget).
 func (e *Engine) expressiveReply(ctx context.Context, p model.Persona, bp model.BehaviorProfile, hist []model.Message, opening bool,
-	cfg goals.Config, turn prompt.GoalTurn, build func(prompt.GoalTurn) llm.Request) (genResult, error) {
-	res, err := e.goalReply(ctx, p, cfg, turn, build)
+	cfg goals.Config, turn prompt.GoalTurn, cross *crossUse, build buildFn) (genResult, error) {
+	res, err := e.guardedReply(ctx, p, cfg, turn, cross, build)
 	if err != nil {
 		return res, err
 	}
 	return e.expressDraft(ctx, p, bp, hist, opening, res, func(note string) (genResult, error) {
-		return e.goalReply(ctx, p, cfg, turn, func(t prompt.GoalTurn) llm.Request {
-			r := build(t)
+		return e.guardedReply(ctx, p, cfg, turn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+			r := build(t, x)
 			r.System += note
 			return r
 		})
@@ -66,6 +66,7 @@ func (e *Engine) expressDraft(ctx context.Context, p model.Persona, bp model.Beh
 		if err == nil && !again.Fallback && prompt.WordCount(again.Text) < words {
 			again.Latency += res.Latency
 			again.GoalRewritten = again.GoalRewritten || res.GoalRewritten
+			again.CrossRewritten = again.CrossRewritten || res.CrossRewritten
 			res = again
 		}
 		res.LengthRetried = true
@@ -220,7 +221,7 @@ func (e *Engine) ExpressionPreview(ctx context.Context, p model.Persona, lengthB
 			chat := model.ChatAssignment{Key: "preview:expression", Kind: "dm", Name: "Friend", PersonaID: p.ID, Enabled: true}
 			hist := []model.Message{{ID: "preview", TS: time.Now(), Speaker: "them", Name: "Friend", Text: incoming}}
 			opts := prompt.Options{LengthBias: bp.LengthBias}
-			res, err := e.expressiveReply(ctx, p, bp, hist, false, goals.Resolve(p, chat), prompt.GoalTurn{Off: true}, func(t prompt.GoalTurn) llm.Request {
+			res, err := e.expressiveReply(ctx, p, bp, hist, false, goals.Resolve(p, chat), prompt.GoalTurn{Off: true}, nil, func(t prompt.GoalTurn, _ prompt.CrossTurn) llm.Request {
 				opts.Goal = t
 				return prompt.Compose(p, chat, hist, false, opts)
 			})

@@ -97,6 +97,11 @@ type Options struct {
 	MacZone  *time.Location // this Mac's zone, where the people chatting probably are (nil = Local)
 	Late     *LateNote      // answering long after the message
 	Memories []MemoryLine   // what the persona learned about the people here
+
+	// Cross-chat context (cross.go): what the persona knows about these
+	// people from its other chats, and this generation's turn (retry/off).
+	Cross     CrossInput
+	CrossTurn CrossTurn
 }
 
 // Goal returns the chat's goal override, else the persona goal, else the default.
@@ -113,7 +118,7 @@ func SystemPrompt(p model.Persona, chat model.ChatAssignment, isGroup bool, last
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	note += PeopleSection(o, isGroup) + MemorySection(o.Memories, isGroup) + WorldSection(p.World, o.Now, o.MacZone) + LateSection(o.Late)
+	note += PeopleSection(o, isGroup) + MemorySection(o.Memories, isGroup) + CrossSection(o.Cross, o.CrossTurn) + WorldSection(p.World, o.Now, o.MacZone) + LateSection(o.Late)
 	return fmt.Sprintf("%s%s%s%s\n\nGUIDANCE: %s%s",
 		Identity(p), AntiJailbreakRules, note, GoalSection(goals.Resolve(p, chat), o.Goal), Guidance(p.MessageLength, lastMsg, o.LengthBias),
 		emojiTurn(p.Emoji, ClassifyTone(lastMsg)))

@@ -186,6 +186,7 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		Behavior     json.RawMessage `json:"behavior"`
 		SnoozedUntil json.RawMessage `json:"snoozedUntil"`
 		People       json.RawMessage `json:"people"`
+		Cross        json.RawMessage `json:"cross"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -253,6 +254,19 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		}
 		people = &pp
 	}
+	var cross *model.CrossContext
+	if len(body.Cross) > 0 {
+		cur := model.CrossContext{}
+		if old, ok := s.d.Store.Chat(key); ok {
+			cur = old.Cross
+		}
+		cc, err := parseCrossPatch(body.Cross, cur)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_cross", err.Error())
+			return
+		}
+		cross = &cc
+	}
 	if hasSnooze {
 		t, err := parseSnooze(body.SnoozedUntil, time.Now())
 		if err != nil {
@@ -307,6 +321,9 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		if people != nil {
 			c.People = people.apply(c.People)
 		}
+		if cross != nil {
+			c.Cross = *cross
+		}
 	})
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "No such chat assignment")
@@ -338,6 +355,7 @@ func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
 	// go with the assignment.
 	_ = s.d.Store.ClearMemories(key)
 	_ = s.d.Store.DeleteRecaps(key)
+	_ = s.d.Store.DeleteBrief(key)
 	// Pending replies for a chat that is no longer assigned can never be sent.
 	for _, p := range s.d.Store.Approvals() {
 		if p.ChatKey != key {

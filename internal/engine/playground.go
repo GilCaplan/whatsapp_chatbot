@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"whatsappdoppel/internal/crossctx"
 	"whatsappdoppel/internal/guard"
 	"whatsappdoppel/internal/llm"
 	"whatsappdoppel/internal/mention"
@@ -36,6 +37,9 @@ type pgSession struct {
 	// goal is the optional "Goal for this test" (chat goal override); see goal.go.
 	goal       string
 	goalStatus model.GoalStatus
+	// crossSource / crossMode: "Pretend this group includes…" (cross.go).
+	crossSource string
+	crossMode   string
 }
 
 func newPlayground(e *Engine) *playground {
@@ -126,11 +130,16 @@ func (pg *playground) Send(ctx context.Context, id, text string, group bool) (mo
 	// ("@Dana") and "several people are talking" can be tried out.
 	who := model.Participant{Name: "Friend"}
 	var dir *mention.Directory
+	roster := pgRoster
 	if group {
-		who = pgRoster[s.turns%len(pgRoster)]
+		if src, ok := e.playgroundSource(s, p.ID); ok {
+			roster = slices.Clone(pgRoster)
+			roster[0] = model.Participant{JID: src.JID, Phone: crossUserPhone(src.JID), Name: playgroundName(src.Name)}
+		}
+		who = roster[s.turns%len(roster)]
 		s.turns++
 		out.Speaker = who.Name
-		dir = mention.NewDirectory(pgRoster, nil)
+		dir = mention.NewDirectory(roster, nil)
 	}
 	s.history = trimHistory(append(s.history, model.Message{
 		ID: store.NewID(), TS: time.Now(), Speaker: "them", Name: who.Name, SenderJID: who.JID, Text: g.Text,
@@ -146,10 +155,17 @@ func (pg *playground) Send(ctx context.Context, id, text string, group bool) (mo
 		}
 	}
 	hist := slices.Clone(s.history)
-	opts := e.promptOptions(chat, rp, dir, hist)
+	opts, _ := e.promptOptions(chat, rp, dir, hist)
+	var cross *crossUse
+	if group {
+		cross = e.playgroundCross(s, chat, dir, hist)
+		if cross.active() {
+			opts.Cross = cross.Input
+		}
+	}
 	gcfg, gturn := e.playgroundGoalTurn(ctx, p, chat, &s.goalStatus, hist, group, g.Text, false)
-	res, err := e.expressiveReply(ctx, p, rp, hist, false, gcfg, gturn, func(t prompt.GoalTurn) llm.Request {
-		opts.Goal = t
+	res, err := e.expressiveReply(ctx, p, rp, hist, false, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+		opts.Goal, opts.CrossTurn = t, x
 		return prompt.Compose(p, chat, hist, group, opts)
 	})
 	out.LatencyMs = time.Since(start).Milliseconds()
@@ -161,10 +177,81 @@ func (pg *playground) Send(ctx context.Context, id, text string, group bool) (mo
 	out.Mentions = mention.Names(tagged)
 	out.Goal = playgroundGoalView(gcfg, gturn, s.goalStatus, res)
 	out.Reply, out.Provider, out.Model = res.Text, res.Provider, res.Model
+	if cross.active() {
+		out.Cross = &model.PlaygroundCross{Mode: cross.Mode, People: cross.People, Items: len(cross.Items), Rewritten: res.CrossRewritten, Dropped: res.CrossDropped}
+	}
 	s.history = trimHistory(append(s.history, model.Message{
 		ID: store.NewID(), TS: time.Now(), Speaker: "me", Text: res.Text, FromBot: true, Mentions: out.Mentions,
 	}), rp.HistoryMessages, rp.HistoryChars)
 	return out, nil
+}
+
+// SetCross binds the cast member "Dana" to a real private chat of the
+// session's persona (source "" = off). mode "" = the app default for groups.
+func (pg *playground) SetCross(id, source, mode string) error {
+	s, err := pg.session(id)
+	if err != nil {
+		return err
+	}
+	if mode != "" && !crossctx.ValidMode(mode) {
+		return fmt.Errorf("cross mode %q: %w", mode, ErrInvalidCross)
+	}
+	if source != "" {
+		c, ok := pg.e.store.Chat(source)
+		if !ok || isGroupChat(c) || c.PersonaID != s.personaID {
+			return fmt.Errorf("%q is not a private chat of this persona: %w", source, ErrInvalidCross)
+		}
+	}
+	s.mu.Lock()
+	s.crossSource, s.crossMode = source, mode
+	s.mu.Unlock()
+	return nil
+}
+
+// ErrInvalidCross: SetCross got an unknown mode or a chat that can't be a source.
+var ErrInvalidCross = errors.New("invalid cross-chat source")
+
+// playgroundSource is the session's bound private chat (s.mu held).
+func (e *Engine) playgroundSource(s *pgSession, personaID string) (model.ChatAssignment, bool) {
+	if s.crossSource == "" {
+		return model.ChatAssignment{}, false
+	}
+	c, ok := e.store.Chat(s.crossSource)
+	if !ok || isGroupChat(c) || c.PersonaID != personaID || c.JID == "" {
+		return model.ChatAssignment{}, false
+	}
+	return c, true
+}
+
+// playgroundCross is the cross-chat context of a playground group turn: the
+// real rules and sources, as if the cast were a real group (s.mu held).
+func (e *Engine) playgroundCross(s *pgSession, chat model.ChatAssignment, d *mention.Directory, hist []model.Message) *crossUse {
+	if s.crossSource == "" {
+		return nil
+	}
+	r := e.crossRules()
+	c := chat
+	c.Kind, c.Cross.Mode = "group", s.crossMode
+	mode, _ := crossctx.ModeFor(r, c)
+	if mode == model.CrossOff {
+		return nil
+	}
+	return e.crossFor(e.ctx, c, d, hist, e.clock.Now(), r, mode)
+}
+
+func crossUserPhone(jid string) string {
+	if strings.HasSuffix(jid, "@s.whatsapp.net") {
+		return crossctx.UserOf(jid)
+	}
+	return ""
+}
+
+// playgroundName is the first name of a contact (the cast is first names).
+func playgroundName(name string) string {
+	if f := strings.Fields(mention.CleanName(name)); len(f) > 0 {
+		return f[0]
+	}
+	return "Dana"
 }
 
 // pgRoster is the playground's group cast (synthetic numbers).

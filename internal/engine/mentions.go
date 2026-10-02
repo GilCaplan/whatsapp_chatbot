@@ -90,13 +90,19 @@ func distinctSpeakers(hist []model.Message, n int) int {
 }
 
 // promptOptions builds the per-chat prompt options: length bias, the group's
-// members for tagging and the owner's notes about people.
-func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile, d *mention.Directory, hist []model.Message) prompt.Options {
+// members for tagging, the owner's notes about people, memories and what
+// the persona knows from its other chats (the *crossUse goes to the leak
+// guard; nil when there is none).
+func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile, d *mention.Directory, hist []model.Message) (prompt.Options, *crossUse) {
 	o := prompt.Options{LengthBias: bp.LengthBias}
 	// Realism (wave 3): the time where the persona lives, and what it
 	// remembers about the people here (routine.go, memory.go).
 	o.Now, o.MacZone = e.clock.Now(), time.Local
 	o.Memories = e.memoryLines(c, hist, o.Now)
+	cross := e.crossContext(c, d, hist, o.Now) // cross.go
+	if cross.active() {
+		o.Cross = cross.Input
+	}
 	if isGroupChat(c) {
 		if d != nil {
 			o.Participants = d.Names(recentSpeakers(hist), prompt.MaxParticipants)
@@ -114,14 +120,14 @@ func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile,
 				o.PeopleNotes = append(o.PeopleNotes, prompt.PersonNote{Name: name, Notes: pp.Notes})
 			}
 		}
-		return o
+		return o, cross
 	}
 	if i := behavior.FindPerson(c.People.People, c.JID, c.AltJID); i >= 0 {
 		o.ContactNote = c.People.People[i].Notes
 	} else if len(c.People.People) == 1 {
 		o.ContactNote = c.People.People[0].Notes
 	}
-	return o
+	return o, cross
 }
 
 // applyMentions validates the tags of a generated group reply (Normalize)
@@ -190,15 +196,16 @@ func (e *Engine) sendTextResult(ctx context.Context, jids []string, text string,
 
 // recordSent appends a persona message (display text and tagged names) to
 // history (runner or store) and touches the chat. wire is the text as sent,
-// remembered to recognise its echo.
-func (e *Engine) recordSent(r *Runner, c model.ChatAssignment, text, wire string, mentions []string) {
-	msg := model.Message{ID: store.NewID(), TS: e.clock.Now(), Speaker: "me", Text: text, FromBot: true, Mentions: mentions}
+// remembered to recognise its echo; crossUsed see Message.CrossUsed.
+func (e *Engine) recordSent(r *Runner, c model.ChatAssignment, text, wire string, mentions, crossUsed []string) {
+	msg := model.Message{ID: store.NewID(), TS: e.clock.Now(), Speaker: "me", Text: text, FromBot: true, Mentions: mentions, CrossUsed: crossUsed}
 	if r != nil {
 		r.recordSent(msg, wire)
 	} else {
 		_ = e.store.AppendHistory(c.Key, msg, e.effective(c).Profile.HistoryMessages)
 	}
 	e.store.TouchChat(c.Key, time.Now())
+	e.briefTick(c) // brief.go
 }
 
 // bubbleMentions lists the people a bubble tags (display names), per d.
@@ -226,7 +233,8 @@ func (e *Engine) previewOptions(c model.ChatAssignment) prompt.Options {
 		return prompt.Options{LengthBias: bp.LengthBias}
 	}
 	hist := e.chatHistory(e.runner(c.Key), c)
-	return e.promptOptions(c, bp, e.directory(e.ctx, c, hist), hist)
+	o, _ := e.promptOptions(c, bp, e.directory(e.ctx, c, hist), hist)
+	return o
 }
 
 // simulatedSender picks who a simulated group message comes from: senderJID
