@@ -191,7 +191,7 @@ A short tour then points out the main screens; you can replay it any time from t
 - **Playground**: chat with a persona privately: try a goal, let it start the conversation, simulate a group.
 - **Activity**: everything that happened and why (seen, waiting, typing, skipped, blocked, goal reached…).
 - **Approvals**: replies and drafts waiting for you.
-- **Settings**: AI brain, Behaviour defaults, Notifications, Safety (hand-off and reveal), Memory and recap, Appearance, WhatsApp, Data, server port, and **Quit**.
+- **Settings**: AI brain, Behaviour defaults, Notifications, Safety (hand-off and reveal), Memory and recap, Appearance (nine looks from Liquid Glass to pure-black Midnight, Vintage and High contrast, each with light/dark or system), WhatsApp, Data, server port, and **Quit**.
 - **Guide**: the in-app manual.
 
 ## FAQ
