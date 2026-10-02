@@ -181,16 +181,15 @@ export default function Playground(ctx) {
   function crossBar(p) {
     const dms = (store.state.chats || []).filter((c) => c.kind !== 'group' && c.personaId === p.id);
     if (!dms.length) return '';
-    const first = (n) => ((n || '').trim().split(/\s+/)[0] || 'them');
     return html`<div class="pg-goal pg-cross">
       <label class="pg-goal-label small" for="pg-cross">${icon('link', 'ic-sm')}Pretend this group includes</label>
       <select id="pg-cross" class="select select-sm" .value=${st.source} @change=${(e) => { st.source = e.target.value; update(); }}>
         <option value="">Nobody from a real chat</option>
-        ${dms.map((c) => html`<option value=${c.key} ?selected=${c.key === st.source}>${c.name || c.key} (as Dana)</option>`)}
+        ${dms.map((c) => html`<option value=${c.key} ?selected=${c.key === st.source}>${c.name || c.key}</option>`)}
       </select>
       ${st.source ? seg([{ value: '', label: 'Default' }, { value: 'discreet', label: 'Discreet' }, { value: 'open', label: 'Open' }], st.crossMode,
         (v) => { st.crossMode = v; update(); }, { cls: 'seg-sm', label: 'How the private chat is used' }) : ''}
-      ${st.source ? html`<span class="tiny faint">Messages from Dana count as ${first((dms.find((c) => c.key === st.source) || {}).name)}: ${p.name} draws on that private chat like in a real group.</span>` : ''}
+      ${st.source ? html`<span class="tiny faint">The cast member Dana stands for ${(dms.find((c) => c.key === st.source) || {}).name || 'this contact'}: ${p.name} draws on that private chat as it would in a real group. Nothing is sent.</span>` : ''}
     </div>`;
   }
 
