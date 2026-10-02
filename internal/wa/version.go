@@ -11,9 +11,10 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
-// The pinned whatsmeow ships a hard-coded WhatsApp Web version that the
-// servers eventually reject (405 "client outdated"). Before connecting we ask
-// web.whatsapp.com for the current revision and advertise that instead.
+// whatsmeow ships a hard-coded WhatsApp Web version that the servers
+// eventually reject (405 "client outdated") as the library ages. Before
+// connecting we ask web.whatsapp.com for the current revision and advertise
+// that instead when it is newer.
 var (
 	versionMu      sync.Mutex
 	versionUpdated bool
@@ -40,7 +41,5 @@ func refreshWAVersion(ctx context.Context, hc *http.Client, log waLog.Logger, fo
 		return
 	}
 	store.SetWAVersion(*latest)
-	// SetWAVersion doesn't refresh the prebuilt payload's AppVersion.
-	store.BaseClientPayload.UserAgent.AppVersion = latest.ProtoAppVersion()
 	log.Infof("Using WhatsApp Web version %s", latest)
 }
