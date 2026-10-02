@@ -17,11 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	"whatsappdoppel/internal/app"
 	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/launcher"
+	"whatsappdoppel/internal/platform"
 )
 
 // Set via -ldflags "-X main.version=... -X main.devProjectDir=...".
@@ -31,6 +30,8 @@ var (
 )
 
 func main() {
+	// Windows GUI build: print to the console we were started from, if any.
+	platform.AttachParentConsole()
 	args := os.Args[1:]
 	// Older macOS versions pass -psn_0_NNN to apps started from Finder.
 	if len(args) > 0 && strings.HasPrefix(args[0], "-psn") {
@@ -78,7 +79,7 @@ Usage:
                                             open the app (starts the server in the background if needed)
   whatsapp-doppel serve [flags]             run the server in the foreground
       --port N          port to listen on (default: settings, then 7788, 7789, 8080, ...)
-      --data-dir D      data folder (default: ~/Library/Application Support/WhatsappDoppel or $DOPPEL_DATA_DIR)
+      --data-dir D      data folder (default: `+config.DefaultDataDir()+`)
       --legacy-db F     import this old bot.db WhatsApp session on first start
       --fake-wa         use a simulated WhatsApp (no phone needed)
       --fake-llm        use a canned LLM (no Ollama/API key needed)
@@ -87,7 +88,8 @@ Usage:
   whatsapp-doppel quit [--data-dir D]       stop the running server
   whatsapp-doppel version
 
-Environment: DOPPEL_DATA_DIR, DOPPEL_PORT, DOPPEL_LEGACY_DB, DOPPEL_NO_BROWSER=1
+Environment: DOPPEL_DATA_DIR, DOPPEL_PORT, DOPPEL_LEGACY_DB,
+  DOPPEL_NO_BROWSER=1 (scripts: never open a browser or an error dialog)
 `)
 }
 
@@ -112,7 +114,7 @@ func runLaunch(args []string) error {
 	if *fakeLLM {
 		extra = append(extra, "--fake-llm")
 	}
-	interactive := isTerminal(os.Stderr)
+	interactive := platform.IsTerminal(os.Stderr)
 	logf := func(format string, a ...any) {
 		if interactive {
 			fmt.Fprintf(os.Stderr, format+"\n", a...)
@@ -126,9 +128,10 @@ func runLaunch(args []string) error {
 	}
 	url, err := launcher.Launch(ctx, opts)
 	if err != nil {
-		if !interactive {
-			// Started from Finder: there is no terminal to print to.
-			launcher.ShowAlert("WhatsApp Doppel could not start", err.Error())
+		if !interactive && !noBrowser() {
+			// Started from Finder / Explorer / an app menu: no terminal to print to.
+			// (Scripted runs set DOPPEL_NO_BROWSER and must never block on a dialog.)
+			platform.Alert("WhatsApp Doppel could not start", err.Error())
 		}
 		return err
 	}
@@ -199,10 +202,6 @@ func runQuit(args []string) error {
 	return nil
 }
 
-// noBrowser lets scripts and tests suppress opening a browser (DOPPEL_NO_BROWSER=1).
+// noBrowser lets scripts and tests suppress opening a browser and error
+// dialogs (DOPPEL_NO_BROWSER=1).
 func noBrowser() bool { return os.Getenv("DOPPEL_NO_BROWSER") != "" }
-
-func isTerminal(f *os.File) bool {
-	_, err := unix.IoctlGetTermios(int(f.Fd()), unix.TIOCGETA)
-	return err == nil
-}

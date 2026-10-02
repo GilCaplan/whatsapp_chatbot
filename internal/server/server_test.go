@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -38,6 +39,7 @@ type testEnv struct {
 	st     *store.Store
 	quitMu sync.Mutex
 	quit   bool
+	opened string // last OpenFolder argument (guarded by quitMu)
 }
 
 func newEnv(t *testing.T) *testEnv {
@@ -79,6 +81,12 @@ func newEnv(t *testing.T) *testEnv {
 		},
 		Version: "test",
 		FakeWA:  true,
+		OpenFolder: func(dir string) error {
+			e.quitMu.Lock()
+			e.opened = dir
+			e.quitMu.Unlock()
+			return nil
+		},
 		OnQuit: func() {
 			e.quitMu.Lock()
 			e.quit = true
@@ -149,8 +157,17 @@ func TestHealthAndIndexToken(t *testing.T) {
 	if code := e.do("GET", "/api/health", nil, &h, noToken); code != 200 {
 		t.Fatalf("health = %d", code)
 	}
-	if h["token"] != e.s.Token() || h["version"] != "test" || h["fakeWA"] != true {
+	if h["token"] != e.s.Token() || h["version"] != "test" || h["fakeWA"] != true || h["platform"] != runtime.GOOS {
 		t.Fatalf("health = %v", h)
+	}
+	if code := e.do("POST", "/api/system/open-data-dir", nil, nil); code != 200 {
+		t.Fatalf("open-data-dir = %d", code)
+	}
+	e.quitMu.Lock()
+	opened := e.opened
+	e.quitMu.Unlock()
+	if opened != e.cfg.Paths().Dir {
+		t.Fatalf("opened %q, want the data dir", opened)
 	}
 	resp, err := http.Get(e.base + "/")
 	if err != nil {

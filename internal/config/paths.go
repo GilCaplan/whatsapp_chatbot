@@ -3,16 +3,20 @@ package config
 import (
 	"os"
 	"path/filepath"
+
+	"whatsappdoppel/internal/platform"
 )
 
 // Paths resolves every on-disk location from a single data directory.
-// Never use relative paths elsewhere: the .app launches with cwd "/".
+// Never use relative paths elsewhere: the .app launches with cwd "/" (and a
+// Windows shortcut or Linux .desktop file with whatever folder it names).
 type Paths struct {
 	Dir string
 }
 
-// DefaultDataDir is ~/Library/Application Support/WhatsappDoppel unless
-// DOPPEL_DATA_DIR is set.
+// DefaultDataDir is DOPPEL_DATA_DIR when set, else the per-user folder
+// (platform.DefaultDataDir): ~/Library/Application Support/WhatsappDoppel on
+// macOS, %APPDATA%\WhatsappDoppel on Windows, ~/.config/WhatsappDoppel on Linux.
 func DefaultDataDir() string {
 	if d := os.Getenv("DOPPEL_DATA_DIR"); d != "" {
 		if abs, err := filepath.Abs(d); err == nil {
@@ -20,11 +24,11 @@ func DefaultDataDir() string {
 		}
 		return d
 	}
-	home, err := os.UserHomeDir()
+	dir, err := platform.DefaultDataDir()
 	if err != nil {
-		return filepath.Join(os.TempDir(), "WhatsappDoppel")
+		return filepath.Join(os.TempDir(), platform.AppDirName)
 	}
-	return filepath.Join(home, "Library", "Application Support", "WhatsappDoppel")
+	return dir
 }
 
 func NewPaths(dir string) (Paths, error) {

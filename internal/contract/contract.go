@@ -133,10 +133,10 @@ type Builder interface {
 	CloneDraft(ctx context.Context, req model.CloneRequest) (model.CloneDraft, error)
 }
 
-// Notifier shows macOS notifications (internal/notify, wave 3).
+// Notifier shows desktop notifications (internal/notify, wave 3).
 type Notifier interface {
 	// Backend names how notifications are shown ("terminal-notifier",
-	// "osascript" or "none").
+	// "osascript", "notify-send", "powershell", "dry-run" or "none").
 	Backend() string
 	// Test shows "Notifications are working".
 	Test(ctx context.Context) error

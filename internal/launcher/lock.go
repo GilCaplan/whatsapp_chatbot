@@ -7,16 +7,16 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/sys/unix"
-
 	"whatsappdoppel/internal/config"
+	"whatsappdoppel/internal/platform"
 )
 
 // ErrLocked means another `serve` process holds server.lock for this data dir.
 var ErrLocked = errors.New("another WhatsApp Doppel server is already running for this data folder")
 
-// Lock is an exclusive flock on <data>/server.lock, held by `serve` for its
-// whole lifetime. The kernel releases it automatically if the process dies.
+// Lock is an exclusive lock on <data>/server.lock (flock, or LockFileEx on
+// Windows), held by `serve` for its whole lifetime. The OS releases it
+// automatically if the process dies. The file itself is never deleted.
 type Lock struct {
 	f *os.File
 }
@@ -27,9 +27,9 @@ func AcquireLock(p config.Paths) (*Lock, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err := platform.TryLockFile(f); err != nil {
 		f.Close()
-		if errors.Is(err, unix.EWOULDBLOCK) {
+		if errors.Is(err, platform.ErrLockHeld) {
 			return nil, ErrLocked
 		}
 		return nil, fmt.Errorf("lock %s: %w", p.LockFile(), err)
@@ -65,7 +65,7 @@ func (l *Lock) Release() {
 	if l == nil || l.f == nil {
 		return
 	}
-	_ = unix.Flock(int(l.f.Fd()), unix.LOCK_UN)
+	_ = platform.UnlockFile(l.f)
 	l.f.Close()
 	l.f = nil
 }
