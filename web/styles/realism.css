@@ -9,8 +9,8 @@
 }
 .world-head .s-icon {
   width: 34px; height: 34px; flex: none; border-radius: 11px; display: grid; place-items: center;
-  color: #fff; background: var(--c, var(--brand-grad));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 14px -6px rgba(0, 0, 0, .35);
+  color: var(--on-brand); background: var(--c, var(--brand-grad));
+  box-shadow: var(--icon-tile-shadow);
 }
 .world-head .s-icon .ic { width: 18px; height: 18px; }
 .world-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -35,9 +35,9 @@
 .zone-opt .mono { color: var(--text-2); }
 .zone-chosen {
   display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: var(--r-md);
-  background: color-mix(in srgb, var(--teal) 10%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--teal) 35%, transparent);
+  background: color-mix(in srgb, var(--ring) 10%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--ring) 35%, transparent);
 }
-.zone-chosen > .ic { color: var(--teal); }
+.zone-chosen > .ic { color: var(--ring); }
 .zone-chosen .faint { margin-left: 4px; }
 
 .world-preview {
@@ -106,7 +106,7 @@
 .mem-group { display: flex; flex-direction: column; gap: 6px; }
 .mem-person { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .mem-dot {
-  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: #fff;
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: var(--on-brand);
   background: linear-gradient(135deg, #818cf8, #22d3ee); flex: none;
 }
 .mem-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }

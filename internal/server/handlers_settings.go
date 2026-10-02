@@ -120,6 +120,7 @@ func validateSettings(s config.Settings) error {
 	}
 	checks := []error{
 		oneOf("theme", s.Theme, "system", "light", "dark"),
+		oneOf("skin", s.Skin, config.Skins...),
 		oneOf("llm.defaultProvider", s.LLM.DefaultProvider, "ollama", "anthropic", "openai"),
 		inRange("llm.replyMaxTokens", s.LLM.ReplyMaxTokens, 0, 32000),
 		inRange("llm.ollamaNumCtx", s.LLM.OllamaNumCtx, 0, 1_048_576),
