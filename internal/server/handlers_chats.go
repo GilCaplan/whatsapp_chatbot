@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -194,25 +196,26 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 	}
 	key := r.PathValue("key")
 	var body struct {
-		Enabled      *bool           `json:"enabled"`
-		PersonaID    *string         `json:"personaId"`
-		Mode         *string         `json:"mode"`
-		ApprovalMode *bool           `json:"approvalMode"`
-		Memory       json.RawMessage `json:"memory"`
-		MissionID    *string         `json:"missionId"`
-		GoalOverride *string         `json:"goalOverride"`
-		GoalStyle    json.RawMessage `json:"goalStyle"`
-		GoalPlan     json.RawMessage `json:"goalPlanAhead"`
-		Name         *string         `json:"name"`
-		Behavior     json.RawMessage `json:"behavior"`
-		SnoozedUntil json.RawMessage `json:"snoozedUntil"`
-		People       json.RawMessage `json:"people"`
-		Cross        json.RawMessage `json:"cross"`
-		Language     json.RawMessage `json:"language"`
-		AutoContinue *bool           `json:"autoContinue"`
-		Instructions *string         `json:"instructions"`
-		ContextFrom  json.RawMessage `json:"contextFrom"`
-		AutoCompact  *bool           `json:"autoCompact"`
+		Enabled      *bool              `json:"enabled"`
+		PersonaID    *string            `json:"personaId"`
+		Mode         *string            `json:"mode"`
+		ApprovalMode *bool              `json:"approvalMode"`
+		Memory       json.RawMessage    `json:"memory"`
+		MissionID    *string            `json:"missionId"`
+		GoalOverride *string            `json:"goalOverride"`
+		GoalStyle    json.RawMessage    `json:"goalStyle"`
+		GoalPlan     json.RawMessage    `json:"goalPlanAhead"`
+		Name         *string            `json:"name"`
+		Behavior     json.RawMessage    `json:"behavior"`
+		SnoozedUntil json.RawMessage    `json:"snoozedUntil"`
+		People       json.RawMessage    `json:"people"`
+		Cross        json.RawMessage    `json:"cross"`
+		Language     json.RawMessage    `json:"language"`
+		AutoContinue *bool              `json:"autoContinue"`
+		Instructions *string            `json:"instructions"`
+		ContextFrom  json.RawMessage    `json:"contextFrom"`
+		AutoCompact  *bool              `json:"autoCompact"`
+		PromptEdits  map[string]*string `json:"promptEdits"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -312,6 +315,16 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		}
 		language = &lp
 	}
+	for k, v := range body.PromptEdits { // key → text; null or "" = back to the original
+		if !slices.Contains(model.EditablePromptSections, k) {
+			writeError(w, http.StatusBadRequest, "invalid_prompt_edit", "Only these parts can be edited: "+strings.Join(model.EditablePromptSections, ", "))
+			return
+		}
+		if v != nil && utf8.RuneCountInString(*v) > model.MaxPromptEdit {
+			writeError(w, http.StatusBadRequest, "invalid_prompt_edit", "An edited part can be at most 8000 characters")
+			return
+		}
+	}
 	if body.Instructions != nil {
 		*body.Instructions = strings.TrimSpace(*body.Instructions)
 		if utf8.RuneCountInString(*body.Instructions) > model.MaxInstructions {
@@ -407,6 +420,23 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		}
 		if body.AutoCompact != nil {
 			c.AutoCompact = *body.AutoCompact
+		}
+		if len(body.PromptEdits) > 0 {
+			edits := maps.Clone(c.PromptEdits) // a fresh map: snapshots may be read elsewhere
+			if edits == nil {
+				edits = map[string]string{}
+			}
+			for k, v := range body.PromptEdits {
+				if v == nil || strings.TrimSpace(*v) == "" {
+					delete(edits, k)
+				} else {
+					edits[k] = strings.TrimSpace(*v)
+				}
+			}
+			if len(edits) == 0 {
+				edits = nil
+			}
+			c.PromptEdits = edits
 		}
 		if body.AutoContinue != nil {
 			c.AutoContinue = *body.AutoContinue

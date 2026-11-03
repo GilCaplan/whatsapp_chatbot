@@ -87,21 +87,23 @@ type BehaviorProfile struct {
 	MuteWords                  []string `json:"muteWords"`                  // never reply to a message containing one
 
 	// Timing
-	NoticeMinSec        int  `json:"noticeMinSec"`
-	NoticeMaxSec        int  `json:"noticeMaxSec"`
-	MarkRead            bool `json:"markRead"`
-	WaitForMoreSec      int  `json:"waitForMoreSec"`
-	BurstCapSec         int  `json:"burstCapSec"`
-	ThinkMinSec         int  `json:"thinkMinSec"`
-	ThinkMaxSec         int  `json:"thinkMaxSec"`
-	DistractedPercent   int  `json:"distractedPercent"`
-	DistractedMinSec    int  `json:"distractedMinSec"`
-	DistractedMaxSec    int  `json:"distractedMaxSec"`
-	TypingIndicator     bool `json:"typingIndicator"`
-	TypingCharsPerSec   int  `json:"typingCharsPerSec"`
-	TypingJitterPercent int  `json:"typingJitterPercent"`
-	TypingMinSec        int  `json:"typingMinSec"`
-	TypingMaxSec        int  `json:"typingMaxSec"`
+	NoticeMinSec      int  `json:"noticeMinSec"`
+	NoticeMaxSec      int  `json:"noticeMaxSec"`
+	MarkRead          bool `json:"markRead"`
+	WaitForMoreSec    int  `json:"waitForMoreSec"`
+	BurstCapSec       int  `json:"burstCapSec"`
+	ThinkMinSec       int  `json:"thinkMinSec"`
+	ThinkMaxSec       int  `json:"thinkMaxSec"`
+	DistractedPercent int  `json:"distractedPercent"`
+	DistractedMinSec  int  `json:"distractedMinSec"`
+	DistractedMaxSec  int  `json:"distractedMaxSec"`
+	// TimingCurve: how delays are drawn in their range (behavior.TimingCurves; "" = uniform).
+	TimingCurve         string `json:"timingCurve"`
+	TypingIndicator     bool   `json:"typingIndicator"`
+	TypingCharsPerSec   int    `json:"typingCharsPerSec"`
+	TypingJitterPercent int    `json:"typingJitterPercent"`
+	TypingMinSec        int    `json:"typingMinSec"`
+	TypingMaxSec        int    `json:"typingMaxSec"`
 
 	// Message shape
 	SplitPercent      int    `json:"splitPercent"`
@@ -153,21 +155,22 @@ type BehaviorOverrides struct {
 	TriggerWords               *[]string `json:"triggerWords,omitempty"`
 	MuteWords                  *[]string `json:"muteWords,omitempty"`
 
-	NoticeMinSec        *int  `json:"noticeMinSec,omitempty"`
-	NoticeMaxSec        *int  `json:"noticeMaxSec,omitempty"`
-	MarkRead            *bool `json:"markRead,omitempty"`
-	WaitForMoreSec      *int  `json:"waitForMoreSec,omitempty"`
-	BurstCapSec         *int  `json:"burstCapSec,omitempty"`
-	ThinkMinSec         *int  `json:"thinkMinSec,omitempty"`
-	ThinkMaxSec         *int  `json:"thinkMaxSec,omitempty"`
-	DistractedPercent   *int  `json:"distractedPercent,omitempty"`
-	DistractedMinSec    *int  `json:"distractedMinSec,omitempty"`
-	DistractedMaxSec    *int  `json:"distractedMaxSec,omitempty"`
-	TypingIndicator     *bool `json:"typingIndicator,omitempty"`
-	TypingCharsPerSec   *int  `json:"typingCharsPerSec,omitempty"`
-	TypingJitterPercent *int  `json:"typingJitterPercent,omitempty"`
-	TypingMinSec        *int  `json:"typingMinSec,omitempty"`
-	TypingMaxSec        *int  `json:"typingMaxSec,omitempty"`
+	NoticeMinSec        *int    `json:"noticeMinSec,omitempty"`
+	NoticeMaxSec        *int    `json:"noticeMaxSec,omitempty"`
+	MarkRead            *bool   `json:"markRead,omitempty"`
+	WaitForMoreSec      *int    `json:"waitForMoreSec,omitempty"`
+	BurstCapSec         *int    `json:"burstCapSec,omitempty"`
+	ThinkMinSec         *int    `json:"thinkMinSec,omitempty"`
+	ThinkMaxSec         *int    `json:"thinkMaxSec,omitempty"`
+	DistractedPercent   *int    `json:"distractedPercent,omitempty"`
+	DistractedMinSec    *int    `json:"distractedMinSec,omitempty"`
+	DistractedMaxSec    *int    `json:"distractedMaxSec,omitempty"`
+	TimingCurve         *string `json:"timingCurve,omitempty"`
+	TypingIndicator     *bool   `json:"typingIndicator,omitempty"`
+	TypingCharsPerSec   *int    `json:"typingCharsPerSec,omitempty"`
+	TypingJitterPercent *int    `json:"typingJitterPercent,omitempty"`
+	TypingMinSec        *int    `json:"typingMinSec,omitempty"`
+	TypingMaxSec        *int    `json:"typingMaxSec,omitempty"`
 
 	SplitPercent      *int    `json:"splitPercent,omitempty"`
 	SplitMaxParts     *int    `json:"splitMaxParts,omitempty"`

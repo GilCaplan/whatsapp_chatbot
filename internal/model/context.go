@@ -26,7 +26,20 @@ type PromptSection struct {
 	Label string `json:"label"` // plain English
 	Group string `json:"group,omitempty"`
 	Text  string `json:"text"`
+	// Editable parts can be replaced for one chat (ChatAssignment.PromptEdits);
+	// Original is the part as written without the edit (only when Edited).
+	Editable bool   `json:"editable,omitempty"`
+	Edited   bool   `json:"edited,omitempty"`
+	Original string `json:"original,omitempty"`
 }
+
+// EditablePromptSections are the parts of the system prompt a chat can
+// replace with its own text: the fixed ones. Parts rebuilt for every reply
+// (people, memories, goal, language, guidance…) are changed where they come from.
+var EditablePromptSections = []string{"character", "safety", "history", "stay"}
+
+// MaxPromptEdit caps one edited part (runes).
+const MaxPromptEdit = 8000
 
 // ContextMessage is one message as the model gets it.
 type ContextMessage struct {

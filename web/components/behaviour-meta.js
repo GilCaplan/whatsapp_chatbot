@@ -7,7 +7,7 @@
 /** Every scalar field of a BehaviorProfile (JSON names). */
 export const SCALAR_FIELDS = [
   'replyPercent', 'replyWhenNameMentioned', 'replyWhenAtMentioned', 'skipWhenOthersMentioned', 'aiJudgement',
-  'chimeInPercent', 'ignoreLinks', 'ignoreStickers', 'reactPercent', 'pauseWhenYouReply', 'maxRepliesPerHour', 'maxRepliesPerDay',
+  'chimeInPercent', 'ignoreLinks', 'ignoreStickers', 'timingCurve', 'reactPercent', 'pauseWhenYouReply', 'maxRepliesPerHour', 'maxRepliesPerDay',
   'cooldownSec', 'historyMessages', 'historyChars', 'staleAfterMin',
   'respondToAllMaxMembers', 'answerAnyoneWhoAddressesIt', 'maxStreak', 'triggerWords', 'muteWords',
   'noticeMinSec', 'noticeMaxSec', 'markRead', 'waitForMoreSec', 'burstCapSec', 'thinkMinSec', 'thinkMaxSec',

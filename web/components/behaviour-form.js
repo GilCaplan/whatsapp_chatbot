@@ -29,13 +29,22 @@ import { wordChips } from './word-chips.js';
 import { dialFieldMap, dialDot } from './vibe-dials.js';
 import { scheduleSummary, minutesText } from './initiate-controls.js';
 
+// Timing curves (behavior.TimingCurves): how each delay is drawn in its range.
+const CURVES = [['uniform', 'Even spread'], ['normal', 'Bell curve'], ['exponential', 'Mostly quick'], ['fixed', 'Always the middle']];
+const CURVE_HELP = {
+  uniform: 'Every delay below is a random time anywhere in its range, all equally likely.',
+  normal: 'Delays cluster around the middle of each range; very quick or very slow ones are rare.',
+  exponential: 'Usually near the short end, now and then much longer, like someone who mostly answers fast.',
+  fixed: 'Always exactly the middle of each range: predictable, no randomness.',
+};
+
 export const FORM_GROUPS = [
   { id: 'responsiveness', label: 'Responsiveness', icon: 'gauge', c: 'linear-gradient(135deg,#38bdf8,#2563eb)', sub: 'Whether it answers at all, and how often',
     fields: ['replyPercent', 'replyWhenNameMentioned', 'replyWhenAtMentioned', 'skipWhenOthersMentioned', 'aiJudgement', 'chimeInPercent', 'ignoreLinks', 'ignoreStickers', 'reactPercent', 'pauseWhenYouReply', 'maxRepliesPerHour', 'maxRepliesPerDay', 'cooldownSec', 'historyMessages', 'historyChars', 'staleAfterMin'] },
   { id: 'people', label: 'Who it answers', icon: 'group', c: 'linear-gradient(135deg,#fbbf24,#ea580c)', sub: 'Who gets a reply, and words that always or never get one',
     fields: ['respondToAllMaxMembers', 'answerAnyoneWhoAddressesIt', 'maxStreak', 'triggerWords', 'muteWords'] },
   { id: 'timing', label: 'Timing', icon: 'timer', c: 'linear-gradient(135deg,#a78bfa,#7c3aed)', sub: 'Noticing, reading, thinking and typing',
-    fields: ['noticeMinSec', 'noticeMaxSec', 'markRead', 'waitForMoreSec', 'burstCapSec', 'thinkMinSec', 'thinkMaxSec', 'distractedPercent', 'distractedMinSec', 'distractedMaxSec', 'typingIndicator', 'typingCharsPerSec', 'typingJitterPercent', 'typingMinSec', 'typingMaxSec'] },
+    fields: ['timingCurve', 'noticeMinSec', 'noticeMaxSec', 'markRead', 'waitForMoreSec', 'burstCapSec', 'thinkMinSec', 'thinkMaxSec', 'distractedPercent', 'distractedMinSec', 'distractedMaxSec', 'typingIndicator', 'typingCharsPerSec', 'typingJitterPercent', 'typingMinSec', 'typingMaxSec'] },
   { id: 'availability', label: 'Active hours', icon: 'calendar', c: 'linear-gradient(135deg,#818cf8,#4338ca)', sub: 'When the persona is around to answer',
     fields: ['availability'] },
   { id: 'shape', label: 'Message shape', icon: 'bubbles', c: 'linear-gradient(135deg,#2dd4bf,#0d9488)', sub: 'One bubble or several, quoting, length',
@@ -235,6 +244,9 @@ export function behaviourForm(opts) {
 
   function timing() {
     return html`
+      ${row({ fields: ['timingCurve'], stack: true, label: 'Timing curve',
+        help: CURVE_HELP[v.timingCurve || 'uniform'],
+        control: seg(CURVES.map(([value, label]) => ({ value, label })), v.timingCurve || 'uniform', (x) => set('timingCurve', x), { label: 'Timing curve' }) })}
       ${row({ fields: ['noticeMinSec', 'noticeMaxSec'], stack: true, readout: span('noticeMinSec', 'noticeMaxSec'), label: 'Time before it notices', help: 'How long until it looks at the phone after a message arrives — a random time in this range.', control: pair('noticeMinSec', 'noticeMaxSec', 'Time before it notices') })}
       ${row({ fields: ['markRead'], label: 'Show “seen” ticks', help: "Marks messages as read (blue ticks) when it looks. If read receipts are off in your WhatsApp privacy settings, nobody sees them anyway.", control: sw('markRead', 'Show seen ticks') })}
       ${row({ fields: ['waitForMoreSec'], label: 'Wait for more messages', help: 'After seeing a message, waits this long in case another follows, so a burst of messages gets one reply.', control: num('waitForMoreSec', { unit: 'sec', label: 'Wait for more messages' }) })}

@@ -117,6 +117,9 @@ type ChatAssignment struct {
 	Instructions string     `json:"instructions"`
 	ContextFrom  *time.Time `json:"contextFrom"`
 	AutoCompact  bool       `json:"autoCompact"`
+	// PromptEdits replace parts of the system prompt in this chat only
+	// (key → text, keys in EditablePromptSections); the persona is unchanged.
+	PromptEdits map[string]string `json:"promptEdits,omitempty"`
 	// RevealedAt is when you told this chat it was talking to a persona.
 	RevealedAt     *time.Time `json:"revealedAt"`
 	LastActivityAt *time.Time `json:"lastActivityAt"`

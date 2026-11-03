@@ -20,9 +20,11 @@ const tokens = (chars) => Math.round(chars / 4);
 
 export function createContextStore(key, update) {
   const st = {
-    data: null, error: '', showPrompt: false, compacting: false,
+    data: null, error: '', showPrompt: true, compacting: false,
+    openParts: new Set(['character']),
     instr: null, // instructions being typed
     summary: null, // summary being typed
+    editing: '', draft: '', // prompt part being edited for this chat
   };
   async function load() {
     try {
@@ -73,8 +75,18 @@ export function createContextStore(key, update) {
     load();
   }
 
+  /** Replace one part of the prompt in this chat only (text null = back to the original). */
+  async function saveEdit(part, text) {
+    try {
+      await patchChat(key, { promptEdits: { [part]: text } });
+      toast(text ? 'Changed for this chat only' : 'Back to the original', { type: 'success' });
+      st.editing = ''; st.draft = '';
+    } catch { /* toasted */ }
+    load();
+  }
+
   return {
-    st, load, reloadSoon, compact, forgetSummary, setFrom, setAuto,
+    st, load, reloadSoon, compact, forgetSummary, setFrom, setAuto, saveEdit,
     typeInstructions(v) { st.instr = v; update(); saveInstructions(); },
     typeSummary(v) { st.summary = v; update(); saveSummary(); },
     destroy() {
@@ -92,8 +104,25 @@ const PART_COLOURS = {
 };
 const partColour = (s) => PART_COLOURS[s.group || s.key] || 'var(--gray)';
 
+// Where the parts that can't be edited here come from.
+const WHERE = {
+  'context-open': 'Fixed wording that frames the chat context as information, not instructions.',
+  'context-close': 'Fixed wording that closes the chat context.',
+  people: 'Built for every reply from who is here and your notes in the People tab.',
+  summary: 'Edit it in "Summary of older messages" below.',
+  memories: 'Built for every reply from what it remembers (further down this tab).',
+  cross: 'Built from what it knows about these people from its other chats.',
+  world: "Built for every reply from the persona's time zone and daily routine.",
+  late: 'Added when it answers long after a message.',
+  goal: 'Change it in the Goal tab.',
+  instructions: 'Edit it in "Your instructions for this chat" below.',
+  language: 'Change it in the Behaviour tab › Languages.',
+  guidance: "Built for every reply from the persona's message length and emoji settings.",
+};
+
 /** The prompt's parts as a stacked bar plus one row each (context parts grouped). */
-function promptParts(d, name, st, onUpdate) {
+function promptParts(cs, d, name, onUpdate) {
+  const st = cs.st;
   const sections = d.sections && d.sections.length ? d.sections : [{ key: 'system', label: 'System prompt', text: d.system }];
   const convo = d.messages.reduce((n, m) => n + m.content.length, 0);
   const total = Math.max(1, d.chars);
@@ -108,13 +137,32 @@ function promptParts(d, name, st, onUpdate) {
   blocks.push({ key: 'conversation', label: 'Conversation', n: convo, c: PART_COLOURS.conversation });
   const open = st.openParts || (st.openParts = new Set());
   const toggle = (k) => { if (open.has(k)) open.delete(k); else open.add(k); onUpdate(); };
-  const row = (key, label, chars, c, body, indent = false) => html`<div class=${'ctx-sec' + (indent ? ' indent' : '') + (open.has(key) ? ' open' : '')}>
+  const row = (key, label, chars, c, body, { indent = false, edited = false } = {}) => html`<div class=${'ctx-sec' + (indent ? ' indent' : '') + (open.has(key) ? ' open' : '') + (edited ? ' edited' : '')}>
     <button type="button" class="ctx-sec-h" aria-expanded=${String(open.has(key))} @click=${() => toggle(key)}>
       <span class="ctx-swatch" style=${`--c:${c}`}></span><span class="grow">${label}</span>
+      ${edited ? html`<span class="chip chip-sm ctx-edited">Edited for this chat</span>` : ''}
       <span class="faint">${chars.toLocaleString()} chars · ${Math.round((chars / total) * 100)}%</span>${icon('chevron-down', 'ic-sm')}
     </button>
     ${open.has(key) ? body : ''}
   </div>`;
+  const partBody = (s) => {
+    if (st.editing === s.key) {
+      return html`<div class="ctx-edit">
+        <textarea class="textarea" rows=${rowsFor(st.draft, 6, 18)} maxlength="8000" .value=${st.draft}
+          aria-label=${s.label + ' for this chat'} @input=${(e) => { st.draft = e.target.value; onUpdate(); }}></textarea>
+        <div class="row gap-8 row-wrap mt-4">
+          <button class="btn btn-primary btn-sm" ?disabled=${!st.draft.trim()} @click=${() => cs.saveEdit(s.key, st.draft.trim())}>${icon('check')}Save for this chat</button>
+          <button class="btn btn-ghost btn-sm" @click=${() => { st.editing = ''; onUpdate(); }}>Cancel</button>
+          <span class="tiny faint">Only this chat changes. ${name}'s persona stays as it is.</span>
+        </div>
+      </div>`;
+    }
+    return html`<pre class="ctx-pre">${s.text.trim()}</pre>
+      <div class="ctx-sec-foot">${s.editable ? html`
+        <button class="btn btn-ghost btn-sm" @click=${() => { st.editing = s.key; st.draft = s.text.trim(); onUpdate(); }}>${icon('edit')}Edit for this chat</button>
+        ${s.edited ? html`<button class="btn btn-ghost btn-sm" title=${(s.original || '').trim().slice(0, 300)} @click=${() => cs.saveEdit(s.key, null)}>${icon('reset')}Back to the original</button>` : ''}`
+        : html`<span class="tiny faint">${WHERE[s.key] || 'Built for every reply.'}</span>`}</div>`;
+  };
   let ctxShown = false;
   return html`
     <div class="ctx-bar" role="img" aria-label="How the prompt is split">
@@ -126,9 +174,9 @@ function promptParts(d, name, st, onUpdate) {
         if (s.group === 'context') {
           const head = ctxShown ? '' : html`<div class="ctx-group-h"><span class="ctx-swatch" style=${`--c:${PART_COLOURS.context}`}></span>Chat context <span class="faint">· who is here, notes, memories, time</span></div>`;
           ctxShown = true;
-          return html`${head}${row(s.key, s.label, s.text.length, partColour(s), html`<pre class="ctx-pre">${s.text.trim()}</pre>`, true)}`;
+          return html`${head}${row(s.key, s.label, s.text.length, partColour(s), partBody(s), { indent: true })}`;
         }
-        return row(s.key, s.label, s.text.length, partColour(s), html`<pre class="ctx-pre">${s.text.trim()}</pre>`);
+        return row(s.key, s.label, s.text.length, partColour(s), partBody(s), { edited: !!s.edited });
       })}
       ${row('conversation', `Conversation (${d.messages.length} messages)`, convo, PART_COLOURS.conversation, d.messages.length
         ? html`${d.messages.map((m) => html`<div class=${'ctx-msg ' + m.role}><span class="ctx-role">${roleLabel(m, name)}</span><pre class="ctx-pre">${m.content}</pre></div>`)}`
@@ -168,6 +216,16 @@ export function contextBlock({ ctx: cs, chat: c, persona: p, onUpdate }) {
     </div>
     <div class="field-help mt-4">${fromNote}</div>
 
+    <div class="row gap-8 mt-8">
+      <div class="field-label grow">The prompt, part by part</div>
+      <button class="btn btn-ghost btn-sm" aria-expanded=${String(st.showPrompt)} @click=${() => { st.showPrompt = !st.showPrompt; onUpdate(); }}>
+        ${icon('eye')}${st.showPrompt ? 'Hide' : 'Show'}</button>
+    </div>
+    ${st.showPrompt ? html`<div class="ctx-full">
+      ${promptParts(cs, d, name, onUpdate)}
+      <div class="tiny faint">Tap a part to read it. Character, safety rules, how to read the conversation and "stay yourself" can be edited for this chat only. This is exactly what the AI gets for the next reply, apart from the private planning step for goals.</div>
+    </div>` : ''}
+
     <div class="field-row field-row-stack mt-12">
       <div><div class="field-label">${icon('edit', 'ic-sm')}Your instructions for this chat</div>
         <div class="field-help">Added to its prompt here only, e.g. "keep it about the trip" or "don't bring up work". Who it is stays in the persona: <a href=${'#/persona/' + encodeURIComponent(c.personaId)}>edit ${name}</a>.</div></div>
@@ -200,13 +258,6 @@ export function contextBlock({ ctx: cs, chat: c, persona: p, onUpdate }) {
       <button class="btn btn-ghost btn-sm" title="It forgets everything said so far in this chat (the messages stay)"
         @click=${async () => { if (await confirmSheet({ title: 'Start fresh?', body: `${name} stops reading the messages so far and the summary. Nothing is deleted.`, confirm: 'Start fresh' })) cs.setFrom('now', 'It starts fresh from here'); }}>${icon('reset')}Start fresh from now</button>
       ${d.contextFrom ? html`<button class="btn btn-ghost btn-sm" @click=${() => cs.setFrom(null, 'It reads the full history again')}>${icon('chats')}Read all history again</button>` : ''}
-      <span class="grow"></span>
-      <button class="btn btn-ghost btn-sm" aria-expanded=${String(st.showPrompt)} @click=${() => { st.showPrompt = !st.showPrompt; onUpdate(); }}>
-        ${icon('eye')}${st.showPrompt ? 'Hide' : 'Show'} the prompt, part by part</button>
     </div>
-    ${st.showPrompt ? html`<div class="ctx-full">
-      ${promptParts(d, name, st, onUpdate)}
-      <div class="tiny faint">Tap a part to read it. This is exactly what goes to the AI for the next reply, apart from the private planning step for goals.</div>
-    </div>` : ''}
   </section>`;
 }

@@ -184,6 +184,9 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   `ChatAssignment.language` (whole block) → `PersonPrefs.language` (reply language only); `engine/language.go` gates
   foreign messages and sets `prompt.Options.ReplyLanguage` (`REPLY LANGUAGE`, after STAY YOURSELF so it wins over the
   persona's own Language line).
+- The system prompt is built from labelled parts (`prompt.SystemSections`; `SystemPrompt` joins them). A chat's
+  `promptEdits` replace the editable parts (`model.EditablePromptSections`: character, safety, history, stay) in that
+  chat only; delays are drawn with `behavior.Delay` along the profile's `timingCurve`.
 - What it reads (`engine/context.go`): history from `ChatAssignment.contextFrom` on (`fromContext`), plus the summary
   (`EARLIER IN THIS CHAT`, inside the chat-context block) and your `instructions` (after the goal). Compaction (manual
   or `autoCompact` when the window is full) writes the summary and moves `contextFrom`. `autoContinue` turns hand-off

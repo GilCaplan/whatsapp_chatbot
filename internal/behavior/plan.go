@@ -57,14 +57,14 @@ func (p Plan) Total() time.Duration {
 
 // PlanNotice draws how long until the persona looks at the chat.
 func PlanNotice(p model.BehaviorProfile, s Sampler) time.Duration {
-	return s.Between(p.NoticeMinSec, p.NoticeMaxSec)
+	return Delay(s, p.NoticeMinSec, p.NoticeMaxSec, p.TimingCurve)
 }
 
 // PlanThink draws the think time and, when the distraction roll hits, the extra delay.
 func PlanThink(p model.BehaviorProfile, s Sampler) (think, distracted time.Duration) {
-	think = s.Between(p.ThinkMinSec, p.ThinkMaxSec)
+	think = Delay(s, p.ThinkMinSec, p.ThinkMaxSec, p.TimingCurve)
 	if s.Hit(p.DistractedPercent) {
-		distracted = s.Between(p.DistractedMinSec, p.DistractedMaxSec)
+		distracted = Delay(s, p.DistractedMinSec, p.DistractedMaxSec, p.TimingCurve)
 	}
 	return think, distracted
 }
@@ -83,7 +83,7 @@ func PlanBubbles(p model.BehaviorProfile, s Sampler, text string, quote *model.Q
 			b.Typing = min(b.Typing, QuickTypingCap)
 		}
 		if i > 0 {
-			b.GapBefore = s.Between(p.BubbleGapMinSec, p.BubbleGapMaxSec)
+			b.GapBefore = Delay(s, p.BubbleGapMinSec, p.BubbleGapMaxSec, p.TimingCurve)
 			if quick {
 				b.GapBefore = min(b.GapBefore, QuickTypingCap)
 			}

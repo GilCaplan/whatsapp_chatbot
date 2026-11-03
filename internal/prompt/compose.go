@@ -129,6 +129,8 @@ type Options struct {
 	// summary of older messages ("" = none).
 	Instructions string
 	Summary      string
+	// Edits replace editable parts of the prompt for this chat (key → text).
+	Edits map[string]string
 
 	// ReplyLanguage is the language to write in (English name, e.g. "Hebrew";
 	// "" = no rule); see language.go.
@@ -158,9 +160,15 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 	}
 	var out []model.PromptSection
 	add := func(key, label, group, text string) {
-		if text != "" {
-			out = append(out, model.PromptSection{Key: key, Label: label, Group: group, Text: text})
+		if text == "" {
+			return
 		}
+		s := model.PromptSection{Key: key, Label: label, Group: group, Text: text, Editable: slices.Contains(model.EditablePromptSections, key)}
+		if e := strings.TrimSpace(o.Edits[key]); s.Editable && e != "" {
+			lead := text[:len(text)-len(strings.TrimLeft(text, "\n"))] // keep the blank line before it
+			s.Original, s.Text, s.Edited = text, lead+e, true
+		}
+		out = append(out, s)
 	}
 	add("character", "Character", "", Identity(p))
 	add("safety", "Safety rules", "", AntiJailbreakRules)

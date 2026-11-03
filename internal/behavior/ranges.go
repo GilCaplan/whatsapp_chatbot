@@ -83,6 +83,7 @@ var enums = map[string][]string{
 	"availability.outsideHours": {"queue", "silent"},
 	"availability.week.day":     Days,
 	"proactive.schedule.repeat": RepeatKinds,
+	"timingCurve":               TimingCurves,
 }
 
 // enumDefaults is what Clamp substitutes for an empty or unknown enum value.

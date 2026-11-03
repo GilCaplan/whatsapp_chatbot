@@ -123,7 +123,7 @@ func distinctSpeakers(hist []model.Message, n int) int {
 // the persona knows from its other chats (the *crossUse goes to the leak
 // guard; nil when there is none).
 func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile, d *mention.Directory, hist []model.Message) (prompt.Options, *crossUse) {
-	o := prompt.Options{LengthBias: bp.LengthBias, ReplyLanguage: lang.Name(e.replyLanguage(c, hist)), Instructions: c.Instructions}
+	o := prompt.Options{LengthBias: bp.LengthBias, ReplyLanguage: lang.Name(e.replyLanguage(c, hist)), Instructions: c.Instructions, Edits: c.PromptEdits}
 	if sm, ok := e.store.Summary(c.Key); ok {
 		o.Summary = sm.Text // older messages (context.go)
 	}

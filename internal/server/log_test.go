@@ -98,3 +98,25 @@ func TestLanguageSettings(t *testing.T) {
 		t.Errorf("reset = %d %+v", code, reset.Language)
 	}
 }
+
+func TestPromptEditsPatch(t *testing.T) {
+	e := newEnv(t)
+	var c model.ChatAssignment
+	if code := e.do("POST", "/api/chats", map[string]any{"jid": "15550001@s.whatsapp.net", "personaId": "leo"}, &c); code != 201 {
+		t.Fatalf("assign = %d", code)
+	}
+	key := "/api/chats/" + strings.ReplaceAll(c.Key, ":", "%3A")
+	var apiErr apiError
+	if code := e.do("PATCH", key, map[string]any{"promptEdits": map[string]any{"goal": "x"}}, &apiErr); code != 400 || apiErr.Code != "invalid_prompt_edit" {
+		t.Errorf("non-editable part = %d %+v", code, apiErr)
+	}
+	var got model.ChatAssignment
+	if code := e.do("PATCH", key, map[string]any{"promptEdits": map[string]any{"character": "  You are a pirate.  ", "stay": "Stay a pirate."}}, &got); code != 200 ||
+		got.PromptEdits["character"] != "You are a pirate." || len(got.PromptEdits) != 2 {
+		t.Fatalf("edit = %d %+v", code, got.PromptEdits)
+	}
+	var back model.ChatAssignment
+	if code := e.do("PATCH", key, map[string]any{"promptEdits": map[string]any{"character": nil, "stay": ""}}, &back); code != 200 || back.PromptEdits != nil {
+		t.Errorf("reset = %d %+v", code, back.PromptEdits)
+	}
+}

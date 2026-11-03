@@ -1577,3 +1577,9 @@ count-ring { display: inline-grid; flex: none; }
 .ctx-sec > .ctx-pre, .ctx-sec > .ctx-msg, .ctx-sec > .small { margin: 0 10px 10px; }
 .ctx-sec > .ctx-msg { margin-bottom: 0; }
 .ctx-group-h { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--text-2); margin: 6px 0 0 2px; }
+.ctx-sec-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 6px 8px; }
+.ctx-sec-foot .tiny { margin: 0 4px; }
+.ctx-edit { margin: 0 10px 10px; }
+.ctx-edit .textarea { font: 12.5px/1.5 var(--font-mono, ui-monospace, monospace); }
+.ctx-sec.edited { border-color: color-mix(in srgb, var(--pink) 45%, var(--hairline)); }
+.ctx-edited { color: var(--pink); background: color-mix(in srgb, var(--pink) 12%, transparent); border-color: transparent; }
