@@ -52,13 +52,17 @@ var (
 )
 
 const (
-	msgQRExpired  = "QR expired — tap to get a new one"
-	msgReplaced   = "Another program is using this WhatsApp session — close the old bot, then press Reconnect"
-	msgOutdated   = "WhatsApp rejected this app version as outdated — the app needs an update"
-	msgRemoteGone = "This device was unlinked from your phone — scan the QR code to link again"
-	groupsTTL     = 10 * time.Minute
-	contactsTTL   = 10 * time.Minute
-	lookupTimeout = 5 * time.Second
+	msgQRExpired   = "QR expired — tap to get a new one"
+	msgReplaced    = "Another program is using this WhatsApp session — close the old bot, then press Reconnect"
+	msgOutdated    = "WhatsApp rejected this app version as outdated — the app needs an update"
+	msgRemoteGone  = "This device was unlinked from your phone — scan the QR code to link again"
+	msgNoAnswer    = "WhatsApp stopped answering — reconnecting"
+	groupsTTL      = 10 * time.Minute
+	groupsTimeout  = 20 * time.Second
+	contactsTTL    = 10 * time.Minute
+	contactsSettle = 3 * time.Second
+	sendTimeout    = 45 * time.Second
+	lookupTimeout  = 5 * time.Second
 )
 
 var _ contract.WhatsApp = (*Manager)(nil)
@@ -89,14 +93,18 @@ type Manager struct {
 	started    bool
 	closed     bool
 
-	contactsGen atomic.Int64 // bumped to invalidate the contacts cache
-	contactsMu  sync.Mutex   // held while (re)building contacts
-	contacts    *contactCache
+	contactsGen      atomic.Int64 // bumped to invalidate the contacts cache
+	contactsBuildMu  sync.Mutex   // held while (re)building contacts
+	contactsBuilding atomic.Bool  // a background rebuild is pending
+	contactsMu       sync.Mutex   // guards contacts
+	contacts         *contactCache
 
-	groupsFetchMu sync.Mutex // serializes GetJoinedGroups
-	groupsMu      sync.RWMutex
-	groups        []model.ChatItem
-	groupsAt      time.Time
+	groupsFetchMu    sync.Mutex // serializes GetJoinedGroups
+	groupsRefreshing atomic.Bool
+	groupsMu         sync.RWMutex
+	groups           []model.ChatItem // nil = not loaded yet (membership unknown)
+	groupsAt         time.Time
+	groupHandler     func(model.GroupChange) // membership.go
 
 	participants participantsCache // group rosters
 
@@ -640,10 +648,22 @@ func (m *Manager) handleEvent(cli *whatsmeow.Client, evt any) {
 		m.publish(events.TypeWAStatus, m.Status())
 	case *waEvents.HistorySync:
 		m.onHistorySync(cli, v)
+	case *waEvents.KeepAliveTimeout:
+		// The socket can stay open while WhatsApp no longer answers; don't
+		// claim "connected" meanwhile (whatsmeow reconnects after 3 minutes).
+		if v.ErrorCount >= 2 && m.Status().State == model.WAConnected {
+			m.setState(model.WAConnecting, msgNoAnswer)
+		}
+	case *waEvents.KeepAliveRestored:
+		if st := m.Status(); st.State == model.WAConnecting && st.LastError == msgNoAnswer && cli.IsLoggedIn() {
+			m.setState(model.WAConnected, "")
+		}
 	case *waEvents.GroupInfo:
 		m.participants.invalidate(v.JID.ToNonAD().String())
+		m.onGroupInfo(cli, v) // membership.go
 	case *waEvents.JoinedGroup:
 		m.participants.invalidate(v.JID.ToNonAD().String())
+		m.onJoinedGroup(v)
 	}
 }
 
@@ -794,6 +814,13 @@ func buildMessage(msg model.OutMessage) *waE2E.Message {
 	return &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{Text: proto.String(msg.Text), ContextInfo: ci}}
 }
 
+// ready reports whether sends can go out now: logged in, the socket open and
+// WhatsApp answering. Failing fast beats a send that hangs until whatsmeow's
+// own timeout while the connection is gone.
+func (m *Manager) ready(cli *whatsmeow.Client) bool {
+	return cli.IsLoggedIn() && cli.IsConnected() && m.Status().State == model.WAConnected
+}
+
 // SendMessage sends a text message (quote and mentions optional). jid may be
 // a JID, chat key or phone number. The result has WhatsApp's message id.
 func (m *Manager) SendMessage(ctx context.Context, jid string, msg model.OutMessage) (model.SendResult, error) {
@@ -802,9 +829,11 @@ func (m *Manager) SendMessage(ctx context.Context, jid string, msg model.OutMess
 		return model.SendResult{}, err
 	}
 	cli := m.currentClient()
-	if !cli.IsLoggedIn() {
+	if !m.ready(cli) {
 		return model.SendResult{}, ErrNotConnected
 	}
+	ctx, cancel := context.WithTimeout(ctx, sendTimeout)
+	defer cancel()
 	resp, err := cli.SendMessage(ctx, to, buildMessage(msg))
 	if err != nil {
 		return model.SendResult{}, err
@@ -824,9 +853,11 @@ func (m *Manager) EditMessage(ctx context.Context, jid, id string, msg model.Out
 		return errors.New("message id required")
 	}
 	cli := m.currentClient()
-	if !cli.IsLoggedIn() {
+	if !m.ready(cli) {
 		return ErrNotConnected
 	}
+	ctx, cancel := context.WithTimeout(ctx, sendTimeout)
+	defer cancel()
 	msg.Quote = nil
 	resp, err := cli.SendMessage(ctx, chat, cli.BuildEdit(chat, types.MessageID(id), buildMessage(msg)))
 	if err == nil {

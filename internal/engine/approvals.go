@@ -246,7 +246,7 @@ func (e *Engine) typingFor(r *Runner, targets []string, on bool) {
 // recordReplyFor counts a delivered reply (rate limits, cooldown, silence).
 func (e *Engine) recordReplyFor(r *Runner, key string) {
 	if r != nil {
-		r.recordReply(false)
+		r.recordReply(false, false)
 		return
 	}
 	now := e.clock.Now()

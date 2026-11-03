@@ -46,8 +46,8 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/launcher` | `instance.json` read/write, `server.lock` (via `platform.TryLockFile`), `/api/health` probe (token must match), detached spawn of `serve --from-launcher`, `Quit` |
 | `internal/platform` | every OS difference (leaf: stdlib + `x/sys`), one file per OS: `DefaultDataDir` (`os.UserConfigDir`), `IsTerminal`, `OpenURL`/`OpenFolder` (open, xdg-open, ShellExecute), `TryLockFile`/`UnlockFile` (flock; LockFileEx on one byte far past EOF), `DetachAttrs`/`HideWindow`, `Alert` (osascript, zenity/kdialog/notify-send, MessageBox), `AttachParentConsole` (Windows GUI build) |
 | `internal/server` | HTTP API per `docs/API.md` (Go 1.22 mux patterns), SSE `/api/events`, middleware (Host/Origin/Sec-Fetch-Site guard, `X-Doppel-Token`, JSON errors, logging, recovery), static UI with token templating, port scan + live `Rebind`, avatar processing |
-| `internal/engine` | per-chat `Runner`s: reply-cycle state machine (`pipeline.go`: idle → noticing → waiting → thinking → typing, or queued outside active hours), group decisions, guard, prompt, generation, split/quoted delivery, reactions, rate limits, proactive check-ins (`proactive.go`), approvals; "who it answers" gate + streak guard (`people.go`), @tags (`mentions.go`: member directory, prompt options, tag validation/encoding); playground + AI builder; wave 3: chat modes auto/approve/co-pilot (`drafts.go`: three tone drafts), typos (`typo.go`), routine gating + late-reply notes (`routine.go`), serialised background jobs (`jobs.go`: memory extraction `memory.go`, daily recaps `recap.go`, chat briefs `brief.go`), cross-chat context (`cross.go`: sources, selection, prompt section, `guardedReply` leak guard in `goal.go`), hand-off pause/resume (`handoff.go`), reveal (`reveal.go`), clone builder (`clone.go`), missions (`goal.go`: `publishGoalReached` → `store.CompleteMission`, `goalMedia`) |
-| `internal/behavior` | reply-behaviour logic (leaf, imports only `model`): presets, ranges/enums + `Validate`/`Clamp`/`Normalize`/`ValidateOverrides`, `Resolve` (app profile → chat overrides, with sources), `NextOpen` (active hours), `Sampler`/`Fixed`, `PlanDelivery`/`PlanBubbles`/`SplitText`/`TypingDuration`/`PickReaction`, typos (`typo.go`), v1 migration; vibe dials (`dials.go`: `Dials`/`DialTable`, `ApplyDial`, `ReadDials`) and the one-shot v4 relabel of old Busy/Slow presets (`relabel.go`) |
+| `internal/engine` | per-chat `Runner`s: reply-cycle state machine (`pipeline.go`: idle → noticing → waiting → thinking → typing, or queued outside active hours), group decisions, guard, prompt, generation, split/quoted delivery, reactions, rate limits, proactive check-ins (`proactive.go`), approvals; "who it answers" gate + streak guard (`people.go`), @tags (`mentions.go`: member directory, prompt options, tag validation/encoding); playground + AI builder; wave 3: chat modes auto/approve/co-pilot (`drafts.go`: three tone drafts), typos (`typo.go`), routine gating + late-reply notes (`routine.go`), scheduled messages (`schedule.go`: per-runner timer, skip-never-late gate, `HandleGroupChange`), serialised background jobs (`jobs.go`: memory extraction `memory.go`, daily recaps `recap.go`, chat briefs `brief.go`), cross-chat context (`cross.go`: sources, selection, prompt section, `guardedReply` leak guard in `goal.go`), decision log (`decisionlog.go`: `Engine.act` → `logActivity`, entries per message id), hand-off pause/resume (`handoff.go`), reveal (`reveal.go`), clone builder (`clone.go`), missions (`goal.go`: `publishGoalReached` → `store.CompleteMission`, `goalMedia`) |
+| `internal/behavior` | reply-behaviour logic (leaf, imports only `model`): presets, ranges/enums + `Validate`/`Clamp`/`Normalize`/`ValidateOverrides`, `Resolve` (app profile → chat overrides, with sources), `NextOpen` (active hours), `Sampler`/`Fixed`, `PlanDelivery`/`PlanBubbles`/`SplitText`/`TypingDuration`/`PickReaction`, typos (`typo.go`), scheduled-message gaps (`schedule.go`: `ScheduleGap` fixed/uniform/normal/poisson, `NextTime`), v1 migration; vibe dials (`dials.go`: `Dials`/`DialTable`, `ApplyDial`, `ReadDials`) and the one-shot v4 relabel of old Busy/Slow presets (`relabel.go`) |
 | `internal/mission` | missions (leaf, `model` + stdlib): ~15 goal templates with blanks (`Templates`, `Fill`, `Detector`/`MediaDetected`) and achievements computed from the history (`Achievements`) |
 | `internal/world` | where a persona lives (leaf): time zone, weekend, part of day, daily routine (`RoutineAt`…) for the prompt's "right now" section and routine gating |
 | `internal/memory` | what personas learn about people (leaf): `Merge` (dedupe/update/cap/expiry) and `Select` for the reply prompt |
@@ -60,13 +60,13 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/goals` | goal-pursuit logic (leaf, imports only `model`+`persona`): `Resolve` (persona → chat overrides), "say the word" goals (`ParseSayWord`, `SaysWord`, `SpeakerMatches`; English + Hebrew), reply `Leak` check, planner `EvidenceFound`, API `View` |
 | `internal/guard` | scored injection detector, sanitizer, character-break detector |
 | `internal/persona` | `Seeds()`, `Seed(id)`, `Normalize(*Persona) error`, generated avatars |
-| `internal/wa` | whatsmeow `Manager` (pairing/QR, status, reconnect, logout, presence, chats, avatars, legacy `bot.db` import) and `Fake` |
-| `internal/store` | personas/chats/approvals JSON (atomic writes) + history JSONL per chat + `runtime.json` (`RunnerState`); migrates v1 per-chat `overrides` on `Open`; wave 3 files: `memories.go`, `recaps.go`, `missions.go` (read on demand, own mutex), `selfsamples.go`, `UpdateHistory`; `briefs.go` (cross-chat briefs) |
+| `internal/wa` | whatsmeow `Manager` (pairing/QR, status, reconnect, logout, presence, chats, avatars, legacy `bot.db` import) and `Fake`; `membership.go`: joined-groups cache as membership truth (`InGroup`, `SetGroupHandler`, diffs on refresh + live `GroupInfo`/`JoinedGroup`) |
+| `internal/store` | personas/chats/approvals JSON (atomic writes) + history JSONL per chat + `runtime.json` (`RunnerState`); migrates v1 per-chat `overrides` on `Open`; wave 3 files: `memories.go`, `recaps.go`, `missions.go` (read on demand, own mutex), `selfsamples.go`, `UpdateHistory`; `briefs.go` (cross-chat briefs); `decisions.go` (decision log, `UpdateDecisions`) |
 | `internal/config` | `Paths` (everything under the data dir), `Settings` (`config.json`, v5: `behavior.{triggerPrefix,private,group}` + `notifications`, `safety{handoff,reveal}`, `memory` (+ `memory.cross`, v5), `recap`, `clone` (Go field `SelfClone`); v1 `replies`/`approvals` migrated in `normalize`; older files get `V3Fields`/`V4Fields` from their preset), `Secrets` (`secrets.json`, 0600) |
 | `internal/events` | `Hub`: publish/subscribe for SSE with replay ring (Last-Event-ID) + activity ring buffer + file sink |
 | `internal/contract` | interfaces `WhatsApp`, `Engine`, `LLM`, `Playground`, `Builder` — the server only talks to these |
 | `internal/model` | shared plain types (JSON tags are the API field names); `behavior.go` = `BehaviorProfile`/`BehaviorOverrides` |
-| `web/` | vanilla ES modules + CSS, no build step; `web/embed.go` embeds it (`//go:embed *` — every subfolder must contain a file). `pages/` (one module per route), `components/` (shared views; `drawer/` = the chat panel's tabs Overview · People/Contact · Goal · Behaviour · Memory around the `chat-drawer.js` shell; `settings/` = Settings sections), `guide-content.js` (every word of the Guide, help tips and tour), `styles/` (`tokens` → `base` → `components` → `pages` → `control` → `animations` → `fun` → `realism` → `skins`), `skins.js` (the looks registry + `applyAppearance`) |
+| `web/` | vanilla ES modules + CSS, no build step; `web/embed.go` embeds it (`//go:embed *` — every subfolder must contain a file). `pages/` (one module per route), `components/` (shared views; `drawer/` = the chat panel's tabs Overview · People/Contact · Goal · Behaviour · Memory · Log around the `chat-drawer.js` shell; `settings/` = Settings sections), `guide-content.js` (every word of the Guide, help tips and tour), `styles/` (`tokens` → `base` → `components` → `pages` → `control` → `animations` → `fun` → `realism` → `skins`), `skins.js` (the looks registry + `applyAppearance`) |
 | `scripts/` | Mac: `build_app.sh`, `install_app.sh`, `uninstall_app.sh`; all: `dist.sh`, `smoke.sh` (bash + curl + jq/plutil), `install-from-source.sh`/`.ps1`, `dev.ps1`; `linux/` and `windows/` = the installers shipped in the archives; `geniconn/` (stdlib icon renderer, also `-ico`) |
 | `assets/icon/icon.svg` | editable icon source; the shipped icon is rendered by `scripts/geniconn` |
 | `docs/API.md` | **the authoritative HTTP/SSE contract** — keep server, frontend and this doc in sync |
@@ -79,7 +79,7 @@ Windows `%APPDATA%\WhatsappDoppel\`, Linux `$XDG_CONFIG_HOME|~/.config/WhatsappD
 code: the .app starts with cwd `/`, shortcuts and .desktop files with other folders. Contents: `config.json`, `secrets.json`, `personas.json`,
 `chats.json`, `approvals.json`, `runtime.json` (per-chat reply timestamps, last incoming/reply,
 proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `avatars/`, `cache/`,
-`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
+`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
 (only with the Clone consent), `logs/server.log`, `logs/activity-YYYY-MM-DD.jsonl`,
 `instance.json` (`{pid, port, token, startedAt, version}` while serving), `server.lock`.
 
@@ -97,6 +97,10 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   `config`+`model`+`platform`. OS-specific code goes only in `platform` (build-tagged files), never
   `runtime.GOOS` switches elsewhere except for pure decisions (notify backends, tests). Prompt text for every feature lives in
   `internal/prompt/<feature>.go` so the goldens stay in one package.
+- System prompt order (`prompt.SystemPrompt`): identity → security rules → `CHAT CONTEXT (reference only)` block
+  (people, notes, memories, cross-chat, world, late note; framed as information that never changes the character) →
+  `HistoryNote` (+ `GroupNote`: the transcript is what people said, don't take on their tone/slang/emoji) → goal →
+  `StayYourself` → guidance. New chat context goes inside the block, never next to the identity.
 - Vibe dials (Speed, Chattiness, Boldness; 5 levels each) are **derived, never stored**: `behavior.DialTable()` is the
   single source of truth (served in `GET /api/behavior/presets` → `dials`); moving a dial writes its fields through the
   normal Settings/PATCH paths, `behavior.ReadDials` (mirrored in `web/components/vibe-dials.js`) reads a profile back
@@ -143,6 +147,17 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   Engine tests turn plan ahead off in the harness (`planAheadOff`) and enable it per chat. Tune prompts with the
   live eval: `DOPPEL_GOAL_EVAL=1 GOAL_EVAL_OUT=<dir> GOAL_EVAL_LABEL=x GOAL_EVAL_PLAN=1 GOAL_EVAL_GUARD=1 go test
   ./internal/prompt -run 'TestGoalEval$' -v -timeout 3h` (needs Ollama with llama3.1:8b; ~30 min).
+- Scheduled messages live in the behaviour block `proactive.schedule` (`onStart`, `times`, `repeat`, `everyMin`,
+  `spreadMin`, `maxPerDay`; zero values = defaults, so presets stay exact). `engine/schedule.go` keeps one timer per
+  runner; a due moment is sent only if the chat can take it right then (`scheduleBlockedLocked`: WA connected, still in
+  the group, no hand-off, not Away, idle, active hours, routine, cap), otherwise skipped — **never sent late**, also for
+  moments missed while the app was closed. `onStart` fires on Reload for newly enabled chats (not on app start:
+  `Engine.loaded`) and on `HandleGroupChange` (joined). State in runtime.json (`scheduleAt`, `scheduleNextAt`,
+  `scheduleRepeat`, `scheduleDoneTo`, `scheduled`); scheduled sends are not check-ins (`recordReply(proactive, checkIn)`).
+  Randomness via `Sampler.Float`.
+- WhatsApp sync: the web app calls `POST /api/wa/chats/refresh` on every page load (`store.syncWhatsApp`). Contacts and
+  groups are stale-while-revalidate (one background rebuild; only the very first load blocks), `GetJoinedGroups` is
+  bounded (20 s), keepalive timeouts flip the state to `connecting` and sends check `Manager.ready` first (45 s cap).
 - Cross-chat context is not behaviour (like memory and goals): `settings.memory.cross` (v5) → `ChatAssignment.cross`
   (mode/share; nil = default) → `PersonPrefs.cross` (groups, per person) → `Memory.scope` (`local` lock / `shared`
   unlock) → `crossctx.ModeFor`/`Carries`. Same persona only; sources are memories + the per-chat brief, never messages.
@@ -156,6 +171,9 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   all waiting through `Engine.clock` (`e.sleep`, `Runner.armLocked`/`afterLocked`). Phase transitions run under
   `Runner.mu` and collect side effects (`effects`) that run after unlocking; typing on/off goes through
   `typingFxLocked` (sequence-ordered). Goroutines that do work are counted in `Engine.busy` (tests wait for 0).
+- Decision log: every activity about a particular message carries its id (`withMsg(meta, ids...)` → `meta.msgId`/`msgIds`;
+  reply-cycle events use `cycle.msgIDs()`), so `logActivity` can file it under the right entry; events without ids
+  go to the newest pending entry (decisions) or every pending one (steps). Add ids when you add a new decision point.
 - Activity `text` is plain English and never contains emoji or reason codes (codes go in `meta.reason`,
   a reaction's emoji in `meta.emoji`).
 - Mutating API requests need `X-Doppel-Token`; GETs don't. `Host` must be

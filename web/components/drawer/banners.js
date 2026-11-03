@@ -48,6 +48,7 @@ export function drawerBanners(ctx, c, p) {
       <button class="btn btn-glass btn-sm" @click=${() => ctx.away.set(null)}>${icon('play')}I'm back</button></div>` : ''}
     ${revealed ? html`<div class="banner revealed-banner mb-16">${icon('eye')}<div class="grow"><strong>Revealed <rel-time datetime=${c.revealedAt}></rel-time>.</strong> ${c.name || 'They'} know${c.kind === 'group' ? '' : 's'} it was ${name}. It's paused here until you switch it back on.</div></div>`
       : !c.enabled ? html`<div class="banner warn mb-16">${icon('pause')}<div><strong>Paused.</strong> ${name} won't reply here until you switch it back on.</div></div>` : ''}
+    ${c.left ? html`<div class="banner warn mb-16">${icon('logout')}<div><strong>You're no longer in this group.</strong> You left, were removed, or the group was deleted, so ${name} can't write here. If you're added back, it picks up again by itself.</div></div>` : ''}
     ${!p ? html`<div class="banner danger mb-16">${icon('warning')}<div>The persona for this chat was deleted. Pick a new one on the Overview tab.</div></div>` : ''}
     ${pending ? html`<a class="banner info mb-16" href="#/approvals" style="text-decoration:none;color:inherit">${icon('inbox')}<div><strong>${pending} repl${pending === 1 ? 'y' : 'ies'} waiting</strong> for your approval →</div></a>` : ''}`;
 }

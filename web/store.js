@@ -145,6 +145,17 @@ export async function loadWA() {
 export const reloadChatsSoon = debounce(() => loadChats().catch(() => {}), 120);
 export const reloadPersonasSoon = debounce(() => loadPersonas().catch(() => {}), 120);
 
+/**
+ * Re-checks WhatsApp on every page load: the server confirms the connection
+ * and re-reads which groups you are in (removed from one? it shows up), then
+ * the lists reload. Emits "wa.synced" on the bus.
+ */
+export async function syncWhatsApp() {
+  try { await api.wa.refreshChats(quiet); } catch { /* not connected: the status says so */ }
+  await Promise.allSettled([loadWA(), loadChats()]);
+  bus.emit('wa.synced', {});
+}
+
 export async function refreshAll() {
   await Promise.allSettled([loadSettings(), loadPersonas(), loadChats(), loadApprovals(), loadActivity(), loadWA()]);
 }

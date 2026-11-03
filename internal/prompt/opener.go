@@ -46,6 +46,8 @@ func initiateNote(p model.Persona, chat model.ChatAssignment, history []model.Me
 		b.WriteString("\n\nYou're starting the conversation — there are no recent messages. Write one short, natural first message a real friend would send.")
 	case op.Silence >= 20*time.Hour:
 		fmt.Fprintf(&b, "\n\nIt has been %s since the last message. Write one short, natural opener a real friend would send to restart the conversation — don't mention the silence unless it fits.", humanSince(op.Silence))
+	case op.Silence > 0 && op.Silence < time.Hour:
+		b.WriteString("\n\nThe last message was a little while ago. Write one short, natural message to keep the conversation going — follow up on it or bring up something new.")
 	case op.Silence > 0:
 		fmt.Fprintf(&b, "\n\nThe chat has gone quiet for %s. Write one short, natural message to pick it back up — it can follow up on what you last talked about or bring up something new.", humanSince(op.Silence))
 	default:

@@ -1,5 +1,5 @@
 // chat-drawer.js — the chat panel (a centered window): header, status
-// banners and a tab bar  Overview · People · Goal · Behaviour · Memory.
+// banners and a tab bar  Overview · People · Goal · Behaviour · Memory · Log.
 // Each tab is its own module under ./drawer/ so features can grow in parallel:
 //
 //   createXTab(ctx) → { id, view(chat, persona), load?(), shown?(),
@@ -30,12 +30,13 @@ import { createPeopleTab } from './drawer/people.js';
 import { createGoalTab } from './drawer/goal.js';
 import { createBehaviourTab } from './drawer/behaviour.js';
 import { createMemoryTab } from './drawer/memory.js';
+import { createLogTab } from './drawer/log.js';
 
 // Public helpers used by other pages.
 export { patchChat, bubbles, awayUntilText } from './drawer/shared.js';
 
 /** Tab ids in order (also the URL segment: #/chats/<key>/<tab>). */
-export const DRAWER_TABS = ['overview', 'people', 'goal', 'behaviour', 'memory'];
+export const DRAWER_TABS = ['overview', 'people', 'goal', 'behaviour', 'memory', 'log'];
 
 const TAB_STORE = 'doppel.drawer.tab';
 
@@ -47,6 +48,7 @@ function tabMeta(id, c) {
     case 'goal': return { label: 'Goal', icon: 'target' };
     case 'behaviour': return { label: 'Behaviour', icon: 'sliders' };
     case 'memory': return { label: 'Memory', icon: 'brain' };
+    case 'log': return { label: 'Log', icon: 'activity' };
     default: return { label: id, icon: 'info' };
   }
 }
@@ -124,6 +126,7 @@ export function openChatDrawer(key, { onClose, tab, onTab } = {}) {
     goal: createGoalTab(ctx),
     behaviour: ctx.behaviour,
     memory: createMemoryTab(ctx),
+    log: createLogTab(ctx),
   };
 
   function body() { return drawer && drawer.el.querySelector('.drawer-body'); }

@@ -24,6 +24,10 @@ type chatView struct {
 	Goal model.ChatGoal `json:"goal"`
 	// NextCheckInAt is when an automatic check-in is scheduled (runtime.json), null = none.
 	NextCheckInAt *time.Time `json:"nextCheckInAt"`
+	// NextScheduledAt is the next scheduled message (proactive.schedule), null = none.
+	NextScheduledAt *time.Time `json:"nextScheduledAt"`
+	// Left: a group you are no longer a member of (removed, left or deleted).
+	Left bool `json:"left"`
 }
 
 func (s *Server) chatsChanged() {
@@ -55,14 +59,21 @@ func (s *Server) handleListChats(w http.ResponseWriter, r *http.Request) {
 	}
 	out := []chatView{}
 	for _, c := range s.d.Store.Chats() {
-		out = append(out, chatView{
-			ChatAssignment: c,
-			PersonaName:    names[c.PersonaID],
-			PendingCount:   pending[c.Key],
-			HistoryCount:   s.d.Store.HistoryCount(c.Key),
-			Goal:           s.chatGoal(c, personas),
-			NextCheckInAt:  s.d.Store.RunnerState(c.Key).ProactiveDueAt,
-		})
+		st := s.d.Store.RunnerState(c.Key)
+		v := chatView{
+			ChatAssignment:  c,
+			PersonaName:     names[c.PersonaID],
+			PendingCount:    pending[c.Key],
+			HistoryCount:    s.d.Store.HistoryCount(c.Key),
+			Goal:            s.chatGoal(c, personas),
+			NextCheckInAt:   st.ProactiveDueAt,
+			NextScheduledAt: st.ScheduleAt,
+		}
+		if c.Kind == "group" && s.d.WA != nil {
+			member, known := s.d.WA.InGroup(c.JID)
+			v.Left = known && !member
+		}
+		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

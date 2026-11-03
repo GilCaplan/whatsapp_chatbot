@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 // ─── Reply behaviour ─────────────────────────────────────────
 //
 // A BehaviorProfile describes HOW a persona replies (timing, chance, shape),
@@ -29,12 +31,29 @@ type Availability struct {
 	CatchUpMaxMin int        `json:"catchUpMaxMin"` // random delay after opening, minutes
 }
 
-// Proactive controls check-in messages after a long silence.
+// Proactive controls the messages the persona starts on its own: check-ins
+// after a long silence (Enabled … SpreadMinutes) and scheduled messages.
 type Proactive struct {
 	Enabled       bool `json:"enabled"`
 	AfterHours    int  `json:"afterHours"`
 	MaxPerDay     int  `json:"maxPerDay"`
 	SpreadMinutes int  `json:"spreadMinutes"` // random delay once the silence threshold passes
+
+	Schedule ProactiveSchedule `json:"schedule"`
+}
+
+// ProactiveSchedule plans openers instead of waiting for a silence: one when
+// the persona starts in the chat, one at each fixed moment, and/or repeats
+// from the start on (the first fixed moment, else when it started). A moment
+// that comes while WhatsApp is disconnected — or the chat can't take a
+// message — is skipped, never sent late, so missed messages don't pile up.
+type ProactiveSchedule struct {
+	OnStart   bool        `json:"onStart"`   // when replies are turned on in the chat or you join the group
+	Times     []time.Time `json:"times"`     // fixed moments (at most 20)
+	Repeat    string      `json:"repeat"`    // off|fixed|uniform|normal|poisson
+	EveryMin  int         `json:"everyMin"`  // average gap between repeats
+	SpreadMin int         `json:"spreadMin"` // uniform: ± this; normal: standard deviation
+	MaxPerDay int         `json:"maxPerDay"` // scheduled messages in 24 h (0 = 12)
 }
 
 // BehaviorProfile is one complete set of reply-behaviour values.

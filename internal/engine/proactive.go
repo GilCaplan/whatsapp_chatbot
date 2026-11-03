@@ -85,6 +85,9 @@ func (r *Runner) proactiveCheck(now time.Time) {
 	if open, _ := eff.Available(now); !open {
 		return
 	}
+	if e.wa.Status().State != model.WAConnected {
+		return // checked again on the next scan: one check-in, never a backlog
+	}
 	if _, busy := r.unreachableLocked(now); busy { // gym, sleep… (routine.go)
 		return
 	}

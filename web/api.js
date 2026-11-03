@@ -179,6 +179,9 @@ export const api = {
     patchMemory: (key, id, body, o) => patch(`/api/chats/${enc(key)}/memories/${enc(id)}`, body, o),
     deleteMemory: (key, id, o) => del(`/api/chats/${enc(key)}/memories/${enc(id)}`, o),
     clearMemories: (key, o) => del(`/api/chats/${enc(key)}/memories`, o),
+    /** Decision log, newest first → { items:[LogEntry] } */
+    log: (key, o) => get(`/api/chats/${enc(key)}/log`, o),
+    clearLog: (key, o) => del(`/api/chats/${enc(key)}/log`, o),
     /** → { added, updated } */
     extractMemories: (key, o) => post(`/api/chats/${enc(key)}/memories/extract`, {}, { timeout: 120000, ...o }),
     /** Cross-chat context → { enabled, kind, mode, modeSource, share, shareSource, sources:[…], brief, briefPending } */

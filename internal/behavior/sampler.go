@@ -17,6 +17,8 @@ type Sampler interface {
 	Jitter(d time.Duration, pct int) time.Duration
 	// Index returns a value in [0, n) (0 when n <= 0).
 	Index(n int) int
+	// Float returns a value in [0, 1) (scheduled-message gaps).
+	Float() float64
 }
 
 // NewSampler returns a goroutine-safe Sampler on src (nil = time-seeded PCG).
@@ -59,6 +61,8 @@ func (s *randSampler) Jitter(d time.Duration, pct int) time.Duration {
 	return jitter(d, pct, s.float())
 }
 
+func (s *randSampler) Float() float64 { return s.float() }
+
 func (s *randSampler) Index(n int) int {
 	if n <= 1 {
 		return 0
@@ -89,6 +93,8 @@ func (f Fixed) Hit(percent int) bool {
 func (f Fixed) Between(minSec, maxSec int) time.Duration { return between(minSec, maxSec, f.Frac) }
 
 func (f Fixed) Jitter(d time.Duration, pct int) time.Duration { return jitter(d, pct, f.Frac) }
+
+func (f Fixed) Float() float64 { return min(max(f.Frac, 0), 1) }
 
 func (f Fixed) Index(n int) int {
 	if n <= 1 {

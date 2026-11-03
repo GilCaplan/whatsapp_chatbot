@@ -4,7 +4,7 @@ import { html, render, mountView } from './dom.js';
 import { installIcons, icon } from './icons.js';
 import { defineElements } from './components/elements.js';
 import { setErrorToaster, setToken, hasToken } from './api.js';
-import { store, bus, loadHealth, refreshAll } from './store.js';
+import { store, bus, loadHealth, refreshAll, syncWhatsApp } from './store.js';
 import { startSSE } from './sse.js';
 import { initRouter, handle, navigate, currentPage, parseHash } from './router.js';
 import { toast, confirmSheet } from './ui.js';
@@ -168,6 +168,7 @@ async function boot() {
   if (!hasToken() && health.token) setToken(health.token);
 
   await refreshAll();
+  syncWhatsApp(); // in the background: connection and group list straight from WhatsApp
   applyAppearance(store.state.settings || {}, { animate: false });
   watchSystemMode(() => store.state.settings || {}, () => { const cur = currentPage(); if (cur) cur.view.update(); });
   store.set({ booted: true });

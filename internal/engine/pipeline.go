@@ -55,6 +55,7 @@ type cycle struct {
 	laterImmediate bool
 	immediate      bool // trigger prefix
 	proactive      bool
+	scheduled      bool          // proactive: a scheduled message (schedule.go), not a check-in
 	opener         prompt.Opener // proactive: manual tap / hint (opener.go)
 	approval       bool
 	copilot        bool // co-pilot mode: three drafts for you to pick from (drafts.go)
@@ -292,7 +293,7 @@ func (r *Runner) admitLocked(fx *effects, c model.ChatAssignment, eff behavior.E
 			if snoozed {
 				reason, text = "snoozed", "Away — not answering"
 			}
-			r.actFx(fx, model.ActDecisionSkip, text, map[string]any{"reason": reason})
+			r.actFx(fx, model.ActDecisionSkip, text, withMsg(map[string]any{"reason": reason}, pm.ID))
 			return
 		}
 		if r.phase == phaseQueued {
@@ -311,7 +312,7 @@ func (r *Runner) admitLocked(fx *effects, c model.ChatAssignment, eff behavior.E
 		return
 	}
 	if limited, meta, text := r.rateLimited(bp, now); limited {
-		r.actFx(fx, model.ActDecisionSkip, text, meta)
+		r.actFx(fx, model.ActDecisionSkip, text, withMsg(meta, pm.ID))
 		return
 	}
 	if !forced && !r.e.rng.Hit(bp.ReplyPercent) {
@@ -342,7 +343,7 @@ func (r *Runner) rateLimited(bp model.BehaviorProfile, now time.Time) (bool, map
 // skipReplyLocked handles a missed reply-chance roll: react, or leave on read.
 func (r *Runner) skipReplyLocked(fx *effects, c model.ChatAssignment, eff behavior.Effective, p model.Persona, pm pendingMsg) {
 	bp := eff.Profile
-	meta := map[string]any{"reason": "reply_chance", "percent": bp.ReplyPercent}
+	meta := withMsg(map[string]any{"reason": "reply_chance", "percent": bp.ReplyPercent}, pm.ID)
 	if pm.ID != "" && r.e.rng.Hit(bp.ReactPercent) {
 		meta["react"] = true
 		r.actFx(fx, model.ActDecisionSkip, "Decided to react instead of answering", meta)
@@ -428,7 +429,7 @@ func (r *Runner) wakeLocked(fx *effects) {
 		return
 	}
 	if limited, meta, text := r.rateLimited(bp, now); limited {
-		r.actFx(fx, model.ActDecisionSkip, text, meta)
+		r.actFx(fx, model.ActDecisionSkip, text, withMsg(meta, r.cyc.msgIDs()...))
 		r.endCycleLocked(fx)
 		return
 	}
@@ -462,9 +463,9 @@ func (r *Runner) cancelCycleLocked(fx *effects, c model.ChatAssignment) {
 	if r.phase == phaseIdle || r.cyc == nil {
 		return
 	}
-	wasQueued := r.phase == phaseQueued
+	wasQueued, ids := r.phase == phaseQueued, r.cyc.msgIDs()
 	r.endCycleLocked(fx)
-	r.actFx(fx, model.ActDecisionSkip, "You replied yourself — standing down", map[string]any{"reason": "you_replied"})
+	r.actFx(fx, model.ActDecisionSkip, "You replied yourself — standing down", withMsg(map[string]any{"reason": "you_replied"}, ids...))
 	if wasQueued {
 		fx.add(func() { r.e.updateState(c.Key, func(st *store.RunnerState) { st.QueuedWakeAt = nil }) })
 	}
@@ -737,7 +738,7 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 	}
 	if cyc.genErr != nil {
 		if cyc.ctx.Err() == nil {
-			r.actFx(fx, model.ActError, "Couldn't generate a reply: "+cyc.genErr.Error(), nil)
+			r.actFx(fx, model.ActError, "Couldn't generate a reply: "+cyc.genErr.Error(), withMsg(nil, cyc.msgIDs()...))
 		}
 		r.endCycleLocked(fx)
 		return
@@ -749,8 +750,13 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 	res, p, hist := *cyc.draft, cyc.persona, cyc.hist
 	if cyc.approval {
 		e := r.e
-		mentions := cyc.mentions
-		fx.add(func() { e.queueApproval(r, c, p, res, hist, mentions) })
+		mentions, ids, now := cyc.mentions, cyc.msgIDs(), r.e.clock.Now()
+		fx.add(func() {
+			e.queueApproval(r, c, p, res, hist, mentions)
+			if len(ids) > 0 {
+				e.logDecided(c.Key, ids, model.DecisionApproval, "approval", "Reply written — waiting for your approval", now)
+			}
+		})
 		r.endCycleLocked(fx)
 		return
 	}
@@ -826,7 +832,7 @@ func (r *Runner) send(cyc *cycle, c model.ChatAssignment, p model.Persona, res g
 		if cyc.proactive {
 			m["proactive"] = true
 		}
-		e.act(model.ActSent, c, p.Name, text, m)
+		e.act(model.ActSent, c, p.Name, text, withMsg(m, cyc.msgIDs()...))
 		sent++
 		if i == typoAt && !r.fixTypo(cyc, c, p, slip, jid, sres.ID, msgID, b.Text, dir, typingOn) {
 			r.sendAborted(cyc, nil, sent)
@@ -865,21 +871,21 @@ func (r *Runner) sendAborted(cyc *cycle, err error, sent int) {
 	r.mu.Lock()
 	if r.cyc == cyc && !r.stopped {
 		if err != nil && cyc.ctx.Err() == nil {
-			r.actFx(&fx, model.ActError, "Send failed: "+err.Error(), nil)
+			r.actFx(&fx, model.ActError, "Send failed: "+err.Error(), withMsg(nil, cyc.msgIDs()...))
 		}
 		r.endCycleLocked(&fx)
 	}
 	r.mu.Unlock()
 	fx.run()
 	if sent > 0 {
-		r.recordReply(cyc.proactive)
+		r.recordReply(cyc.proactive, cyc.proactive && !cyc.scheduled)
 	}
 }
 
 // finishSend ends the cycle; messages that arrived while typing start the next one.
 func (r *Runner) finishSend(cyc *cycle, sent int) {
 	if sent > 0 {
-		r.recordReply(cyc.proactive)
+		r.recordReply(cyc.proactive, cyc.proactive && !cyc.scheduled)
 	}
 	var fx effects
 	r.mu.Lock()
@@ -896,8 +902,9 @@ func (r *Runner) finishSend(cyc *cycle, sent int) {
 	fx.run()
 }
 
-// recordReply counts a delivered reply for rate limits, cooldown and silence tracking.
-func (r *Runner) recordReply(proactive bool) {
+// recordReply counts a delivered reply for rate limits, cooldown and silence
+// tracking; checkIn also counts it against the check-in limit.
+func (r *Runner) recordReply(proactive, checkIn bool) {
 	now := r.e.clock.Now()
 	if !proactive {
 		r.mu.Lock()
@@ -907,7 +914,7 @@ func (r *Runner) recordReply(proactive bool) {
 	r.e.updateState(r.key, func(st *store.RunnerState) {
 		st.LastReplyAt = now
 		st.Replies = append(st.Replies, now)
-		if proactive {
+		if checkIn {
 			st.Proactive = append(st.Proactive, now)
 		}
 	})

@@ -44,6 +44,7 @@ export const FALLBACK_RANGES = {
   maxRepliesPerHour: [0, 600], maxRepliesPerDay: [0, 5000],
   historyMessages: [2, 500], historyChars: [500, 200000], staleAfterMin: [1, 1440], autoSendSeconds: [0, 86400],
   'availability.catchUpMaxMin': [0, 240], 'proactive.afterHours': [1, 720], 'proactive.maxPerDay': [1, 10], 'proactive.spreadMinutes': [0, 720],
+  'proactive.schedule.everyMin': [5, 20160], 'proactive.schedule.spreadMin': [0, 10080], 'proactive.schedule.maxPerDay': [1, 96],
 };
 
 export const FALLBACK_ENUMS = {
@@ -51,6 +52,7 @@ export const FALLBACK_ENUMS = {
   lengthBias: ['shorter', 'normal', 'longer', 'match'],
   typoFixStyle: ['correction', 'edit', 'none'],
   outsideHours: ['queue', 'silent'],
+  repeat: ['off', 'fixed', 'uniform', 'normal', 'poisson'],
 };
 
 /** Range for a field: { min, max }. Accepts "availability.catchUpMaxMin" style paths. */

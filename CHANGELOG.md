@@ -7,6 +7,24 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
 Everything below is new unless noted.
 
+### Decision log
+- Each chat panel has a **Log** tab: every message with what the persona did about it and why
+  (answered, stayed quiet, reacted, left for you, blocked, waiting for approval), the time from
+  their message to the reply, and the steps on the way (seen, waited, thought, typed). On top, for
+  today, 7 days or everything: messages, answer rate, typical and longest reply time, why it didn't
+  answer, how fast it answers and, in groups, who it answers.
+
+### Scheduled messages and WhatsApp sync
+- Start conversations › On a schedule: an opener when replies are turned on or you join a group,
+  one at each set time, and repeats with a fixed gap, an even spread, a bell curve or at random
+  (Poisson), with a daily cap. A moment that can't be sent right then (WhatsApp disconnected, not
+  in the group, Away, outside active hours) is skipped and never sent late, so nothing piles up.
+- Every page load re-checks WhatsApp: the connection state and the groups you are in. Groups you
+  left or were removed from are marked "Not in group"; being added back picks up again.
+- Faster chat lists right after linking (contacts and groups are served from cache while they
+  refresh) and "connected" is no longer shown while WhatsApp stops answering; sends fail fast
+  with "WhatsApp is not connected" instead of hanging.
+
 ### Windows and Linux
 - Runs on Windows 10/11 and 64-bit Linux as well as macOS (amd64 and arm64 everywhere).
 - Downloads built by `make dist` (and by the release workflow on a `v*` tag): a universal macOS

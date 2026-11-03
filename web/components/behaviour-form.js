@@ -27,6 +27,7 @@ import { weekEditor, describeWeek, normWeek } from './week-editor.js';
 import { rangeOf, fmtSec, GROUP_ONLY, FALLBACK_ENUMS, same } from './behaviour-meta.js';
 import { wordChips } from './word-chips.js';
 import { dialFieldMap, dialDot } from './vibe-dials.js';
+import { scheduleSummary, minutesText } from './initiate-controls.js';
 
 export const FORM_GROUPS = [
   { id: 'responsiveness', label: 'Responsiveness', icon: 'gauge', c: 'linear-gradient(135deg,#38bdf8,#2563eb)', sub: 'Whether it answers at all, and how often',
@@ -39,7 +40,7 @@ export const FORM_GROUPS = [
     fields: ['availability'] },
   { id: 'shape', label: 'Message shape', icon: 'bubbles', c: 'linear-gradient(135deg,#2dd4bf,#0d9488)', sub: 'One bubble or several, quoting, length',
     fields: ['splitPercent', 'splitMaxParts', 'bubbleGapMinSec', 'bubbleGapMaxSec', 'quoteReplyPercent', 'allowMentions', 'mentionMax', 'tagReplyPercent', 'lengthBias', 'typoPercent', 'typoFixStyle'] },
-  { id: 'proactive', label: 'Start conversations', icon: 'megaphone', c: 'linear-gradient(135deg,#f472b6,#db2777)', sub: 'Message first after a quiet spell',
+  { id: 'proactive', label: 'Start conversations', icon: 'megaphone', c: 'linear-gradient(135deg,#f472b6,#db2777)', sub: 'Message first: after a quiet spell, or on a schedule',
     fields: ['proactive'] },
   { id: 'safety', label: 'Safety', icon: 'shield', c: 'linear-gradient(135deg,#34d399,#059669)', sub: 'Approvals and trick protection',
     fields: ['autoSendSeconds', 'injectionFilter'] },
@@ -62,6 +63,23 @@ const TYPO_FIX_HELP = {
   none: 'The typo stays. People usually understand anyway.',
 };
 const OUTSIDE_LABEL = { queue: 'Reply later', silent: 'Stay silent' };
+const REPEAT_LABEL = { off: 'Off', fixed: 'Fixed', uniform: 'Even spread', normal: 'Bell curve', poisson: 'Poisson' };
+const REPEAT_HELP = {
+  off: 'No repeats — only the start message and the set times.',
+  fixed: 'Exactly the same gap every time.',
+  uniform: 'A random gap, any value between “every” minus and plus the spread equally likely.',
+  normal: 'A random gap that is usually close to “every”: about two thirds land within the spread of it (normal distribution).',
+  poisson: 'Random moments at a steady average rate, like messages from a real person: short and long gaps both happen (Poisson process).',
+};
+
+// datetime-local works in the browser's (this computer's) time zone.
+const pad2 = (n) => String(n).padStart(2, '0');
+const toLocalInput = (iso) => {
+  const d = new Date(iso);
+  return isNaN(d) ? '' : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+const fromLocalInput = (val) => { const d = new Date(val); return isNaN(d) ? null : d.toISOString(); };
+const soonSlot = () => { const d = new Date(Date.now() + 3600000); d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0); return d.toISOString(); };
 const FILTER_LABEL = { strict: 'Strict', balanced: 'Balanced', off: 'Off' };
 
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
@@ -95,7 +113,11 @@ function groupSummary(id, v, kind) {
       return `${v.splitPercent ? `Splits ${v.splitPercent}% of long replies` : 'One bubble per reply'} · ${v.lengthBias === 'match' ? 'length matches theirs' : `${(BIAS_LABEL[v.lengthBias] || 'Normal').toLowerCase()} length`}${kind === 'group' && v.allowMentions ? ' · tags people' : ''}${v.typoPercent ? ` · typos ${v.typoPercent}%` : ''}`;
     case 'proactive': {
       const p = v.proactive || {};
-      return p.enabled ? `After ${plural(p.afterHours || 0, 'hour')} of quiet · up to ${p.maxPerDay || 1}/day` : 'Off';
+      const bits = [];
+      if (p.enabled) bits.push(`After ${plural(p.afterHours || 0, 'hour')} of quiet · up to ${p.maxPerDay || 1}/day`);
+      const sched = scheduleSummary(p.schedule);
+      if (sched) bits.push(sched);
+      return bits.join(' · ') || 'Off';
     }
     case 'safety':
       return `Trick protection ${(FILTER_LABEL[v.injectionFilter] || 'Balanced').toLowerCase()} · ${v.autoSendSeconds ? `auto-send after ${fmtSec(v.autoSendSeconds)}` : 'no auto-send'}`;
@@ -281,17 +303,59 @@ export function behaviourForm(opts) {
   function proactive() {
     const p = v.proactive || {};
     const setP = (patch) => set('proactive', { ...p, ...patch });
+    const sc = p.schedule || {};
+    const setS = (patch) => setP({ schedule: { ...sc, ...patch } });
+    const times = sc.times || [];
+    const setTime = (i, iso) => setS({ times: times.map((t, j) => (j === i ? iso : t)).sort() });
+    const repeat = sc.repeat || 'off';
+    const repeats = repeat !== 'off';
+    const kinds = enums['proactive.schedule.repeat'] || enums.repeat;
+    const minNow = toLocalInput(new Date().toISOString());
+    const anything = !!p.enabled || !!scheduleSummary(sc);
     return html`
-      <div class="banner warn bf-warn">${icon('warning')}<div><strong>Sends messages nobody asked for — use sparingly.</strong> Lots of unprompted messages can get a WhatsApp account flagged. It only ever checks in on chats that have talked before.</div></div>
-      ${row({ fields: ['proactive'], label: 'Start conversations', help: 'If a chat has been quiet for a while, the persona sends a natural opener, the way a friend checks in.',
-        control: toggle(!!p.enabled, (c) => setP({ enabled: c }), { label: 'Start conversations' }) })}
+      ${anything ? html`<div class="banner warn bf-warn">${icon('warning')}<div><strong>Sends messages nobody asked for — use sparingly.</strong> Lots of unprompted messages can get a WhatsApp account flagged.</div></div>` : ''}
+      <div class="bf-sub">${icon('hourglass', 'ic-sm')}After a quiet spell</div>
+      ${row({ fields: ['proactive'], key: 'checkins', label: 'Check in when it has been quiet', help: 'If a chat has been quiet for a while, the persona sends a natural opener, the way a friend checks in. Only in chats that have talked before.',
+        control: toggle(!!p.enabled, (c) => setP({ enabled: c }), { label: 'Check in when it has been quiet' }) })}
       ${p.enabled ? html`
         <div class="field-row bf-row" data-key="after"><div class="grow"><div class="field-label">After a quiet spell of</div><div class="field-help">Counted from the last message by anyone in the chat.</div></div>
           ${numberField({ value: p.afterHours, ...R('proactive.afterHours'), unit: 'hours', label: 'After a quiet spell of', onChange: (n) => setP({ afterHours: n }) })}</div>
         <div class="field-row bf-row" data-key="maxday"><div class="grow"><div class="field-label">At most per day</div><div class="field-help">A hard cap on check-ins in this kind of chat.</div></div>
           ${numberField({ value: p.maxPerDay, ...R('proactive.maxPerDay'), unit: 'per day', label: 'At most per day', onChange: (n) => setP({ maxPerDay: n }) })}</div>
         <div class="field-row bf-row" data-key="spread"><div class="grow"><div class="field-label">Random extra wait</div><div class="field-help">Adds up to this much so check-ins never happen at an exact, robotic time.</div></div>
-          ${numberField({ value: p.spreadMinutes, ...R('proactive.spreadMinutes'), unit: 'min', label: 'Random extra wait', onChange: (n) => setP({ spreadMinutes: n }) })}</div>` : ''}`;
+          ${numberField({ value: p.spreadMinutes, ...R('proactive.spreadMinutes'), unit: 'min', label: 'Random extra wait', onChange: (n) => setP({ spreadMinutes: n }) })}</div>` : ''}
+
+      <div class="bf-sub">${icon('calendar', 'ic-sm')}On a schedule</div>
+      ${row({ fields: ['proactive'], key: 'onstart', derived: true, label: 'Write first when it starts', help: isGroup ? 'Sends an opener as soon as replies are turned on for the group, or when you join it (or are added back).' : 'Sends an opener as soon as replies are turned on for the chat.',
+        control: toggle(!!sc.onStart, (c) => setS({ onStart: c }), { label: 'Write first when it starts' }) })}
+      <div class="field-row field-row-stack bf-row" data-key="times">
+        <div class="grow"><div class="field-label">At set times</div>
+          <div class="field-help">One message at each moment, in this computer's time zone.${ov ? '' : ' Set here, the times apply to every chat that uses these defaults — for one chat, set them in its Behaviour tab.'}</div></div>
+        <div class="bf-control sched-times">
+          ${times.map((t, i) => html`<span class=${'row gap-6 sched-time ' + (Date.parse(t) <= Date.now() ? 'is-dim' : '')} data-key=${'t' + i + t}>
+            <input class="input input-sm" type="datetime-local" step="60" aria-label=${`Set time ${i + 1}`} min=${minNow} .value=${toLocalInput(t)}
+              @change=${(e) => { const iso = fromLocalInput(e.target.value); if (iso) setTime(i, iso); }}>
+            ${Date.parse(t) <= Date.now() ? html`<span class="faint small">passed</span>` : ''}
+            <button type="button" class="btn btn-ghost btn-icon btn-xs" title="Remove this time" aria-label=${`Remove set time ${i + 1}`}
+              @click=${() => setS({ times: times.filter((_, j) => j !== i) })}>${icon('x')}</button>
+          </span>`)}
+          ${times.length < 20 ? html`<button type="button" class="btn btn-glass btn-sm" @click=${() => setS({ times: [...times, soonSlot()].sort() })}>${icon('plus')}Add a time</button>` : ''}
+        </div>
+      </div>
+      ${row({ fields: ['proactive'], key: 'repeat', derived: true, stack: true, label: 'Repeat', help: html`${REPEAT_HELP[repeat] || REPEAT_HELP.off}${repeats ? ` Counts from ${times.length ? 'the first set time' : 'when it starts'}.` : ''}`,
+        control: seg((kinds || Object.keys(REPEAT_LABEL)).map((k) => ({ value: k, label: REPEAT_LABEL[k] || k })), repeat, (x) => setS({ repeat: x, everyMin: sc.everyMin || 120 }), { label: 'Repeat', cls: 'seg-sm' }) })}
+      ${repeats ? html`
+        <div class="field-row bf-row" data-key="every"><div class="grow"><div class="field-label">${repeat === 'fixed' ? 'Every' : 'On average every'}<span class="bf-readout">${minutesText(sc.everyMin || 120)}</span></div>
+          <div class="field-help">${repeat === 'poisson' ? 'The average gap; single gaps can be much shorter or longer (never under a minute).' : 'The gap between two messages.'}</div></div>
+          ${numberField({ value: sc.everyMin || 120, ...R('proactive.schedule.everyMin'), unit: 'min', label: 'Every', width: 92, onChange: (n) => setS({ everyMin: n }) })}</div>
+        ${repeat === 'uniform' || repeat === 'normal' ? html`
+          <div class="field-row bf-row" data-key="spreadmin"><div class="grow"><div class="field-label">${repeat === 'normal' ? 'Typical variation' : 'Give or take'}<span class="bf-readout">± ${minutesText(sc.spreadMin || 0)}</span></div>
+            <div class="field-help">${repeat === 'normal' ? 'The standard deviation of the bell curve.' : 'Each gap is picked anywhere in this range around the average.'}</div></div>
+            ${numberField({ value: sc.spreadMin || 0, ...R('proactive.schedule.spreadMin'), unit: 'min', label: 'Give or take', width: 92, onChange: (n) => setS({ spreadMin: n }) })}</div>` : ''}` : ''}
+      ${scheduleSummary(sc) ? html`
+        <div class="field-row bf-row" data-key="schedmax"><div class="grow"><div class="field-label">At most per day</div><div class="field-help">A hard cap on scheduled messages in 24 hours, whatever the plan says.</div></div>
+          ${numberField({ value: sc.maxPerDay || 12, ...R('proactive.schedule.maxPerDay'), unit: 'per day', label: 'Scheduled messages per day', onChange: (n) => setS({ maxPerDay: n }) })}</div>
+        <div class="bf-note small muted">${icon('info', 'ic-sm')}<span>When a moment comes it is only sent if it can go out right then: WhatsApp connected, ${isGroup ? 'you still in the group, ' : ''}the chat not paused or Away, inside active hours and not mid-reply. Otherwise that message is skipped, never sent later — so nothing piles up while you are offline.</span></div>` : ''}`;
   }
 
   function safety() {

@@ -19,6 +19,7 @@ type fakeWA struct {
 	chats   []model.ChatItem
 	sent    []string
 	rosters map[string][]model.Participant
+	left    map[string]bool // group JID → no longer a member
 }
 
 func newFakeWA() *fakeWA {
@@ -91,7 +92,13 @@ func (f *fakeWA) MarkRead(ctx context.Context, chatJID, senderJID string, ids []
 func (f *fakeWA) Typing(ctx context.Context, jid string, on bool) {}
 func (f *fakeWA) OwnJIDs() []string                               { return []string{"15550000@s.whatsapp.net"} }
 func (f *fakeWA) SetMessageHandler(fn func(model.Incoming))       {}
-func (f *fakeWA) Close()                                          {}
+func (f *fakeWA) SetGroupHandler(fn func(model.GroupChange))      {}
+func (f *fakeWA) InGroup(jid string) (bool, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.left[jid], true
+}
+func (f *fakeWA) Close() {}
 
 // ─── fake Engine ─────────────────────────────────────────────
 

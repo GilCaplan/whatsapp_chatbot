@@ -68,6 +68,8 @@ type Fake struct {
 	mu      sync.Mutex
 	status  model.WAStatus
 	handler func(model.Incoming)
+	onGroup func(model.GroupChange)
+	left    map[string]bool // group JID → you are no longer a member
 	sent    []FakeSent
 	edits   []FakeEdit
 	seq     int
@@ -276,12 +278,64 @@ func (f *Fake) ListChats(ctx context.Context, q model.ChatQuery) ([]model.ChatIt
 		items, total := filterChats(nil, f.contacts, q)
 		return items, total, nil
 	case "groups":
-		items, total := filterChats(nil, f.groups, q)
+		f.mu.Lock()
+		var gs []model.ChatItem
+		for _, g := range f.groups {
+			if !f.left[g.JID] {
+				gs = append(gs, g)
+			}
+		}
+		f.mu.Unlock()
+		items, total := filterChats(nil, gs, q)
 		return items, total, nil
 	case "assigned":
 		return []model.ChatItem{}, 0, nil
 	}
 	return nil, 0, fmt.Errorf("unknown chat tab %q", q.Tab)
+}
+
+// InGroup reports membership of the synthetic groups (unknown JIDs: not a member).
+func (f *Fake) InGroup(jid string) (member, known bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, g := range f.groups {
+		if g.JID == jid {
+			return !f.left[jid], true
+		}
+	}
+	return false, true
+}
+
+func (f *Fake) SetGroupHandler(fn func(model.GroupChange)) {
+	f.mu.Lock()
+	f.onGroup = fn
+	f.mu.Unlock()
+}
+
+// SetGroupMember simulates being removed from (member false) or added back
+// to one of the synthetic groups and reports it like the real layer does.
+func (f *Fake) SetGroupMember(jid string, member bool) {
+	f.mu.Lock()
+	var g model.ChatItem
+	for _, x := range f.groups {
+		if x.JID == jid {
+			g = x
+		}
+	}
+	if g.JID == "" || f.left[jid] == !member {
+		f.mu.Unlock()
+		return
+	}
+	if f.left == nil {
+		f.left = map[string]bool{}
+	}
+	f.left[jid] = !member
+	h := f.onGroup
+	f.mu.Unlock()
+	if h != nil {
+		h(model.GroupChange{Key: g.Key, JID: g.JID, Name: g.Name, Joined: member})
+	}
+	f.publish(events.TypeChatsChanged, map[string]any{})
 }
 
 func (f *Fake) RefreshChats(ctx context.Context) error { return nil }

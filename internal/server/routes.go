@@ -80,6 +80,9 @@ func (s *Server) routes() http.Handler {
 	// Activity
 	mux.HandleFunc("GET /api/activity", s.handleActivity)
 	mux.HandleFunc("DELETE /api/activity", s.handleClearActivity)
+	// Decision log (handlers_log.go)
+	mux.HandleFunc("GET /api/chats/{key}/log", s.handleChatLog)
+	mux.HandleFunc("DELETE /api/chats/{key}/log", s.handleClearChatLog)
 
 	// ── Wave 3 (frozen routes; handlers live in one file per feature) ──
 

@@ -80,6 +80,9 @@ type Engine struct {
 	mu      sync.RWMutex
 	runners map[string]*Runner
 	stopped bool
+	loaded  bool // the first Reload (app start) ran
+
+	openers openerWhy // decision log: why the next opener is written (decisionlog.go)
 
 	proMu          sync.Mutex
 	proTimer       Timer
@@ -167,12 +170,32 @@ func (e *Engine) Reload() {
 			delete(e.runners, key)
 		}
 	}
-	for key, c := range want {
-		e.runners[key] = newRunner(e, c)
+	var started, kept []*Runner
+	for _, r := range e.runners {
+		kept = append(kept, r)
 	}
+	for key, c := range want {
+		r := newRunner(e, c)
+		e.runners[key] = r
+		started = append(started, r)
+	}
+	// Runners made at app start just resume their schedule; later ones are
+	// chats whose replies were just turned on.
+	first := !e.loaded
+	e.loaded = true
 	e.mu.Unlock()
 	for _, r := range stop {
 		r.stop()
+	}
+	for _, r := range kept {
+		r.syncSchedule()
+	}
+	for _, r := range started {
+		if first {
+			r.syncSchedule()
+		} else {
+			r.scheduleStart(trigStart)
+		}
 	}
 	e.syncProactive()
 }
@@ -436,6 +459,7 @@ func (e *Engine) act(typ string, c model.ChatAssignment, personaName, text strin
 		Text:        guard.Truncate(text, 500),
 		Meta:        meta,
 	})
+	e.logActivity(typ, c, text, meta)
 }
 
 func containsStr(s []string, v string) bool {

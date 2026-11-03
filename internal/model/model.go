@@ -255,6 +255,50 @@ type ActivityEvent struct {
 	Meta        map[string]any `json:"meta,omitempty"`
 }
 
+// ─── Decision log ────────────────────────────────────────────
+
+// Decision outcomes: what the persona did about a message.
+const (
+	DecisionPending  = "pending"  // still on it (noticing, waiting, thinking…)
+	DecisionReplied  = "replied"  // answered (alone or together with other messages)
+	DecisionSkipped  = "skipped"  // stayed quiet
+	DecisionReacted  = "reacted"  // reacted with an emoji instead
+	DecisionPaused   = "paused"   // hand-off: left for you
+	DecisionBlocked  = "blocked"  // likely prompt injection
+	DecisionApproval = "approval" // a reply waits for your approval
+	DecisionFailed   = "failed"   // the reply couldn't be written or sent
+)
+
+// LogEntry is one entry of a chat's decision log: a message someone sent
+// (or an opener the persona wrote first, Kind "opener") and what the persona
+// did about it, why, and how long it took.
+type LogEntry struct {
+	ID        string     `json:"id"` // the WhatsApp message id
+	ChatKey   string     `json:"chatKey"`
+	Kind      string     `json:"kind,omitempty"` // "" = a message to them, "opener"
+	At        time.Time  `json:"at"`             // when it was sent on WhatsApp
+	Sender    string     `json:"sender,omitempty"`
+	Text      string     `json:"text,omitempty"`
+	Outcome   string     `json:"outcome"`
+	Reason    string     `json:"reason,omitempty"` // code (activity meta.reason)
+	Why       string     `json:"why,omitempty"`    // plain English
+	DecidedAt *time.Time `json:"decidedAt,omitempty"`
+	// RepliedAt is when the first reply message went out; DelaySeconds is
+	// At → RepliedAt.
+	RepliedAt    *time.Time `json:"repliedAt,omitempty"`
+	DelaySeconds float64    `json:"delaySeconds,omitempty"`
+	Reply        string     `json:"reply,omitempty"`
+	Steps        []LogStep  `json:"steps,omitempty"`
+}
+
+// LogStep is one thing the persona did on the way (seen, waiting,
+// thinking, typing…), as written in the activity feed.
+type LogStep struct {
+	At   time.Time `json:"at"`
+	Type string    `json:"type"` // activity type
+	Text string    `json:"text"`
+}
+
 // ─── WhatsApp ────────────────────────────────────────────────
 
 // WhatsApp connection states.
@@ -303,6 +347,14 @@ type ChatItem struct {
 	LastMessageAt    *time.Time `json:"lastMessageAt"`
 	IsSelf           bool       `json:"isSelf"`
 	Assigned         bool       `json:"assigned"`
+}
+
+// GroupChange reports that you joined or left (were removed from) a group.
+type GroupChange struct {
+	Key    string `json:"key"`
+	JID    string `json:"jid"`
+	Name   string `json:"name"`
+	Joined bool   `json:"joined"`
 }
 
 type ChatQuery struct {

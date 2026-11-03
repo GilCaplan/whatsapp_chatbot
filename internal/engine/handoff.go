@@ -56,9 +56,12 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 			r.handoffNoted = now
 		}
 		r.mu.Unlock()
+		const why = "Paused — waiting for you to take over (kept as context)"
 		if due {
-			e.act(model.ActDecisionSkip, c, p.Name, "Paused — waiting for you to take over (kept as context)",
-				map[string]any{"reason": "handoff", "category": cur.Handoff.Category})
+			e.act(model.ActDecisionSkip, c, p.Name, why,
+				withMsg(map[string]any{"reason": "handoff", "category": cur.Handoff.Category}, in.MessageID))
+		} else {
+			e.logDecided(c.Key, []string{in.MessageID}, model.DecisionPaused, "handoff", why, now)
 		}
 		return true
 	}
@@ -140,7 +143,7 @@ func (e *Engine) triggerHandoff(r *Runner, c model.ChatAssignment, p model.Perso
 	r.keepAsContext(in, text, mentions, bp, now)
 	e.holdApprovals(c.Key)
 	e.forgetBrief(c.Key) // its window held the sensitive message: nothing of it crosses (brief.go)
-	meta := map[string]any{"category": hit.Category, "excerpt": hs.Excerpt, "how": how, "sender": who}
+	meta := withMsg(map[string]any{"category": hit.Category, "excerpt": hs.Excerpt, "how": how, "sender": who}, in.MessageID)
 	if hit.Match != "" {
 		meta["match"] = hit.Match
 	}

@@ -56,6 +56,8 @@ type Runner struct {
 	timerGen uint64 // invalidates stale timer callbacks
 	aux      map[uint64]Timer
 	auxSeq   uint64
+	sched    Timer  // next scheduled message (schedule.go)
+	schedGen uint64 // invalidates stale schedule callbacks
 
 	typSeq     uint64 // order of typing on/off decisions
 	typMu      sync.Mutex
@@ -118,6 +120,7 @@ func (r *Runner) stop() {
 	r.mu.Lock()
 	r.stopped = true
 	r.stopTimerLocked()
+	r.stopScheduleLocked()
 	for id, t := range r.aux {
 		t.Stop()
 		delete(r.aux, id)
@@ -260,8 +263,11 @@ func (r *Runner) process(in model.Incoming) {
 		if speaker == "them" {
 			r.keepAsContext(in, text, mentionNames, bp, now)
 		}
+		if speaker == "them" {
+			e.logArrived(c.Key, in.MessageID, in.Timestamp, in.PushName, text)
+		}
 		e.act(model.ActDecisionSkip, c, "", "Old message from while offline — kept as context, not answered",
-			map[string]any{"reason": "stale", "sentAt": in.Timestamp})
+			withMsg(map[string]any{"reason": "stale", "sentAt": in.Timestamp}, in.MessageID))
 		return
 	}
 
@@ -271,7 +277,10 @@ func (r *Runner) process(in model.Incoming) {
 		e.act(model.ActError, c, "", fmt.Sprintf("Persona %q not found — assign another persona", c.PersonaID), nil)
 		return
 	}
-	meta := map[string]any{"fromMe": in.IsFromMe, "group": isGroup}
+	meta := withMsg(map[string]any{"fromMe": in.IsFromMe, "group": isGroup}, in.MessageID)
+	if !in.Timestamp.IsZero() {
+		meta["sentAt"] = in.Timestamp
+	}
 	if in.PushName != "" && !in.IsFromMe {
 		meta["sender"] = in.PushName
 	}
@@ -290,7 +299,7 @@ func (r *Runner) process(in model.Incoming) {
 	}
 
 	if bp.IgnoreLinks && hasLink(text) {
-		e.act(model.ActDecisionSkip, c, p.Name, "Ignored a message with a link", map[string]any{"reason": "link"})
+		e.act(model.ActDecisionSkip, c, p.Name, "Ignored a message with a link", withMsg(map[string]any{"reason": "link"}, in.MessageID))
 		return
 	}
 
@@ -301,18 +310,18 @@ func (r *Runner) process(in model.Incoming) {
 		// people, trigger words, the streak guard.
 		switch gt := r.peopleGate(c, bp, p, in, raw, isGroup, roster, now); gt.action {
 		case gateSkip:
-			e.act(model.ActDecisionSkip, c, p.Name, gt.text, gt.meta)
+			e.act(model.ActDecisionSkip, c, p.Name, gt.text, withMsg(gt.meta, in.MessageID))
 			r.keepAsContext(in, text, mentionNames, bp, now)
 			return
 		case gateForce:
-			e.act(model.ActDecisionReply, c, p.Name, gt.text, gt.meta)
+			e.act(model.ActDecisionReply, c, p.Name, gt.text, withMsg(gt.meta, in.MessageID))
 			forced = true
 		}
 	}
 	if isGroup && speaker == "them" && !forced {
 		d := e.decide(r.ctx, p, bp, raw, in.MentionedJIDs)
 		if !d.Reply {
-			e.act(model.ActDecisionSkip, c, p.Name, decisionText(d.Reason, p.Name), d.Meta)
+			e.act(model.ActDecisionSkip, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
 			if open, _ := eff.Available(now); open && e.rng.Hit(bp.ReactPercent) {
 				r.mu.Lock()
 				if !r.stopped {
@@ -322,13 +331,13 @@ func (r *Runner) process(in model.Incoming) {
 			}
 			return
 		}
-		e.act(model.ActDecisionReply, c, p.Name, decisionText(d.Reason, p.Name), d.Meta)
+		e.act(model.ActDecisionReply, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
 	}
 
 	g := guard.Inspect(text, bp.InjectionFilter)
 	if g.Blocked {
 		e.act(model.ActBlockedInjection, c, p.Name, "Ignored a likely prompt-injection attempt: "+guard.Truncate(text, 200),
-			map[string]any{"score": g.Score, "matches": g.Matches, "level": bp.InjectionFilter})
+			withMsg(map[string]any{"score": g.Score, "matches": g.Matches, "level": bp.InjectionFilter}, in.MessageID))
 		return
 	}
 	if g.Text == "" {

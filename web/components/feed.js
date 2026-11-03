@@ -23,6 +23,11 @@ const META_LABELS = {
   dueAt: 'Due',
   readReceipts: 'Read receipts',
   proactive: 'Check-in',
+  scheduled: 'Scheduled',
+  trigger: 'Why now',
+  plannedAt: 'Planned for',
+  count: 'How many',
+  joined: 'Joined',
   manual: 'Sent by you',
   percent: 'Chance',
   messages: 'Messages read',
@@ -65,7 +70,7 @@ const META_LABELS = {
 };
 
 // Never shown: reactions are described in words, not with the emoji itself.
-const HIDDEN = new Set(['emoji', 'parts', 'messageId', 'distracted', 'jid', 'sentAt', 'missionId']);
+const HIDDEN = new Set(['emoji', 'parts', 'messageId', 'msgId', 'msgIds', 'distracted', 'jid', 'sentAt', 'missionId', 'group']);
 
 /** decision.skip / deferred reason codes in plain English. */
 export const REASONS = {
@@ -98,6 +103,14 @@ export const REASONS = {
   // Wave 3
   handoff: 'Paused until you take over',
   routine: 'Busy with its daily routine',
+  // Scheduled messages
+  disconnected: 'WhatsApp was disconnected',
+  left_group: 'You are no longer in this group',
+  away: 'Chat is set to Away',
+  busy: 'It was in the middle of a reply',
+  closed: 'Outside active hours',
+  cap: 'Reached the daily limit for scheduled messages',
+  missed: 'Missed while the chat was off or the app was closed',
 };
 
 // Wave 3: hand-off categories and how they were spotted.
@@ -110,6 +123,7 @@ const HANDOFF_HOW = { keyword: 'Matched a keyword', ai: 'The AI double-checked i
 // Activity types whose text is a chat message (tags are shown as chips).
 const MESSAGE_TYPES = new Set(['incoming', 'sent', 'approval.sent', 'approval.queued', 'approval.discarded']);
 
+const TRIGGERS = { start: 'Replies were turned on', joined: 'You joined the group', time: 'A set time', repeat: 'Repeat' };
 const STAGES = { scheduled: 'Scheduled', starting: 'Writing the opener', sent: 'Sent', queued: 'Waiting for approval', skipped: 'Skipped', plan: 'Planning the next move', manual: 'You asked for it', cross: 'Using context from other chats' };
 const GOAL_HOW = { said_word: 'They said the word', ai: 'Spotted in the conversation', media: 'They sent it' };
 const GOAL_AFTER = { relax: 'Stops pursuing it and just chats', continue: 'Keeps gently pursuing it' };
@@ -131,7 +145,11 @@ function metaValue(k, v, meta) {
     case 'readReceipts': return v ? 'On' : 'Off — nobody sees blue ticks';
     case 'percent': return `${v}%`;
     case 'proactive':
+    case 'scheduled':
+    case 'joined':
     case 'manual': return v ? 'Yes' : 'No';
+    case 'trigger': return TRIGGERS[v] || String(v);
+    case 'plannedAt':
     case 'dueAt':
     case 'resumeAt': { const t = clockTime(v); const r = relTime(v); return t ? `${t}${r ? ` (${r})` : ''}` : String(v); }
     case 'silenceHours': return typeof v === 'number' ? (v >= 48 ? `${Math.round(v / 24)} days` : `${Math.round(v)} hours`) : String(v);

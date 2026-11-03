@@ -4,7 +4,7 @@
 import { html } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
-import { store, personaById, assignmentFor, isAway } from '../store.js';
+import { store, bus, personaById, assignmentFor, isAway } from '../store.js';
 import { seg, toggle, toast, spinner, skeletonRows } from '../ui.js';
 import { chatAvatar, avatarStack, personaAvatar } from '../components/avatar.js';
 import { emptyState } from '../components/art.js';
@@ -34,14 +34,15 @@ export default function Chats(ctx) {
   let drawer = null;
   let drawerKey = '';
 
-  async function load(reset = true) {
+  // soft: reload the first page in place (no skeleton) — WhatsApp changes.
+  async function load(reset = true, soft = false) {
     if (st.tab === 'assigned') { st.loading = false; update(); return; }
     const seq = ++st.seq;
     if (st.abort) st.abort.abort();
     st.abort = new AbortController();
-    st.loading = true;
+    st.loading = !soft;
     st.error = '';
-    if (reset) { st.items = []; st.total = 0; }
+    if (reset && !soft) { st.items = []; st.total = 0; }
     update();
     try {
       const r = await api.wa.chats({ q: st.q.trim(), tab: st.tab, limit: PAGE, offset: reset ? 0 : st.items.length },
@@ -58,6 +59,9 @@ export default function Chats(ctx) {
     }
   }
   const search = debounce(() => load(true), 200);
+  const reloadSoft = debounce(() => { if (!st.loading) load(true, true); }, 300);
+  let offs = [];
+  let lastWA = store.state.wa && store.state.wa.state;
 
   /** Route param "<key>" or "<key>/<drawer tab>" (keys never contain "/"). */
   function splitParam(param) {
@@ -158,7 +162,7 @@ export default function Chats(ctx) {
         ${avatarStack({ jid: c.jid, name: c.name, kind: c.kind }, p, 42)}
         <div class="grow">
           <div class="title ellipsis">${c.name || c.jid}</div>
-          <div class="sub ellipsis">${c.kind === 'group' ? 'Group' : 'Direct chat'}${c.goalOverride ? html` · goal: ${c.goalOverride}${c.goal && c.goal.state === 'reached' ? ' (reached)' : ''}` : ''}</div>
+          <div class="sub ellipsis">${c.left ? html`<span class="chip chip-sm chip-away" title="You left, were removed, or the group was deleted">Not in group</span> ` : ''}${c.kind === 'group' ? 'Group' : 'Direct chat'}${c.goalOverride ? html` · goal: ${c.goalOverride}${c.goal && c.goal.state === 'reached' ? ' (reached)' : ''}` : ''}</div>
         </div>
         ${c.pendingCount ? html`<span class="badge" title="Waiting for approval">${c.pendingCount}</span>` : ''}
         ${c.lastActivityAt ? html`<rel-time class="faint small nowrap hide-sm" datetime=${c.lastActivityAt}></rel-time>` : ''}
@@ -215,7 +219,19 @@ export default function Chats(ctx) {
   return {
     title: 'Chats',
     view,
-    mount() { load(true); syncDrawer(ctx.route); },
+    mount() {
+      load(true);
+      syncDrawer(ctx.route);
+      offs = [
+        bus.on('wa.synced', reloadSoft),
+        bus.on('chats.changed', reloadSoft), // joined or left a group
+        bus.on('wa.status', (wa) => { // just (re)connected: the lists fill in
+          const now = wa && wa.state;
+          if (now === 'connected' && lastWA !== 'connected') reloadSoft();
+          lastWA = now;
+        }),
+      ];
+    },
     onParams(route) {
       const t = route.query.get('tab');
       if (t && TABS.includes(t) && t !== st.tab) { st.tab = t; load(true); }
@@ -224,6 +240,8 @@ export default function Chats(ctx) {
     unmount() {
       if (st.abort) st.abort.abort();
       search.cancel();
+      reloadSoft.cancel();
+      offs.forEach((off) => off());
       if (drawer && !drawer.closed) { drawerKey = ''; const d = drawer; drawer = null; d.close(); }
     },
   };

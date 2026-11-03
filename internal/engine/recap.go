@@ -310,4 +310,7 @@ func (e *Engine) settingsChanged() {
 		return
 	}
 	e.scheduleRecap()
+	for _, r := range e.allRunners() {
+		r.syncSchedule() // the app profiles may hold the schedule
+	}
 }

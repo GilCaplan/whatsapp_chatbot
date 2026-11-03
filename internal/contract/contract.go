@@ -55,6 +55,11 @@ type WhatsApp interface {
 	OwnJIDs() []string
 
 	SetMessageHandler(fn func(model.Incoming))
+	// InGroup reports whether you are a member of a group (from the cached
+	// group list; known is false until it has loaded). Never blocks.
+	InGroup(jid string) (member, known bool)
+	// SetGroupHandler registers a callback for groups you join or leave.
+	SetGroupHandler(fn func(model.GroupChange))
 	Close()
 }
 

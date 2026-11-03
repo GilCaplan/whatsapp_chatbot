@@ -24,6 +24,14 @@ type RunnerState struct {
 	Proactive        []time.Time `json:"proactive"` // proactive check-ins, pruned to 24 h
 	ProactiveDueAt   *time.Time  `json:"proactiveDueAt"`
 	QueuedWakeAt     *time.Time  `json:"queuedWakeAt"`
+	// Scheduled messages (proactive.schedule): the next moment of any kind,
+	// the next repeat and the repeat settings it was drawn with, fixed
+	// moments handled up to here, and the messages started in the last 24 h.
+	ScheduleAt     *time.Time  `json:"scheduleAt,omitempty"`
+	ScheduleNextAt *time.Time  `json:"scheduleNextAt,omitempty"`
+	ScheduleRepeat string      `json:"scheduleRepeat,omitempty"`
+	ScheduleDoneTo time.Time   `json:"scheduleDoneTo"`
+	Scheduled      []time.Time `json:"scheduled,omitempty"`
 	// Goal is the chat's progress on its goal (nil = not started).
 	Goal *model.GoalStatus `json:"goal,omitempty"`
 
@@ -44,12 +52,24 @@ func (st *RunnerState) Prune(now time.Time) {
 	old := func(t time.Time) bool { return now.Sub(t) > 24*time.Hour }
 	st.Replies = slices.DeleteFunc(st.Replies, old)
 	st.Proactive = slices.DeleteFunc(st.Proactive, old)
+	st.Scheduled = slices.DeleteFunc(st.Scheduled, old)
 }
 
 // RepliesSince counts persona replies at or after t.
 func (st RunnerState) RepliesSince(t time.Time) int {
 	n := 0
 	for _, r := range st.Replies {
+		if !r.Before(t) {
+			n++
+		}
+	}
+	return n
+}
+
+// ScheduledSince counts scheduled messages started at or after t.
+func (st RunnerState) ScheduledSince(t time.Time) int {
+	n := 0
+	for _, r := range st.Scheduled {
 		if !r.Before(t) {
 			n++
 		}
@@ -71,6 +91,15 @@ func (st RunnerState) ProactiveSince(t time.Time) int {
 func (st RunnerState) clone() RunnerState {
 	st.Replies = slices.Clone(st.Replies)
 	st.Proactive = slices.Clone(st.Proactive)
+	st.Scheduled = slices.Clone(st.Scheduled)
+	if st.ScheduleNextAt != nil {
+		t := *st.ScheduleNextAt
+		st.ScheduleNextAt = &t
+	}
+	if st.ScheduleAt != nil {
+		t := *st.ScheduleAt
+		st.ScheduleAt = &t
+	}
 	if st.ProactiveDueAt != nil {
 		t := *st.ProactiveDueAt
 		st.ProactiveDueAt = &t

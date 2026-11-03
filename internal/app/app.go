@@ -128,6 +128,7 @@ func Run(opts Options) error {
 
 	eng := engine.New(engine.Deps{Config: cfg, Store: st, Hub: hub, WA: waSvc, LLM: llmReg})
 	waSvc.SetMessageHandler(eng.HandleIncoming)
+	waSvc.SetGroupHandler(eng.HandleGroupChange)
 
 	ln, err := listen(opts.Port, cfg.Get().Port)
 	if err != nil {

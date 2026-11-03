@@ -136,7 +136,10 @@ BehaviorProfile {
   // Blocks (overridden per chat as a whole)
   availability: { enabled, timezone ("" = this computer, "persona" = the chat persona's World.timezone, else IANA), week:[DayHours ×7 mon..sun],
                   outsideHours:"queue|silent", catchUpMaxMin },
-  proactive:    { enabled, afterHours, maxPerDay, spreadMinutes },
+  proactive:    { enabled, afterHours, maxPerDay, spreadMinutes,   // check-ins after a silence
+                  schedule: { onStart, times:[time] (≤ 20), repeat:"off|fixed|uniform|normal|poisson" ("" = off),
+                              everyMin (5–20160; 0 = 120), spreadMin (uniform ±, normal standard deviation),
+                              maxPerDay (1–96; 0 = 12) } },   // scheduled messages, below
   // Safety
   autoSendSeconds (approval auto-send, 0 = off), injectionFilter:"strict|balanced|off" }
   // * = only used in group chats; † = added in settings v3; ‡ = added in settings v4 (Natural 5 % correction, Instant 0)
@@ -255,7 +258,7 @@ A normal reply narrates: `incoming` → `noticing` → `seen` → `waiting` → 
 | `goal.reached` | "Goal reached — Josh said apple" / "Goal reached — find out what Dana is doing this weekend" / "Goal reached — Dana sent a photo" | `goal`, `how` (`said_word`, `ai`, `media`), `evidence`, `afterReached`, `missionId?` |
 | `deferred` | "Outside active hours — will reply around 08:30" / "Away until 09:00 — will reply then" | `resumeAt` (time), `reason` (`outside_hours`, `snoozed`) |
 | `reacted` | "Reacted to Dana's message instead of replying" | `emoji`, `messageId` |
-| `proactive` | "Will check in within 3 hours — quiet for 2 days" / "Checking in after 2 days of silence" / "Starting a conversation because you asked — about: the new bakery" | `stage` (`scheduled`, `starting`, `manual`), `silenceHours`, `dueAt`, `hint` |
+| `proactive` | "Will check in within 3 hours — quiet for 2 days" / "Checking in after 2 days of silence" / "Starting a conversation because you asked — about: the new bakery" / "Sending the message planned for 14:00" / "Skipped a scheduled message — WhatsApp was disconnected, so it wasn't sent late either" | `stage` (`scheduled`, `starting`, `manual`, `skipped`), `silenceHours`, `dueAt`, `hint`, `scheduled`, `trigger`, `plannedAt`, `reason`, `count` |
 | `decision.skip` | e.g. "Decided not to answer this one — left on read", "Staying quiet — the AI thinks Leo wouldn't jump in here", "Reply limit reached (6 per hour) — not answering", "You replied yourself — standing down" | `reason` (below) |
 | `decision.reply` | e.g. "Joining in — someone said Leo's name", "Joining in — you were @mentioned", "Chiming in by chance" | `reason` (below) |
 | `approval.sent` | the message text (one event per bubble) | `approvalId`, `edited`, `jid`, `provider`, `model`, `part`, `parts` |
@@ -319,8 +322,9 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 
 - Presets (`id`): `natural` (default for both kinds), `instant`, `busy`, `slow`, `nightowl`; `custom` is the label
   for anything else. `ranges` keys are JSON names; nested ones are `availability.catchUpMaxMin`,
-  `proactive.afterHours`, `proactive.maxPerDay`, `proactive.spreadMinutes`. `enums` keys: `preset`,
-  `injectionFilter`, `lengthBias`, `availability.outsideHours`, `availability.week.day`.
+  `proactive.afterHours`, `proactive.maxPerDay`, `proactive.spreadMinutes`, `proactive.schedule.everyMin`,
+  `proactive.schedule.spreadMin`, `proactive.schedule.maxPerDay`. `enums` keys: `preset`,
+  `injectionFilter`, `lengthBias`, `availability.outsideHours`, `availability.week.day`, `proactive.schedule.repeat`.
 - Vibe dials (`behavior/dials.go`): `DialDef {id, label, blurb, fields:[owned JSON names], levels:[DialLevel ×5]}`,
   `DialLevel {level 1–5, label, blurb, privateBlurb?, private:{field:value}, group:{field:value}}`. A dial is derived,
   never stored: moving it writes that level's fields for the chat kind (Settings: `PUT /api/settings`
@@ -354,14 +358,14 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 | `POST /api/wa/disconnect` | – | `{ok:true}` |
 | `POST /api/wa/logout` | – | `{ok:true}` (state → `logged_out`, then pairing can start again) |
 | `GET /api/wa/chats?q=&kind=all\|dm\|group&tab=recent\|assigned\|contacts\|groups&limit=50&offset=0` | – | `{items:[ChatItem], total}` (`tab=recent` always includes a "You (message yourself)" item with `isSelf:true`) |
-| `POST /api/wa/chats/refresh` | – | `{ok:true}` |
+| `POST /api/wa/chats/refresh` | – | `{ok:true}` — re-reads the joined groups from WhatsApp (≤ 20 s), drops the contacts cache and corrects a "connected" state whose socket is gone. The web app calls it on every page load; groups you joined or left meanwhile are reported (activity `system`, SSE `chats.changed`) |
 | `GET /api/wa/avatar?jid=` | – | image bytes, or **204** when none (UI shows generated fallback) |
 
 ## Chat assignments
 
 | Method & path | Body | Response |
 |---|---|---|
-| `GET /api/chats` | – | `[ChatAssignment & {personaName, pendingCount, historyCount, goal: ChatGoal, nextCheckInAt: null\|time}]` (`nextCheckInAt` = scheduled automatic check-in, from runtime.json) |
+| `GET /api/chats` | – | `[ChatAssignment & {personaName, pendingCount, historyCount, goal: ChatGoal, nextCheckInAt: null\|time, nextScheduledAt: null\|time, left: bool}]` (`nextCheckInAt` = scheduled automatic check-in, `nextScheduledAt` = next scheduled message, both from runtime.json; `left` = a group you are no longer in) |
 | `POST /api/chats` | `{jid, personaId, mode?, approvalMode?, enabled?, behavior?: BehaviorOverrides}` (mode wins over approvalMode) | `ChatAssignment` (201; server canonicalizes key/jid/altJid/name); 409 `already_assigned`; 400 `invalid_behavior` |
 | `PATCH /api/chats/{key}` | any of `{enabled, personaId, mode, approvalMode, goalOverride, goalStyle, goalPlanAhead, name, behavior, snoozedUntil, people, memory, missionId, cross}` | `ChatAssignment`; 400 `invalid_behavior` / `invalid_snooze` / `invalid_goal` / `invalid_people` / `invalid_mode` / `invalid_memory` / `invalid_cross`. `approvalMode:true` keeps co-pilot, `false` = auto; `memory:null` = the app setting; `cross: {mode?: string\|null, share?: bool\|null}` (absent = keep, null = the app default; `cross:null` resets both); `people.people[].cross: bool\|null` |
 | `GET /api/chats/{key}/people` | – | `{kind, mode:"auto\|everyone\|selected", effectiveMode:"everyone\|selected", memberCount, threshold, answerAnyoneWhoAddressesIt, members:[{jid, name, phone, lid, isAdmin, isSelf, respond (effective), respondSource:"person\|mode", priority, notes, lastSpokeAt: null\|time, left, cross (effective), crossSource:"person\|default", dmChatKey ("" = no private chat with this persona), dmShares}], membersError?}` — group members (cached by WhatsApp, 10 min) merged with the chat's preferences; people with preferences who are no longer members are listed with `left:true`. Order: recent speakers, then by name, then you, then people who left. DMs list the single contact (for notes). |
@@ -446,6 +450,19 @@ optional `hint` (topic) and the chat goal (a natural first step, never revealed)
 Activity: `proactive` with `stage:"manual"`, text "Starting a conversation because you asked — about: …", `hint`.
 Openers count as check-ins (`proactive` in runtime.json, `sent` meta `proactive:true`); a queued opener has
 `PendingReply.opener:true` and Regenerate writes a new opener (not a reply).
+
+Scheduled messages (`proactive.schedule`, `engine/schedule.go`): openers on a plan instead of after a silence —
+`onStart` when replies are turned on for the chat (not on app start) or you join / are added back to the group,
+one at each of `times`, and repeats from the start on (the first set time, else when it started) with a gap that is
+`fixed` (exactly `everyMin`), `uniform` (`everyMin ± spreadMin`), `normal` (mean `everyMin`, standard deviation
+`spreadMin`) or `poisson` (exponential gaps, mean `everyMin`); never under a minute. At each moment the chat must take
+a message right then: WhatsApp connected, still in the group, not handed off, not Away, idle, inside active hours,
+not in a routine block and under `maxPerDay`; otherwise the moment is **skipped**, never sent late (also moments
+missed while the app was closed or the chat off), so nothing piles up. Several moments due at once make one message.
+Activity `proactive`: `stage:"starting"`, `scheduled:true`, `trigger` (`start|joined|time|repeat`), `plannedAt`; or
+`stage:"skipped"` with `reason` (`disconnected|left_group|handoff|away|busy|closed|routine|cap|missed`). Scheduled
+messages don't count as check-ins (runtime.json `scheduled`, `scheduleAt`, `scheduleNextAt`, `scheduleDoneTo`).
+Silence check-ins also wait while WhatsApp is disconnected (one check-in once it is back, never a backlog).
 
 PATCH `goalStyle` / `goalPlanAhead`: absent = keep, `null` = use the persona's setting, a value overrides it for this
 chat. `goalStyle` must be `subtle|balanced|direct` (case-insensitive), `goalPlanAhead` a bool; anything else → 400
@@ -568,6 +585,24 @@ by `[link]`/`[email]`/`[number]`; a bare photo/sticker is skipped (a caption is 
 
 Wave 3 endpoints whose feature has not landed yet answer **501** `{"code":"not_implemented"}`; the UI shows a
 friendly "coming soon" state for them.
+
+## Decision log
+
+Per chat, one entry per message someone sent (and per opener the persona wrote first): what the persona did about
+it, why, and how long it took. The engine keeps it up to date from the chat's activity (activity about particular
+messages carries `meta.msgId` / `meta.msgIds`); `decisions/<chatKey>.json` keeps the newest 500.
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/chats/{key}/log?limit=200` | – | `{items:[LogEntry] (newest first, limit 1–500)}`; 404 unknown chat |
+| `DELETE /api/chats/{key}/log` | – | `{ok:true}` — forgets the entries (not the messages) |
+
+`LogEntry`: `{id (WhatsApp message id), chatKey, kind: ""|"opener", at (sent on WhatsApp), sender?, text?,
+outcome: "pending"|"replied"|"skipped"|"reacted"|"paused"|"blocked"|"approval"|"failed", reason? (the activity
+reason code), why? (plain English), decidedAt?, repliedAt?, delaySeconds? (at → first reply message), reply?,
+steps:[{at, type (activity type, or "decision"), text}]}`. One reply can answer several messages (each gets the
+reply). `pending` entries whose cycle was dropped (restart) stay pending; the web app shows them as "No reply"
+after 30 minutes.
 
 ## Activity
 
