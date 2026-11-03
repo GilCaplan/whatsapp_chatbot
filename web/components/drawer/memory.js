@@ -56,6 +56,7 @@ export function createMemoryTab(ctx) {
     const own = c.memory != null;
     const pending = mem.data ? mem.data.pending || 0 : 0;
     return html`
+      ${contextBlock({ ctx: context, chat: c, persona: p, onUpdate: ctx.update })}
       <section class="drawer-section" data-key="memory">
         <h4>${icon('brain', 'ic-sm')}What ${name} remembers<span class="grow"></span>
           ${enabled ? html`<button class=${'btn btn-ghost btn-sm ' + (ui.extracting ? 'loading' : '')} ?disabled=${ui.extracting}
@@ -75,7 +76,6 @@ export function createMemoryTab(ctx) {
         ${enabled ? crossBlock({ cross, chat: c, persona: p, onUpdate: ctx.update }) : ''}
         ${memoryList({ mem, chat: c, persona: p, ui, onUpdate: ctx.update })}
       </section>
-      ${contextBlock({ ctx: context, chat: c, persona: p, onUpdate: ctx.update })}
       ${recapBlock(ctx, c, p) /* Engineer B: daily recap block (recap-card.js) */}`;
   }
 

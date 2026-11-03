@@ -184,7 +184,7 @@ func (e *Engine) ChatContext(chatKey string) (model.ChatContext, error) {
 	bp := e.effective(c).Profile
 	opts, _ := e.promptOptions(c, bp, e.directory(e.ctx, c, hist), hist)
 	req := prompt.Compose(p, c, hist, isGroupChat(c), opts)
-	out := model.ChatContext{System: req.System, Messages: make([]model.ContextMessage, 0, len(req.Messages)), Chars: len(req.System),
+	out := model.ChatContext{System: req.System, Sections: prompt.ComposeSections(p, c, hist, isGroupChat(c), opts), Messages: make([]model.ContextMessage, 0, len(req.Messages)), Chars: len(req.System),
 		HistoryKept: len(hist), Window: bp.HistoryMessages, Instructions: c.Instructions, ContextFrom: c.ContextFrom, AutoCompact: c.AutoCompact}
 	for _, m := range req.Messages {
 		out.Messages = append(out.Messages, model.ContextMessage{Role: m.Role, Content: m.Content})

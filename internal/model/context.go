@@ -20,6 +20,14 @@ const (
 	MaxInstructions = 1000
 )
 
+// PromptSection is one labelled part of the system prompt.
+type PromptSection struct {
+	Key   string `json:"key"`   // character|safety|context-open|people|summary|memories|cross|world|late|context-close|history|goal|instructions|stay|language|guidance
+	Label string `json:"label"` // plain English
+	Group string `json:"group,omitempty"`
+	Text  string `json:"text"`
+}
+
 // ContextMessage is one message as the model gets it.
 type ContextMessage struct {
 	Role    string `json:"role"` // user|assistant
@@ -31,6 +39,7 @@ type ContextMessage struct {
 // exactly as sent (without the private planning step).
 type ChatContext struct {
 	System       string           `json:"system"`
+	Sections     []PromptSection  `json:"sections"` // System in its parts (joined = System)
 	Messages     []ContextMessage `json:"messages"`
 	Chars        int              `json:"chars"`        // system + messages
 	HistoryKept  int              `json:"historyKept"`  // messages it reads

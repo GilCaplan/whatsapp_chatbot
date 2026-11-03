@@ -85,6 +85,57 @@ export function createContextStore(key, update) {
   };
 }
 
+// Colour of each part of the prompt (tokens only; the context parts share one).
+const PART_COLOURS = {
+  character: 'var(--indigo)', safety: 'var(--red)', context: 'var(--teal)', history: 'var(--gray)', goal: 'var(--orange)',
+  instructions: 'var(--pink)', stay: 'var(--indigo)', language: 'var(--mint)', guidance: 'var(--yellow)', conversation: 'var(--blue)',
+};
+const partColour = (s) => PART_COLOURS[s.group || s.key] || 'var(--gray)';
+
+/** The prompt's parts as a stacked bar plus one row each (context parts grouped). */
+function promptParts(d, name, st, onUpdate) {
+  const sections = d.sections && d.sections.length ? d.sections : [{ key: 'system', label: 'System prompt', text: d.system }];
+  const convo = d.messages.reduce((n, m) => n + m.content.length, 0);
+  const total = Math.max(1, d.chars);
+  // The bar: the chat-context parts count as one block.
+  const blocks = [];
+  for (const s of sections) {
+    const key = s.group || s.key;
+    const last = blocks[blocks.length - 1];
+    if (s.group && last && last.key === key) last.n += s.text.length;
+    else blocks.push({ key, label: s.group === 'context' ? 'Chat context' : s.label, n: s.text.length, c: partColour(s) });
+  }
+  blocks.push({ key: 'conversation', label: 'Conversation', n: convo, c: PART_COLOURS.conversation });
+  const open = st.openParts || (st.openParts = new Set());
+  const toggle = (k) => { if (open.has(k)) open.delete(k); else open.add(k); onUpdate(); };
+  const row = (key, label, chars, c, body, indent = false) => html`<div class=${'ctx-sec' + (indent ? ' indent' : '') + (open.has(key) ? ' open' : '')}>
+    <button type="button" class="ctx-sec-h" aria-expanded=${String(open.has(key))} @click=${() => toggle(key)}>
+      <span class="ctx-swatch" style=${`--c:${c}`}></span><span class="grow">${label}</span>
+      <span class="faint">${chars.toLocaleString()} chars · ${Math.round((chars / total) * 100)}%</span>${icon('chevron-down', 'ic-sm')}
+    </button>
+    ${open.has(key) ? body : ''}
+  </div>`;
+  let ctxShown = false;
+  return html`
+    <div class="ctx-bar" role="img" aria-label="How the prompt is split">
+      ${blocks.map((b) => html`<span style=${`--c:${b.c};flex:${Math.max(b.n, 1)}`} title=${`${b.label}: ${b.n.toLocaleString()} characters`}></span>`)}
+    </div>
+    <div class="ctx-legend">${blocks.map((b) => html`<span><span class="ctx-swatch" style=${`--c:${b.c}`}></span>${b.label}</span>`)}</div>
+    <div class="ctx-secs">
+      ${sections.map((s) => {
+        if (s.group === 'context') {
+          const head = ctxShown ? '' : html`<div class="ctx-group-h"><span class="ctx-swatch" style=${`--c:${PART_COLOURS.context}`}></span>Chat context <span class="faint">· who is here, notes, memories, time</span></div>`;
+          ctxShown = true;
+          return html`${head}${row(s.key, s.label, s.text.length, partColour(s), html`<pre class="ctx-pre">${s.text.trim()}</pre>`, true)}`;
+        }
+        return row(s.key, s.label, s.text.length, partColour(s), html`<pre class="ctx-pre">${s.text.trim()}</pre>`);
+      })}
+      ${row('conversation', `Conversation (${d.messages.length} messages)`, convo, PART_COLOURS.conversation, d.messages.length
+        ? html`${d.messages.map((m) => html`<div class=${'ctx-msg ' + m.role}><span class="ctx-role">${roleLabel(m, name)}</span><pre class="ctx-pre">${m.content}</pre></div>`)}`
+        : html`<div class="small muted">No messages yet.</div>`)}
+    </div>`;
+}
+
 function roleLabel(m, name) {
   return m.role === 'assistant' ? name : 'Chat';
 }
@@ -151,16 +202,11 @@ export function contextBlock({ ctx: cs, chat: c, persona: p, onUpdate }) {
       ${d.contextFrom ? html`<button class="btn btn-ghost btn-sm" @click=${() => cs.setFrom(null, 'It reads the full history again')}>${icon('chats')}Read all history again</button>` : ''}
       <span class="grow"></span>
       <button class="btn btn-ghost btn-sm" aria-expanded=${String(st.showPrompt)} @click=${() => { st.showPrompt = !st.showPrompt; onUpdate(); }}>
-        ${icon('eye')}${st.showPrompt ? 'Hide' : 'Show'} the full prompt</button>
+        ${icon('eye')}${st.showPrompt ? 'Hide' : 'Show'} the prompt, part by part</button>
     </div>
     ${st.showPrompt ? html`<div class="ctx-full">
-      <div class="ctx-part"><div class="ctx-part-h">System prompt <span class="faint">· ${d.system.length.toLocaleString()} characters</span></div>
-        <pre class="ctx-pre">${d.system}</pre></div>
-      <div class="ctx-part"><div class="ctx-part-h">Messages <span class="faint">· ${d.messages.length}</span></div>
-        ${d.messages.length ? d.messages.map((m) => html`<div class=${'ctx-msg ' + m.role}><span class="ctx-role">${roleLabel(m, name)}</span><pre class="ctx-pre">${m.content}</pre></div>`)
-          : html`<div class="small muted">No messages yet.</div>`}
-      </div>
-      <div class="tiny faint">This is exactly what goes to the AI for the next reply, apart from the private planning step for goals.</div>
+      ${promptParts(d, name, st, onUpdate)}
+      <div class="tiny faint">Tap a part to read it. This is exactly what goes to the AI for the next reply, apart from the private planning step for goals.</div>
     </div>` : ''}
   </section>`;
 }

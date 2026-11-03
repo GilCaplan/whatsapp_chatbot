@@ -611,7 +611,7 @@ direct chat with a nickname `name` = the nickname and `waName` = the original.
 
 | Method & path | Body | Response |
 |---|---|---|
-| `GET /api/chats/{key}/context` | – | `ChatContext {system, messages:[{role, content}], chars, historyKept, historyTotal, window, summary: ChatSummary\|null, instructions, contextFrom, autoCompact}` — exactly what the next reply sends, without the goal planner's private step |
+| `GET /api/chats/{key}/context` | – | `ChatContext {system, sections:[{key, label, group?, text}] (system in its parts, in order; joined = system; group "context" = the chat-context block), messages:[{role, content}], chars, historyKept, historyTotal, window, summary: ChatSummary\|null, instructions, contextFrom, autoCompact}` — exactly what the next reply sends, without the goal planner's private step |
 | `PUT /api/chats/{key}/summary` | `{text}` | `ChatSummary` (`edited: true`); 400 `invalid_summary` (1–1500 characters) |
 | `DELETE /api/chats/{key}/summary` | – | `{ok:true}` |
 | `POST /api/chats/{key}/compact` | `{keep?}` (default 8) | `ChatSummary` — folds everything but the last `keep` messages into the summary and moves `contextFrom` to the first kept one; 502 `compact_failed` (also when there is nothing older) |

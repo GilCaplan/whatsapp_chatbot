@@ -4,6 +4,7 @@ package prompt
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -140,23 +141,64 @@ func Goal(p model.Persona, chat model.ChatAssignment) string { return goals.Text
 // SystemPrompt renders the full system prompt (also used for previews).
 // At most one Options value is used.
 func SystemPrompt(p model.Persona, chat model.ChatAssignment, isGroup bool, lastMsg string, opts ...Options) string {
+	var b strings.Builder
+	for _, s := range SystemSections(p, chat, isGroup, lastMsg, opts...) {
+		b.WriteString(s.Text)
+	}
+	return b.String()
+}
+
+// SystemSections is SystemPrompt in its labelled parts, in order (empty
+// parts left out); their texts joined are exactly SystemPrompt. The parts
+// of the chat-context block have Group "context".
+func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, lastMsg string, opts ...Options) []model.PromptSection {
 	var o Options
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	note := ""
-	if ctx := PeopleSection(o, isGroup) + SummarySection(o.Summary) + MemorySection(o.Memories, isGroup) + CrossSection(o.Cross, o.CrossTurn) + WorldSection(p.World, o.Now, o.MacZone) + LateSection(o.Late); ctx != "" {
-		note = ContextOpen + ctx + ContextClose
+	var out []model.PromptSection
+	add := func(key, label, group, text string) {
+		if text != "" {
+			out = append(out, model.PromptSection{Key: key, Label: label, Group: group, Text: text})
+		}
 	}
-	note += HistoryNote
+	add("character", "Character", "", Identity(p))
+	add("safety", "Safety rules", "", AntiJailbreakRules)
+	ctx := []model.PromptSection{
+		{Key: "people", Label: "People and your notes", Text: PeopleSection(o, isGroup)},
+		{Key: "summary", Label: "Summary of older messages", Text: SummarySection(o.Summary)},
+		{Key: "memories", Label: "Memories", Text: MemorySection(o.Memories, isGroup)},
+		{Key: "cross", Label: "From its other chats", Text: CrossSection(o.Cross, o.CrossTurn)},
+		{Key: "world", Label: "Right now (time and place)", Text: WorldSection(p.World, o.Now, o.MacZone)},
+		{Key: "late", Label: "Late reply", Text: LateSection(o.Late)},
+	}
+	if slices.ContainsFunc(ctx, func(s model.PromptSection) bool { return s.Text != "" }) {
+		add("context-open", "Chat context: how to read it", "context", ContextOpen)
+		for _, s := range ctx {
+			add(s.Key, s.Label, "context", s.Text)
+		}
+		add("context-close", "End of chat context", "context", ContextClose)
+	}
+	note := HistoryNote
 	if isGroup {
 		note += GroupNote
 	}
-	return fmt.Sprintf("%s%s%s%s%s%s%s\n\nGUIDANCE: %s%s",
-		Identity(p), AntiJailbreakRules, note, GoalSection(goals.Resolve(p, chat), o.Goal), InstructionsSection(o.Instructions),
-		StayYourself(p.Name), LanguageSection(o.ReplyLanguage),
-		Guidance(p.MessageLength, lastMsg, o.LengthBias),
-		emojiTurn(p.Emoji, ClassifyTone(lastMsg)))
+	add("history", "How to read the conversation", "", note)
+	add("goal", "Goal", "", GoalSection(goals.Resolve(p, chat), o.Goal))
+	add("instructions", "Your instructions for this chat", "", InstructionsSection(o.Instructions))
+	add("stay", "Stay yourself", "", StayYourself(p.Name))
+	add("language", "Reply language", "", LanguageSection(o.ReplyLanguage))
+	add("guidance", "Guidance for this reply", "", "\n\nGUIDANCE: "+Guidance(p.MessageLength, lastMsg, o.LengthBias)+emojiTurn(p.Emoji, ClassifyTone(lastMsg)))
+	return out
+}
+
+// ComposeSections is SystemSections for the reply Compose builds from history.
+func ComposeSections(p model.Persona, chat model.ChatAssignment, history []model.Message, isGroup bool, opts ...Options) []model.PromptSection {
+	last := ""
+	if vh := visible(history); len(vh) > 0 {
+		last = vh[len(vh)-1].Text
+	}
+	return SystemSections(p, chat, isGroup, last, opts...)
 }
 
 // OwnerLabel names your own message when it is the turn being answered in a
