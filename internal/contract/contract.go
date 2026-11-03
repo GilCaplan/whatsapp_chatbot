@@ -89,6 +89,12 @@ type Engine interface {
 	Initiate(ctx context.Context, chatKey, hint string) error
 	// PromptPreview renders the system prompt the persona would get (chatKey optional).
 	PromptPreview(personaID, chatKey string) (string, error)
+	// ChatContext is what the persona reads for its next reply in a chat
+	// (system prompt + messages as sent, summary, instructions).
+	ChatContext(chatKey string) (model.ChatContext, error)
+	// Compact folds all but the last keep messages (0 = default) into the
+	// chat summary now; ErrNothingToCompact-like errors are plain errors.
+	Compact(ctx context.Context, chatKey string, keep int) (model.ChatSummary, error)
 	// ExpressionPreview writes up to 3 sample replies of p (may be unsaved) at
 	// its emoji and length settings; lengthBias "" = the private profile's,
 	// roll picks other sample messages.

@@ -13,6 +13,7 @@ import (
 	"whatsappdoppel/internal/behavior"
 	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/events"
+	"whatsappdoppel/internal/lang"
 	"whatsappdoppel/internal/model"
 )
 
@@ -127,6 +128,8 @@ func validateSettings(s config.Settings) error {
 		inRange("llm.ollamaNumCtx", s.LLM.OllamaNumCtx, 0, 1_048_576),
 		prefixed("behavior.private.", behavior.Validate(s.Behavior.Private)),
 		prefixed("behavior.group.", behavior.Validate(s.Behavior.Group)),
+		prefixed("behavior.languages.private: ", lang.Validate(s.Behavior.Languages.Private)),
+		prefixed("behavior.languages.group: ", lang.Validate(s.Behavior.Languages.Group)),
 	}
 	if utf8.RuneCountInString(s.Behavior.TriggerPrefix) > 8 || strings.ContainsAny(s.Behavior.TriggerPrefix, " \t\n") {
 		checks = append(checks, fmt.Errorf("behavior.triggerPrefix must be at most 8 characters without spaces"))

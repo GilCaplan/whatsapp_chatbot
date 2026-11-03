@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,16 @@ type BehaviorSettings struct {
 	TriggerPrefix string                `json:"triggerPrefix"` // your own "<prefix> text" makes the persona reply at once
 	Private       model.BehaviorProfile `json:"private"`
 	Group         model.BehaviorProfile `json:"group"`
+	// Languages it speaks and replies in, per kind (internal/lang; zero
+	// values = English and Hebrew, ignore others, match the message). Kept
+	// out of the profiles so presets and dials never touch them.
+	Languages LanguageSettings `json:"languages"`
+}
+
+// LanguageSettings are the app-wide language preferences per chat kind.
+type LanguageSettings struct {
+	Private model.LanguagePrefs `json:"private"`
+	Group   model.LanguagePrefs `json:"group"`
 }
 
 // For returns the profile for a chat kind ("group" or anything else = private).
@@ -43,6 +54,14 @@ func (b BehaviorSettings) For(kind string) model.BehaviorProfile {
 		return b.Group
 	}
 	return b.Private
+}
+
+// LanguagesFor returns the language preferences for a chat kind.
+func (b BehaviorSettings) LanguagesFor(kind string) model.LanguagePrefs {
+	if kind == behavior.KindGroup {
+		return b.Languages.Group
+	}
+	return b.Languages.Private
 }
 
 // Legacy (v1) blocks: read once from old files, migrated into Behavior and
@@ -193,6 +212,8 @@ type Settings struct {
 func (s Settings) Clone() Settings {
 	s.Behavior.Private = behavior.Clone(s.Behavior.Private)
 	s.Behavior.Group = behavior.Clone(s.Behavior.Group)
+	s.Behavior.Languages.Private.Languages = slices.Clone(s.Behavior.Languages.Private.Languages)
+	s.Behavior.Languages.Group.Languages = slices.Clone(s.Behavior.Languages.Group.Languages)
 	if s.Replies != nil {
 		r := *s.Replies
 		s.Replies = &r

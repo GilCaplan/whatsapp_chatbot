@@ -154,6 +154,12 @@ export const api = {
     qrURL: () => `/api/wa/qr.png?t=${Date.now()}`,
   },
 
+  nicknames: {
+    /** → { items:[{ ids, name, original, updatedAt }] } */
+    list: (o) => get('/api/nicknames', o),
+    /** body: { ids:[jid…], name ('' removes), original? } → Nickname */
+    set: (body, o) => put('/api/nicknames', body, o),
+  },
   chats: {
     list: (o) => get('/api/chats', o),
     create: (body, o) => post('/api/chats', body, o),
@@ -179,6 +185,13 @@ export const api = {
     patchMemory: (key, id, body, o) => patch(`/api/chats/${enc(key)}/memories/${enc(id)}`, body, o),
     deleteMemory: (key, id, o) => del(`/api/chats/${enc(key)}/memories/${enc(id)}`, o),
     clearMemories: (key, o) => del(`/api/chats/${enc(key)}/memories`, o),
+    /** What the persona reads → ChatContext { system, messages, chars, historyKept, historyTotal, window, summary, instructions, contextFrom, autoCompact } */
+    context: (key, o) => get(`/api/chats/${enc(key)}/context`, o),
+    /** body: { text } → ChatSummary (your edit) */
+    putSummary: (key, body, o) => put(`/api/chats/${enc(key)}/summary`, body, o),
+    deleteSummary: (key, o) => del(`/api/chats/${enc(key)}/summary`, o),
+    /** body: { keep? } → ChatSummary */
+    compact: (key, body, o) => post(`/api/chats/${enc(key)}/compact`, body, { timeout: 150000, ...o }),
     /** Decision log, newest first → { items:[LogEntry] } */
     log: (key, o) => get(`/api/chats/${enc(key)}/log`, o),
     clearLog: (key, o) => del(`/api/chats/${enc(key)}/log`, o),

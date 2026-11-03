@@ -28,14 +28,76 @@ func (r *Runner) planTypo(cyc *cycle, c model.ChatAssignment, bubbles []behavior
 	if bp.TypoPercent <= 0 || !r.e.rng.Hit(bp.TypoPercent) {
 		return -1, behavior.Typo{}
 	}
+	marks := r.e.store.RunnerState(r.key).Typos
 	start := r.e.rng.Index(len(bubbles))
-	for k := range bubbles {
-		i := (start + k) % len(bubbles)
-		if t, ok := behavior.MakeTypo(bubbles[i].Text, r.e.rng); ok {
-			return i, t
+	// The variety rules first; when no allowed kind fits these bubbles, only
+	// "never twice in a row", so the rule never silently lowers TypoPercent.
+	for _, avoid := range []func(string) bool{typoAvoid(marks), typoAvoidLast(marks)} {
+		for k := range bubbles {
+			i := (start + k) % len(bubbles)
+			if t, ok := behavior.VariedTypo(bubbles[i].Text, r.e.rng, avoid); ok {
+				t.Form = r.fixForm(marks)
+				return i, t
+			}
 		}
 	}
 	return -1, behavior.Typo{}
+}
+
+// Variety (per chat, from RunnerState.Typos): a kind of slip at most
+// typoKindMax times among the recent ones and never twice in a row; the
+// correction's shape rotates (the least used, never the last one again).
+const typoKindMax = 2
+
+func typoAvoid(marks []store.TypoMark) func(string) bool {
+	count := map[string]int{}
+	for _, m := range marks {
+		count[m.Kind]++
+	}
+	last := ""
+	if n := len(marks); n > 0 {
+		last = marks[n-1].Kind
+	}
+	return func(kind string) bool { return kind == last || count[kind] >= typoKindMax }
+}
+
+// typoAvoidLast only keeps the last kind from coming twice in a row.
+func typoAvoidLast(marks []store.TypoMark) func(string) bool {
+	if len(marks) == 0 {
+		return nil
+	}
+	last := marks[len(marks)-1].Kind
+	return func(kind string) bool { return kind == last }
+}
+
+func (r *Runner) fixForm(marks []store.TypoMark) int {
+	used := make([]int, len(behavior.FixForms))
+	last := -1
+	for _, m := range marks {
+		if m.Form >= 0 && m.Form < len(used) {
+			used[m.Form]++
+			last = m.Form
+		}
+	}
+	best, start := -1, r.e.rng.Index(len(used))
+	for k := range used {
+		f := (start + k) % len(used)
+		if f != last && (best < 0 || used[f] < used[best]) {
+			best = f
+		}
+	}
+	return max(best, 0)
+}
+
+// noteTypo remembers a typo that went out (form -1 = not corrected).
+func (r *Runner) noteTypo(t behavior.Typo, form int) {
+	now := r.e.clock.Now()
+	r.e.updateState(r.key, func(st *store.RunnerState) {
+		st.Typos = append(st.Typos, store.TypoMark{At: now, Kind: t.Kind, Form: form})
+		if n := len(st.Typos); n > store.MaxTypoMarks {
+			st.Typos = st.Typos[n-store.MaxTypoMarks:]
+		}
+	})
 }
 
 // recordSentBubble appends a sent persona bubble to history: text is what
@@ -78,7 +140,8 @@ func (r *Runner) fixTypo(cyc *cycle, c model.ChatAssignment, p model.Persona, t 
 	e := r.e
 	bp := e.effective(c).Profile
 	style := bp.TypoFixStyle
-	if style == "none" {
+	if style == "none" || t.NoFix {
+		r.noteTypo(t, -1)
 		return true
 	}
 	if style == "edit" && waID != "" {
@@ -97,6 +160,7 @@ func (r *Runner) fixTypo(cyc *cycle, c model.ChatAssignment, p model.Persona, t 
 				m.Text, m.Corrected, m.Kind = intended, "", model.MsgKindEdited
 			})
 			e.act(model.ActSent, c, p.Name, intended, map[string]any{"edited": true, "jid": jid, "typo": t.Wrong})
+			r.noteTypo(t, -1)
 			return true
 		}
 		if cyc.ctx.Err() != nil {
@@ -107,7 +171,8 @@ func (r *Runner) fixTypo(cyc *cycle, c model.ChatAssignment, p model.Persona, t 
 	if !e.sleep(cyc.ctx, e.rng.Between(1, 4)) {
 		return false
 	}
-	fix := behavior.FixBubble(t)
+	fix := behavior.FixText(t, t.Form)
+	r.noteTypo(t, t.Form)
 	if typingOn {
 		r.setTyping(cyc, true)
 	}

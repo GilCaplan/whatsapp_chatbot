@@ -18,6 +18,7 @@ import { vibeDials } from '../components/vibe-dials.js';
 import { helpTip } from '../components/help-tip.js';
 import { notificationsSection } from '../components/settings/notifications.js';
 import { safetySection } from '../components/settings/safety.js';
+import { languageControls } from '../components/language-controls.js';
 import { memorySection } from '../components/settings/memory.js';
 import { cloneRows } from '../components/settings/clone-rows.js';
 import { SKINS, skinById, resolveMode, systemDark } from '../skins.js';
@@ -461,6 +462,10 @@ export default function Settings(ctx) {
           ${vibeDials({ kind: apiKind(key), profile: prof, meta, scope: 'settings-' + key, onChange: (fields) => editMany(key, fields) })}
         </div>
         <div class="bh-block">${timeline.view({ kind: apiKind(key), profile: prof })}</div>
+        <div class="bh-block" data-key=${'langs-' + key}>
+          <div class="eyebrow mb-8 row gap-4">Languages ${helpTip('languages')}</div>
+          ${languageControls((B.languages || {})[key], (next) => save({ behavior: { languages: { [key]: next } } }, 'behaviour'), { idPrefix: 'lang-' + key })}
+        </div>
         <div class="bh-block adv-switch-row">
           <div class="grow"><div class="field-label row gap-4">Advanced ${helpTip('advanced')}</div>
             <div class="field-help">${adv ? 'Every setting, grouped. Rows with a coloured label are set by that dial.' : 'Active hours, message shape, limits, check-ins, trick protection and the test trigger.'}</div></div>

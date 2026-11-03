@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"whatsappdoppel/internal/events"
+	"whatsappdoppel/internal/lang"
 	"whatsappdoppel/internal/model"
 	"whatsappdoppel/internal/store"
 )
@@ -28,6 +30,9 @@ type chatView struct {
 	NextScheduledAt *time.Time `json:"nextScheduledAt"`
 	// Left: a group you are no longer a member of (removed, left or deleted).
 	Left bool `json:"left"`
+	// WAName is a direct chat's WhatsApp/contact name when you gave the
+	// contact a nickname (Name is then the nickname).
+	WAName string `json:"waName,omitempty"`
 }
 
 func (s *Server) chatsChanged() {
@@ -72,6 +77,11 @@ func (s *Server) handleListChats(w http.ResponseWriter, r *http.Request) {
 		if c.Kind == "group" && s.d.WA != nil {
 			member, known := s.d.WA.InGroup(c.JID)
 			v.Left = known && !member
+		}
+		if c.Kind != "group" {
+			if nk := s.d.Store.NicknameFor(c.JID, c.AltJID); nk != "" && nk != c.Name {
+				v.WAName, v.Name = c.Name, nk
+			}
 		}
 		out = append(out, v)
 	}
@@ -198,6 +208,11 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		SnoozedUntil json.RawMessage `json:"snoozedUntil"`
 		People       json.RawMessage `json:"people"`
 		Cross        json.RawMessage `json:"cross"`
+		Language     json.RawMessage `json:"language"`
+		AutoContinue *bool           `json:"autoContinue"`
+		Instructions *string         `json:"instructions"`
+		ContextFrom  json.RawMessage `json:"contextFrom"`
+		AutoCompact  *bool           `json:"autoCompact"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -278,6 +293,44 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		}
 		cross = &cc
 	}
+	// language: absent = keep, null = the app's languages, object = this chat's block.
+	var (
+		hasLanguage = len(body.Language) > 0
+		language    *model.LanguagePrefs
+	)
+	if hasLanguage && string(bytes.TrimSpace(body.Language)) != "null" {
+		var lp model.LanguagePrefs
+		dec := json.NewDecoder(bytes.NewReader(body.Language))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&lp); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_language", "language must be {languages, others, reply} or null")
+			return
+		}
+		if err := lang.Validate(lp); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_language", err.Error())
+			return
+		}
+		language = &lp
+	}
+	if body.Instructions != nil {
+		*body.Instructions = strings.TrimSpace(*body.Instructions)
+		if utf8.RuneCountInString(*body.Instructions) > model.MaxInstructions {
+			writeError(w, http.StatusBadRequest, "invalid_instructions", "Instructions can be at most 1000 characters")
+			return
+		}
+	}
+	// contextFrom: absent = keep; null = read all history again, "now" =
+	// start fresh (both forget the summary); a time = start there.
+	hasFrom := len(body.ContextFrom) > 0
+	var from *time.Time
+	if hasFrom {
+		f, err := parseContextFrom(body.ContextFrom, time.Now())
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_context", `contextFrom must be null, "now" or a time`)
+			return
+		}
+		from = f
+	}
 	if hasSnooze {
 		t, err := parseSnooze(body.SnoozedUntil, time.Now())
 		if err != nil {
@@ -285,6 +338,14 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		snooze = t
+	}
+	if body.AutoContinue != nil && *body.AutoContinue && s.d.Engine != nil {
+		// Turning auto-continue on resumes a paused chat the normal way
+		// (runner state, activity handoff.resumed); the update below clears
+		// the pause too when there is no engine.
+		if cur, ok := s.d.Store.Chat(key); ok && cur.Handoff != nil {
+			_ = s.d.Engine.ResumeHandoff(key)
+		}
 	}
 	c, err := s.d.Store.UpdateChat(key, func(c *model.ChatAssignment) {
 		if body.Enabled != nil {
@@ -335,6 +396,24 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		if cross != nil {
 			c.Cross = *cross
 		}
+		if hasLanguage {
+			c.Language = language
+		}
+		if body.Instructions != nil {
+			c.Instructions = *body.Instructions
+		}
+		if hasFrom {
+			c.ContextFrom = from
+		}
+		if body.AutoCompact != nil {
+			c.AutoCompact = *body.AutoCompact
+		}
+		if body.AutoContinue != nil {
+			c.AutoContinue = *body.AutoContinue
+			if c.AutoContinue {
+				c.Handoff = nil // nothing to resume any more
+			}
+		}
 	})
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not_found", "No such chat assignment")
@@ -343,6 +422,9 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "save_failed", err.Error())
 		return
+	}
+	if hasFrom && (from == nil || string(bytes.TrimSpace(body.ContextFrom)) == `"now"`) {
+		_ = s.d.Store.DeleteSummary(c.Key) // nothing left for it to summarise
 	}
 	s.reloadEngine()
 	s.chatsChanged()
@@ -367,6 +449,7 @@ func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
 	_ = s.d.Store.ClearMemories(key)
 	_ = s.d.Store.DeleteRecaps(key)
 	_ = s.d.Store.DeleteBrief(key)
+	_ = s.d.Store.DeleteSummary(key) // or a new assignment would read the old summary
 	// Pending replies for a chat that is no longer assigned can never be sent.
 	for _, p := range s.d.Store.Approvals() {
 		if p.ChatKey != key {

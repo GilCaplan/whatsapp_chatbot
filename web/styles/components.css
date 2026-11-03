@@ -1484,10 +1484,15 @@ count-ring { display: inline-grid; flex: none; }
 .person-notes .textarea { font-size: 13.5px; }
 .person-notes-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .people-section .person-notes:only-child, .people-section > .person-notes { padding-left: 0; }
+.person-nick { padding: 2px 12px 10px 56px; gap: 12px; align-items: center; border: 0; animation: fade-up .3s var(--spring) both; }
+.people-section > .person-nick { padding-left: 0; }
+.person-nick-ctl { flex: none; }
+.person-nick-ctl .input { width: 170px; }
 .sim-from { display: inline-flex; align-items: center; gap: 6px; }
 .select.select-sm { height: 30px; padding: 4px 30px 4px 10px; font-size: 13px; width: auto; max-width: 220px; border-radius: 10px; background-position: right 10px center; }
 @media (max-width: 560px) {
-  .person-notes { padding-left: 12px; }
+  .person-notes, .person-nick { padding-left: 12px; }
+  .person-nick { flex-wrap: wrap; }
   .person-respond .inherit-chip { display: none; }
 }
 
@@ -1539,3 +1544,21 @@ count-ring { display: inline-grid; flex: none; }
 .log-steps .ic { flex: none; margin-top: 1px; }
 .log-step-t { flex: none; min-width: 48px; font-variant-numeric: tabular-nums; color: var(--text-3); }
 @media (max-width: 560px) { .log-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ── Languages (Settings › Behaviour, chat Behaviour tab) ── */
+.lang-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lang-chip { gap: 4px; padding-right: 4px; }
+.lang-x { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; padding: 0; }
+.lang-x:hover { background: var(--fill-2); }
+.lang-controls .select-sm { max-width: 200px; }
+
+/* ── What it reads (chat drawer › Memory) ── */
+.ctx-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ctx-full { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.ctx-part { border: 1px solid var(--hairline); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.ctx-part-h { font-size: 12px; font-weight: 650; color: var(--text-2); margin-bottom: 6px; }
+.ctx-pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 var(--font-mono, ui-monospace, monospace); color: var(--text); max-height: 360px; overflow: auto; }
+.ctx-msg { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--hairline); }
+.ctx-msg:first-of-type { border-top: 0; }
+.ctx-role { font-size: 11.5px; font-weight: 650; color: var(--text-3); padding-top: 1px; }
+.ctx-msg.assistant .ctx-role { color: var(--teal); }

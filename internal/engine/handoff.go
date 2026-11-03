@@ -76,6 +76,18 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 	}
 	who := senderName(in, c, isGroup)
 	how := model.HandoffHowKeyword
+	if cur := r.config(); cur.AutoContinue {
+		if hit.Strength == handoff.Strong { // weak hits aren't worth an AI check just to flag them
+			if who == "" {
+				who = c.Name
+			}
+			e.forgetBrief(c.Key) // as with a pause: nothing of a sensitive message crosses (brief.go)
+			e.act(model.ActHandoff, c, p.Name, handoff.Reason(hit.Category, who)+" — flagged, kept going (auto-continue is on)",
+				withMsg(map[string]any{"category": hit.Category, "how": how, "sender": who, "autoContinued": true,
+					"excerpt": guard.Truncate(strings.Join(strings.Fields(text), " "), 160)}, in.MessageID))
+		}
+		return false
+	}
 	if hit.Strength == handoff.Weak {
 		if !hs.AICheck {
 			return false

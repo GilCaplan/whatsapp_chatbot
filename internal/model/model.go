@@ -104,6 +104,19 @@ type ChatAssignment struct {
 	// Cross is how this chat uses (and shares) context from the same
 	// persona's other chats; zero value = the app defaults.
 	Cross CrossContext `json:"cross"`
+	// Language: the languages it speaks here and the reply language
+	// (nil = settings.behavior.languages for the chat's kind; see internal/lang).
+	Language *LanguagePrefs `json:"language,omitempty"`
+	// AutoContinue: a message that would pause the chat (hand-off) is only
+	// flagged — the persona keeps replying, nothing to resume.
+	AutoContinue bool `json:"autoContinue"`
+	// What the persona reads (context.go): your instructions for this chat
+	// (added to its prompt), where its history starts (nil = everything
+	// kept; older messages are left to the summary) and whether old messages
+	// are summarised automatically as the history fills up.
+	Instructions string     `json:"instructions"`
+	ContextFrom  *time.Time `json:"contextFrom"`
+	AutoCompact  bool       `json:"autoCompact"`
 	// RevealedAt is when you told this chat it was talking to a persona.
 	RevealedAt     *time.Time `json:"revealedAt"`
 	LastActivityAt *time.Time `json:"lastActivityAt"`
@@ -367,13 +380,18 @@ type ChatQuery struct {
 
 // Incoming is a normalized WhatsApp message handed from the wa layer to the engine.
 type Incoming struct {
-	ChatKey       string // canonical key (see ChatAssignment.Key)
-	ChatJID       string // the address the message actually arrived on (send replies here first)
-	AltJID        string // the other address for the same chat (phone↔lid), may be ""
-	IsGroup       bool
-	IsFromMe      bool
-	SenderJID     string
-	PushName      string
+	ChatKey   string // canonical key (see ChatAssignment.Key)
+	ChatJID   string // the address the message actually arrived on (send replies here first)
+	AltJID    string // the other address for the same chat (phone↔lid), may be ""
+	IsGroup   bool
+	IsFromMe  bool
+	SenderJID string
+	PushName  string
+	// WAName is their own PushName when a nickname replaced it (engine.
+	// HandleIncoming, Nicknamed set; may be ""); history keeps this one,
+	// nicknames apply on read.
+	WAName        string
+	Nicknamed     bool
 	Text          string
 	MentionedJIDs []string
 	Timestamp     time.Time

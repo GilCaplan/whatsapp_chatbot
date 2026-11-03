@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,13 +12,15 @@ import (
 	"time"
 
 	"whatsappdoppel/internal/behavior"
+	"whatsappdoppel/internal/lang"
 	"whatsappdoppel/internal/model"
 )
 
 // personView is one row of GET /api/chats/{key}/people.
 type personView struct {
 	JID           string     `json:"jid"`
-	Name          string     `json:"name"`
+	Name          string     `json:"name"`     // WhatsApp / contact name
+	Nickname      string     `json:"nickname"` // the name you gave them ("" = none)
 	Phone         string     `json:"phone"`
 	LID           string     `json:"lid"`
 	IsAdmin       bool       `json:"isAdmin"`
@@ -26,6 +29,7 @@ type personView struct {
 	RespondSource string     `json:"respondSource"` // person|mode
 	Priority      bool       `json:"priority"`
 	Notes         string     `json:"notes"`
+	Language      string     `json:"language"` // reply language for them ("" = the chat's)
 	LastSpokeAt   *time.Time `json:"lastSpokeAt"`
 	Left          bool       `json:"left"` // has preferences but is no longer in the group
 	// Cross-chat context (groups): use the same persona's private chat with
@@ -85,8 +89,8 @@ func (s *Server) chatPeopleView(ctx context.Context, c model.ChatAssignment) peo
 			phone = behavior.UserOf(c.JID)
 		}
 		v.EffectiveMode = model.PeopleEveryone
-		v.Members = append(v.Members, personView{JID: c.JID, Name: c.Name, Phone: phone, LID: lidOf(c.AltJID),
-			Respond: true, RespondSource: behavior.SourcePeopleBy, Notes: pp.Notes})
+		v.Members = append(v.Members, personView{JID: c.JID, Name: c.Name, Nickname: s.d.Store.NicknameFor(c.JID, c.AltJID),
+			Phone: phone, LID: lidOf(c.AltJID), Respond: true, RespondSource: behavior.SourcePeopleBy, Notes: pp.Notes, Language: pp.Language})
 		return v
 	}
 
@@ -113,10 +117,13 @@ func (s *Server) chatPeopleView(ctx context.Context, c model.ChatAssignment) peo
 			ids = append(ids, p.Phone+"@s.whatsapp.net")
 		}
 		pv := personView{JID: p.JID, Name: p.Name, Phone: p.Phone, LID: p.LID, IsAdmin: p.IsAdmin, IsSelf: p.IsSelf}
+		if !p.IsSelf {
+			pv.Nickname = s.d.Store.NicknameFor(ids...)
+		}
 		if i := behavior.FindPerson(c.People.People, ids...); i >= 0 {
 			seen[i] = true
 			pp := c.People.People[i]
-			pv.Priority, pv.Notes = pp.Priority, pp.Notes
+			pv.Priority, pv.Notes, pv.Language = pp.Priority, pp.Notes, pp.Language
 			if pv.Name == "" {
 				pv.Name = pp.Name
 			}
@@ -137,7 +144,8 @@ func (s *Server) chatPeopleView(ctx context.Context, c model.ChatAssignment) peo
 		if seen[i] {
 			continue
 		}
-		pv := personView{JID: pp.JID, Name: pp.Name, LID: lidOf(pp.JID), Priority: pp.Priority, Notes: pp.Notes, Left: len(roster) > 0}
+		pv := personView{JID: pp.JID, Name: pp.Name, Nickname: s.d.Store.NicknameFor(pp.JID), LID: lidOf(pp.JID),
+			Priority: pp.Priority, Notes: pp.Notes, Language: pp.Language, Left: len(roster) > 0}
 		if strings.HasSuffix(pp.JID, "@s.whatsapp.net") {
 			pv.Phone = behavior.UserOf(pp.JID)
 		}
@@ -162,7 +170,7 @@ func (s *Server) chatPeopleView(ctx context.Context, c model.ChatAssignment) peo
 		if a.LastSpokeAt != nil && !a.LastSpokeAt.Equal(*b.LastSpokeAt) {
 			return a.LastSpokeAt.After(*b.LastSpokeAt)
 		}
-		an, bn := strings.ToLower(a.Name), strings.ToLower(b.Name)
+		an, bn := strings.ToLower(cmp.Or(a.Nickname, a.Name)), strings.ToLower(cmp.Or(b.Nickname, b.Name))
 		if (an == "") != (bn == "") {
 			return an != "" // named first
 		}
@@ -215,6 +223,7 @@ type personPatch struct {
 	priority *bool
 	notes    *string
 	cross    *json.RawMessage // present: null clears, bool sets
+	language *string          // "" = the chat's choice, "match" or a language code
 }
 
 // parsePeoplePatch decodes and validates `people` of PATCH /api/chats/{key}:
@@ -274,6 +283,11 @@ func parsePeoplePatch(raw json.RawMessage) (peoplePatch, error) {
 				case "notes":
 					e.notes = new(string)
 					err = json.Unmarshal(v, e.notes)
+				case "language":
+					e.language = new(string)
+					if err = json.Unmarshal(v, e.language); err == nil && !lang.ValidPerson(*e.language) {
+						err = fmt.Errorf("language must be \"\", match or a language code")
+					}
 				default:
 					err = fmt.Errorf("unknown field %q", k)
 				}
@@ -348,6 +362,9 @@ func (pp peoplePatch) apply(cur model.PeopleConfig) model.PeopleConfig {
 		}
 		if e.notes != nil {
 			p.Notes = *e.notes
+		}
+		if e.language != nil {
+			p.Language = *e.language
 		}
 		out.People[i] = p
 	}

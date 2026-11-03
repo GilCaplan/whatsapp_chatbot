@@ -19,6 +19,7 @@ import { patchChat, awayUntilText } from './shared.js';
 import { vibeDials } from '../vibe-dials.js';
 import { helpTip } from '../help-tip.js';
 import { routineSummary } from '../routine-editor.js';
+import { languageControls, langSummary } from '../language-controls.js';
 
 /** Wave 3 (Engineer A): "Also follows Leo's routine: gym 07:00–08:30, …". */
 function routineNote(c) {
@@ -228,6 +229,48 @@ export function createBehaviourTab(ctx) {
     </section>`;
   }
 
+  /** This chat's languages: its own block, or the app's for its kind. */
+  function languageSection(c) {
+    const app = ((store.state.settings || {}).behavior || {}).languages || {};
+    const own = c.language != null;
+    const prefs = own ? c.language : app[c.kind === 'group' ? 'group' : 'private'];
+    const set = (v) => {
+      c.language = v;
+      ctx.update();
+      patchChat(key, { language: v })
+        .then(() => toast(v ? 'Languages set for this chat' : 'Back to the default languages', { type: 'success' }))
+        .catch(() => {}); // toasted
+    };
+    return html`<section class="drawer-section" data-key="languages">
+      <h4>${icon('globe', 'ic-sm')}Languages ${helpTip('languages')}<span class="grow"></span>
+        ${own ? html`<button class="btn btn-ghost btn-sm" title="Follow Settings › Behaviour again" @click=${() => set(null)}>${icon('reset')}Use defaults</button>`
+          : html`<span class="inherit-chip" title="Follows Settings › Behaviour">Default</span>`}
+      </h4>
+      <div class="field-help mb-8">${own ? 'Set for this chat only.' : html`Following Settings › Behaviour: ${langSummary(prefs)}. Change anything to set it for this chat.`}</div>
+      ${languageControls(prefs, set, { idPrefix: 'lang-' + key })}
+    </section>`;
+  }
+
+  /** Auto-continue: flagged (hand-off) messages don't pause this chat. */
+  function autoContinueSection(c) {
+    const on = !!c.autoContinue;
+    const handoffOn = !!(store.state.settings && store.state.settings.safety && store.state.settings.safety.handoff && store.state.settings.safety.handoff.enabled);
+    return html`<section class="drawer-section" data-key="auto-continue">
+      <div class="field-row">
+        <div class="grow"><div class="field-label">${icon('bolt', 'ic-sm')}Keep going when a message is flagged ${helpTip('auto-continue')}</div>
+          <div class="field-help">${!handoffOn ? 'Hand-off is off in Settings › Safety, so nothing pauses this chat anyway.'
+            : on ? 'Messages about money, health, meeting up or asking if it is a bot are only flagged in the activity feed and the Log. The persona keeps replying and nothing needs Resume.'
+            : 'Off: such messages pause this chat until you tap Resume.'}</div></div>
+        ${toggle(on, (v) => {
+          c.autoContinue = v;
+          if (v) c.handoff = null;
+          ctx.update();
+          ctx.safePatch({ autoContinue: v });
+        }, { label: 'Keep going when a message is flagged' })}
+      </div>
+    </section>`;
+  }
+
   return {
     id: 'behaviour',
     /** The chat's behaviour view (GET /api/chats/{key}/behavior) with pending edits, or null. */
@@ -238,7 +281,7 @@ export function createBehaviourTab(ctx) {
     /** Mirror a new Away time locally before the reload. */
     setSnoozedLocal(iso) { if (st.cb) st.cb = { ...st.cb, snoozedUntil: iso }; },
     load: loadBehavior,
-    view: (c) => behaviourSection(c),
+    view: (c) => html`${behaviourSection(c)}${languageSection(c)}${autoContinueSection(c)}`,
     onBus(type) {
       // Defaults or this chat changed elsewhere → refresh the effective profile.
       if (type === 'settings.changed') reloadBehaviorSoon();

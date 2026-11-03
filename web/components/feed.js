@@ -6,9 +6,12 @@ import { actMeta, providerLabel } from './status.js';
 import { fmtMs, clockTime, relTime } from '../util.js';
 import { fmtSec } from './behaviour-meta.js';
 import { mentionNodes } from './mentions.js';
+import { langName } from './language-controls.js';
 
 const META_LABELS = {
   reason: 'Why',
+  language: 'Language',
+  autoContinued: 'Kept going',
   delaySeconds: 'Delay',
   typingSeconds: 'Typing for',
   chars: 'Characters',
@@ -111,6 +114,8 @@ export const REASONS = {
   closed: 'Outside active hours',
   cap: 'Reached the daily limit for scheduled messages',
   missed: 'Missed while the chat was off or the app was closed',
+  language: 'Not one of its languages',
+  sticker: 'Only a sticker',
 };
 
 // Wave 3: hand-off categories and how they were spotted.
@@ -147,7 +152,9 @@ function metaValue(k, v, meta) {
     case 'proactive':
     case 'scheduled':
     case 'joined':
-    case 'manual': return v ? 'Yes' : 'No';
+    case 'manual':
+    case 'autoContinued': return v ? 'Yes' : 'No';
+    case 'language': return langName(v);
     case 'trigger': return TRIGGERS[v] || String(v);
     case 'plannedAt':
     case 'dueAt':

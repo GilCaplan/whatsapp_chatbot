@@ -24,9 +24,10 @@ const (
 	TypeSystem          = "system" // data: {kind:"port_changed", url} | {kind:"quitting"}
 
 	// Wave 3.
-	TypeMemoriesChanged = "memories.changed" // data: {chatKey}
-	TypeRecapsChanged   = "recaps.changed"   // data: {}
-	TypeMissionsChanged = "missions.changed" // data: {}
+	TypeMemoriesChanged  = "memories.changed" // data: {chatKey}
+	TypeNicknamesChanged = "nicknames.changed"
+	TypeRecapsChanged    = "recaps.changed"   // data: {}
+	TypeMissionsChanged  = "missions.changed" // data: {}
 )
 
 type Event struct {

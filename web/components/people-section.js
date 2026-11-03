@@ -1,6 +1,8 @@
 // people-section.js — the chat drawer's "People" section: who the persona
 // answers in a group (mode + per-person switches, "always reply" stars and
-// notes), or notes about the contact in a direct chat.
+// notes), or notes about the contact in a direct chat. Everyone can get a
+// nickname (PUT /api/nicknames): used in every chat instead of their
+// WhatsApp name, also by the persona and for @tags.
 //
 //   const people = createPeopleSection({ key, update });
 //   people.view(chat)   → template            people.load()  → fetch
@@ -13,6 +15,7 @@ import { toggle, seg, toast } from '../ui.js';
 import { chatAvatar } from './avatar.js';
 import { debounce, relTime, rowsFor, prettyPhone } from '../util.js';
 import { helpTip } from './help-tip.js';
+import { personLanguageSelect, langName } from './language-controls.js';
 
 const MODES = [
   { value: 'auto', label: 'Automatic', title: 'By group size' },
@@ -20,8 +23,17 @@ const MODES = [
   { value: 'selected', label: 'Only people I pick' },
 ];
 const NOTES_MAX = 300;
+const NICK_MAX = 40;
 
-const displayName = (m) => m.name || (m.phone ? prettyPhone(m.phone) : 'Someone');
+const waName = (m) => m.name || (m.phone ? prettyPhone(m.phone) : 'Someone');
+const displayName = (m) => m.nickname || waName(m);
+
+/** Every address the person is known by (phone and lid forms). */
+function idsOf(m) {
+  const ids = [m.jid, m.lid];
+  if (m.phone) ids.push(`${m.phone}@s.whatsapp.net`);
+  return ids.filter(Boolean);
+}
 
 export function createPeopleSection({ key, update }) {
   const st = {
@@ -29,6 +41,7 @@ export function createPeopleSection({ key, update }) {
     q: '',
     notesOpen: new Set(),
     drafts: new Map(),     // jid → notes being typed
+    nicks: new Map(),      // jid → nickname being typed
     saved: '',             // jid whose notes were just saved
     busy: false,
   };
@@ -158,7 +171,56 @@ export function createPeopleSection({ key, update }) {
     timers.clear();
   }
 
+  async function saveNickname(m) {
+    if (!st.nicks.has(m.jid)) return;
+    const name = st.nicks.get(m.jid).trim().replace(/\s+/g, ' ');
+    st.nicks.delete(m.jid);
+    if (name === (m.nickname || '')) { redraw(); return; }
+    const before = displayName(m);
+    m.nickname = name;
+    redraw();
+    try {
+      await api.nicknames.set({ ids: idsOf(m), name, original: m.name || '' });
+      toast(name ? `${before} is now “${name}” in every chat` : `Back to ${waName(m)}`, { type: 'success' });
+    } catch { /* toasted */ }
+    reloadSoon();
+  }
+
+  function setLanguage(m, value) {
+    m.language = value;
+    redraw();
+    const name = displayName(m);
+    patch({ people: [{ jid: m.jid, name: m.name || '', language: value }] },
+      !value ? `${name} follows the chat's language again` : value === 'match' ? `Replying to ${name} in whatever they write` : `Replying to ${name} in ${langName(value)}`);
+  }
+
   // ── views ──────────────────────────────────────────────────────
+  function languageRow(m) {
+    return html`<div class="field-row person-nick" data-key=${'lang-' + m.jid}>
+      <div class="grow"><div class="field-label">${icon('globe', 'ic-sm')}Reply to them in</div>
+        <div class="field-help">Overrides the chat's language for replies to ${displayName(m)}.</div></div>
+      <div class="person-nick-ctl">${personLanguageSelect(m.language || '', (v) => setLanguage(m, v), 'Reply language for ' + displayName(m))}</div>
+    </div>`;
+  }
+
+  function nicknameBox(m) {
+    const val = st.nicks.has(m.jid) ? st.nicks.get(m.jid) : (m.nickname || '');
+    return html`<div class="field-row person-nick" data-key=${'nick-' + m.jid}>
+      <div class="grow">
+        <label class="field-label" for=${'nick-' + m.jid}>${icon('user', 'ic-sm')}Call them</label>
+        <div class="field-help">Used instead of “${waName(m)}” in every chat: in the app, in what the persona reads and when it tags them.</div>
+      </div>
+      <div class="row gap-4 person-nick-ctl">
+        <input class="input input-sm" id=${'nick-' + m.jid} type="text" maxlength=${NICK_MAX} placeholder=${waName(m)} .value=${val}
+          @input=${(e) => { st.nicks.set(m.jid, e.target.value); }}
+          @keydown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); saveNickname(m); } if (e.key === 'Escape') { st.nicks.delete(m.jid); redraw(); } }}
+          @blur=${() => saveNickname(m)} aria-label=${'Nickname for ' + waName(m)}>
+        ${m.nickname ? html`<button type="button" class="btn btn-ghost btn-icon btn-xs" title=${'Back to ' + waName(m)} aria-label="Remove the nickname"
+          @click=${() => { st.nicks.set(m.jid, ''); saveNickname(m); }}>${icon('x')}</button>` : ''}
+      </div>
+    </div>`;
+  }
+
   function notesBox(m, placeholder) {
     const val = st.drafts.has(m.jid) ? st.drafts.get(m.jid) : (m.notes || '');
     const left = NOTES_MAX - [...val].length;
@@ -178,6 +240,8 @@ export function createPeopleSection({ key, update }) {
     const name = displayName(m);
     const hasNotes = !!(m.notes && m.notes.trim());
     const sub = [];
+    if (m.nickname) sub.push(`on WhatsApp: ${waName(m)}`);
+    if (m.language) sub.push(m.language === 'match' ? 'replies in their language' : `replies in ${langName(m.language)}`);
     if (m.left) sub.push('no longer in the group');
     else if (m.lastSpokeAt) sub.push(`spoke ${relTime(m.lastSpokeAt)}`);
     else sub.push('quiet lately');
@@ -195,7 +259,7 @@ export function createPeopleSection({ key, update }) {
           title=${m.priority ? 'Always replies to them — click to turn off' : 'Always reply to them (skips the chance and AI checks)'} aria-label=${'Always reply to ' + name}
           @click=${() => setPriority(m)}>${icon('star')}</button>
         <button type="button" class=${'btn btn-ghost btn-icon btn-xs person-note-btn ' + (hasNotes ? 'has-notes' : '')} aria-expanded=${String(open)}
-          title=${hasNotes ? 'Notes for the persona' : 'Add notes for the persona'} aria-label=${'Notes about ' + name}
+          title=${hasNotes ? 'Nickname and notes for the persona' : 'Give them a nickname or add notes for the persona'} aria-label=${'Nickname and notes for ' + name}
           @click=${() => { if (open) st.notesOpen.delete(m.jid); else st.notesOpen.add(m.jid); redraw(); }}>${icon('edit')}</button>
         <span class="person-respond">
           ${custom ? html`<button type="button" class="btn btn-ghost btn-icon btn-xs reset-btn" title="Follow the group setting again" aria-label=${'Reset ' + name + ' to the group setting'}
@@ -203,7 +267,7 @@ export function createPeopleSection({ key, update }) {
           ${toggle(m.respond, (v) => setRespond(m, v), { small: true, label: (m.respond ? 'Answering ' : 'Not answering ') + name })}
         </span>
       </div>
-      ${open ? html`${notesBox(m, `What should the persona know about ${name}?`)}${crossRow(m)}` : ''}
+      ${open ? html`${nicknameBox(m)}${languageRow(m)}${notesBox(m, `What should the persona know about ${name}?`)}${crossRow(m)}` : ''}
     </div>`;
   }
 
@@ -249,7 +313,8 @@ export function createPeopleSection({ key, update }) {
     const m = members()[0];
     if (!m) return '';
     const name = displayName(m);
-    return html`<div class="field-help mb-8">Notes about ${name} help the persona sound like it knows them. Only the persona sees them.</div>
+    return html`${nicknameBox(m)}${languageRow(m)}
+      <div class="field-help mb-8 mt-12">Notes about ${name} help the persona sound like it knows them. Only the persona sees them.</div>
       ${notesBox(m, `What should the persona know about ${name}?`)}`;
   }
 
@@ -278,6 +343,9 @@ export function createPeopleSection({ key, update }) {
     load,
     reloadSoon,
     members,
-    destroy() { alive = false; reloadSoon.cancel(); flushNotes(); },
+    destroy() {
+      alive = false; reloadSoon.cancel(); flushNotes();
+      for (const m of members()) if (st.nicks.has(m.jid)) saveNickname(m);
+    },
   };
 }

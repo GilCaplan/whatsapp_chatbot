@@ -147,7 +147,7 @@ export function createOverviewTab(ctx) {
           ${isGroup && !st.simFromMe && people.members().some((m) => !m.isSelf && !m.left) ? html`<label class="sim-from small muted">From
             <select class="select select-sm" aria-label="Who the simulated message comes from" @change=${(e) => { st.simFrom = e.target.value; }}>
               <option value="" ?selected=${!st.simFrom}>Someone at random</option>
-              ${people.members().filter((m) => !m.isSelf && !m.left).map((m) => html`<option value=${m.jid} ?selected=${st.simFrom === m.jid}>${m.name || m.phone || m.jid}</option>`)}
+              ${people.members().filter((m) => !m.isSelf && !m.left).map((m) => html`<option value=${m.jid} ?selected=${st.simFrom === m.jid}>${m.nickname || m.name || m.phone || m.jid}</option>`)}
             </select></label>` : ''}
         </div>
         <div class="composer mt-12">

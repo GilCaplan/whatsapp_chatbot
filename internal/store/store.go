@@ -36,6 +36,8 @@ type Store struct {
 	histMu sync.Mutex // serializes history file I/O
 
 	rt runtimeState // runtime.json
+
+	nicks nickState // nicknames.json (nicknames.go)
 }
 
 // Open loads all JSON files. If personas.json does not exist it is created from seeds.
@@ -421,6 +423,7 @@ func (s *Store) History(chatKey string, limit int) ([]model.Message, error) {
 	if limit > 0 && len(msgs) > limit {
 		msgs = msgs[len(msgs)-limit:]
 	}
+	s.ApplyNicknames(msgs)
 	return msgs, nil
 }
 

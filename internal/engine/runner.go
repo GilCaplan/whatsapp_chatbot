@@ -13,6 +13,7 @@ import (
 
 	"whatsappdoppel/internal/behavior"
 	"whatsappdoppel/internal/guard"
+	"whatsappdoppel/internal/lang"
 	"whatsappdoppel/internal/model"
 	"whatsappdoppel/internal/store"
 )
@@ -154,10 +155,17 @@ func (r *Runner) preferredJID() string {
 	return r.sendJID
 }
 
+// historySnapshot is a copy of the remembered history, with nicknames.
 func (r *Runner) historySnapshot() []model.Message {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return slices.Clone(r.history)
+	return r.historyCopyLocked()
+}
+
+func (r *Runner) historyCopyLocked() []model.Message {
+	h := slices.Clone(fromContext(r.history, r.cfg.ContextFrom)) // older ones are in the summary (context.go)
+	r.e.store.ApplyNicknames(h)                                  // set or changed after the messages came in
+	return h
 }
 
 func (r *Runner) setPending(id string) {
@@ -302,6 +310,17 @@ func (r *Runner) process(in model.Incoming) {
 		e.act(model.ActDecisionSkip, c, p.Name, "Ignored a message with a link", withMsg(map[string]any{"reason": "link"}, in.MessageID))
 		return
 	}
+	if bp.IgnoreStickers && in.Media == model.MediaSticker && speaker == "them" {
+		e.act(model.ActDecisionSkip, c, p.Name, "Ignored a sticker", withMsg(map[string]any{"reason": "sticker"}, in.MessageID))
+		r.keepAsContext(in, text, mentionNames, bp, now)
+		return
+	}
+	if code := e.foreignLanguage(c, text); speaker == "them" && code != "" { // language.go
+		e.act(model.ActDecisionSkip, c, p.Name, "Staying quiet — the message is in "+lang.Name(code)+", not one of its languages",
+			withMsg(map[string]any{"reason": "language", "language": code}, in.MessageID))
+		r.keepAsContext(in, text, mentionNames, bp, now)
+		return
+	}
 
 	pm := pendingMsg{ID: in.MessageID, SenderJID: in.SenderJID, ChatJID: in.ChatJID, Name: in.PushName, Text: text}
 	forced := false
@@ -442,6 +461,9 @@ func newMessage(in model.Incoming, speaker, text string, now time.Time) model.Me
 	}
 	if speaker == "them" {
 		m.Name = in.PushName
+		if in.Nicknamed { // a nickname: never written into history (store/nicknames.go)
+			m.Name = in.WAName
+		}
 		m.SenderJID = in.SenderJID
 	}
 	return m

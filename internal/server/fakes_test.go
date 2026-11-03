@@ -220,6 +220,12 @@ func (e *fakeEngine) Simulate(chatKey, text string, fromMe bool, senderJID strin
 func (e *fakeEngine) PromptPreview(personaID, chatKey string) (string, error) {
 	return "SYSTEM for " + personaID, nil
 }
+func (e *fakeEngine) ChatContext(chatKey string) (model.ChatContext, error) {
+	return model.ChatContext{System: "SYSTEM", Messages: []model.ContextMessage{{Role: "user", Content: "hi"}}, Chars: 8}, nil
+}
+func (e *fakeEngine) Compact(ctx context.Context, chatKey string, keep int) (model.ChatSummary, error) {
+	return model.ChatSummary{ChatKey: chatKey, Text: "they said hi", Messages: 3}, nil
+}
 func (e *fakeEngine) ExpressionPreview(ctx context.Context, p model.Persona, lengthBias string, count, roll int) (model.ExpressionPreview, error) {
 	out := model.ExpressionPreview{Provider: "fake", Model: "fake-1"}
 	for i := range count {

@@ -5,8 +5,8 @@
 import { html } from '../../dom.js';
 import { icon } from '../../icons.js';
 import { store, isAway } from '../../store.js';
-import { busy } from '../../ui.js';
-import { awayUntilText } from './shared.js';
+import { busy, toast } from '../../ui.js';
+import { awayUntilText, patchChat } from './shared.js';
 import { catGlyph, catLabel, catReason, waLink, resumeChat } from '../handoff-meta.js';
 
 /** The "Needs you" banner of a paused (hand-off) chat. */
@@ -29,6 +29,8 @@ export function needsYouBanner(c, p, { compact = false } = {}) {
     <div class="nb-actions">
       ${link ? html`<a class="btn btn-glass btn-sm" href=${link} target="_blank" rel="noopener">${icon('external')}Open WhatsApp</a>` : ''}
       <button class="btn btn-primary btn-sm" @click=${busy(() => resumeChat(c.key, p && p.name))}>${icon('play')}Resume ${name}</button>
+      ${compact ? '' : html`<button class="btn btn-ghost btn-sm" title="Resume now, and from now on only flag such messages here instead of pausing"
+        @click=${busy(() => patchChat(c.key, { autoContinue: true }).then(() => toast(`${name} keeps going here from now on`, { type: 'success' })).catch(() => {}))}>${icon('bolt')}Always keep going here</button>`}
     </div>
   </div>`;
 }

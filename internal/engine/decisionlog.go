@@ -132,6 +132,10 @@ func (e *Engine) logActivity(typ string, c model.ChatAssignment, text string, me
 	case model.ActBlockedInjection:
 		e.logDecided(c.Key, ids, model.DecisionBlocked, "injection", "Ignored a likely prompt-injection attempt", now)
 	case model.ActHandoff:
+		if meta["autoContinued"] == true {
+			e.logStep(c.Key, ids, typ, text, now) // flagged, but it carries on
+			return
+		}
 		e.logDecided(c.Key, ids, model.DecisionPaused, "handoff", text, now)
 	case model.ActReacted:
 		e.logUpdate(c.Key, ids, now, func(d *model.LogEntry) {

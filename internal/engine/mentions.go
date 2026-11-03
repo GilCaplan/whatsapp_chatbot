@@ -1,11 +1,14 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"whatsappdoppel/internal/behavior"
+	"whatsappdoppel/internal/lang"
 	"whatsappdoppel/internal/mention"
 	"whatsappdoppel/internal/model"
 	"whatsappdoppel/internal/prompt"
@@ -15,9 +18,24 @@ import (
 // rosterTimeout bounds a group member lookup (cached by the wa layer).
 const rosterTimeout = 5 * time.Second
 
-// tagReplySpeakers is how many recent messages are checked for "several
-// people are talking" before tagging the person a reply answers.
-const tagReplySpeakers = 10
+// Tagging etiquette: a tag pings someone's phone, so it has to earn it.
+//   - not again soon: no tag within tagCooldown or the persona's last
+//     tagCooldownMsgs messages after one;
+//   - the person a reply answers only when it would be unclear otherwise:
+//     tagBusySpeakers+ people talking in the last tagRecentMsgs messages, or
+//     someone else wrote after them;
+//   - anyone else only to pull them in: not if they wrote in the last
+//     tagRecentMsgs messages (their name is enough then).
+//
+// Tags the LLM writes that break a rule become the plain name (or go away
+// when the reply opens with them); the automatic tag (tagReplyPercent)
+// follows the same rules.
+const (
+	tagCooldown     = 15 * time.Minute
+	tagCooldownMsgs = 4
+	tagRecentMsgs   = 8
+	tagBusySpeakers = 3
+)
 
 func isGroupChat(c model.ChatAssignment) bool { return c.Kind == "group" }
 
@@ -43,6 +61,17 @@ func (e *Engine) roster(ctx context.Context, c model.ChatAssignment) []model.Par
 	ps, err := e.wa.GroupParticipants(ctx, jid)
 	if err != nil {
 		return nil
+	}
+	ps = slices.Clone(ps)
+	for i := range ps {
+		p := &ps[i]
+		ids := []string{p.JID, p.LID}
+		if p.Phone != "" {
+			ids = append(ids, p.Phone+"@s.whatsapp.net")
+		}
+		if nk := e.store.NicknameFor(ids...); nk != "" {
+			p.Name = nk
+		}
 	}
 	return ps
 }
@@ -94,7 +123,10 @@ func distinctSpeakers(hist []model.Message, n int) int {
 // the persona knows from its other chats (the *crossUse goes to the leak
 // guard; nil when there is none).
 func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile, d *mention.Directory, hist []model.Message) (prompt.Options, *crossUse) {
-	o := prompt.Options{LengthBias: bp.LengthBias}
+	o := prompt.Options{LengthBias: bp.LengthBias, ReplyLanguage: lang.Name(e.replyLanguage(c, hist)), Instructions: c.Instructions}
+	if sm, ok := e.store.Summary(c.Key); ok {
+		o.Summary = sm.Text // older messages (context.go)
+	}
 	// Realism (wave 3): the time where the persona lives, and what it
 	// remembers about the people here (routine.go, memory.go).
 	o.Now, o.MacZone = e.clock.Now(), time.Local
@@ -112,7 +144,7 @@ func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile,
 			if pp.Notes == "" {
 				continue
 			}
-			name := pp.Name
+			name := cmp.Or(e.store.NicknameFor(pp.JID), pp.Name)
 			if en, ok := d.ByJID(pp.JID); ok {
 				name = en.Display
 			}
@@ -139,10 +171,20 @@ func (e *Engine) applyMentions(text string, d *mention.Directory, bp model.Behav
 		return text, nil
 	}
 	out, tagged := mention.Normalize(text, d, mention.Policy{Allow: bp.AllowMentions, Max: bp.MentionMax})
-	if !bp.AllowMentions || bp.TagReplyPercent <= 0 || proactive || answered.SenderJID == "" || len(tagged) >= bp.MentionMax {
-		return out, tagged
+	cooling := tagCoolingDown(hist, e.clock.Now())
+	if len(tagged) > 0 {
+		out, tagged = mention.Keep(out, d, func(x mention.Entry) bool {
+			if cooling {
+				return false
+			}
+			if answered.SenderJID != "" && samePerson(d, x.JID, answered.SenderJID) {
+				return tagHelps(d, hist, answered.SenderJID)
+			}
+			return !spokeRecently(d, hist, x.JID)
+		})
 	}
-	if distinctSpeakers(hist, tagReplySpeakers) < 2 {
+	if !bp.AllowMentions || bp.TagReplyPercent <= 0 || proactive || answered.SenderJID == "" || len(tagged) >= bp.MentionMax ||
+		cooling || !tagHelps(d, hist, answered.SenderJID) {
 		return out, tagged
 	}
 	who, ok := d.ByJID(answered.SenderJID)
@@ -153,6 +195,64 @@ func (e *Engine) applyMentions(text string, d *mention.Directory, bp model.Behav
 		out, tagged = t, append([]mention.Entry{who}, tagged...)
 	}
 	return out, tagged
+}
+
+// tagCoolingDown reports whether the persona tagged someone too recently to
+// tag again (within tagCooldown or its last tagCooldownMsgs messages).
+func tagCoolingDown(hist []model.Message, now time.Time) bool {
+	mine := 0
+	for i := len(hist) - 1; i >= 0; i-- {
+		m := hist[i]
+		if m.Speaker != "me" || !m.FromBot || m.Kind == model.MsgKindFix { // its own replies, not yours or "*word" fixes
+			continue
+		}
+		recent := now.Sub(m.TS) < tagCooldown
+		if mine >= tagCooldownMsgs && !recent {
+			return false
+		}
+		if len(m.Mentions) > 0 {
+			return true
+		}
+		mine++
+	}
+	return false
+}
+
+// tagHelps reports whether tagging the person a reply answers makes it
+// clearer: a busy conversation, or someone else wrote after them.
+func tagHelps(d *mention.Directory, hist []model.Message, jid string) bool {
+	for i := len(hist) - 1; i >= 0; i-- {
+		m := hist[i]
+		if m.Speaker != "them" || m.SenderJID == "" {
+			continue
+		}
+		if samePerson(d, m.SenderJID, jid) {
+			break
+		}
+		return true // someone else wrote after them
+	}
+	return distinctSpeakers(hist, tagRecentMsgs) >= tagBusySpeakers
+}
+
+// spokeRecently reports whether jid wrote in the last tagRecentMsgs messages.
+func spokeRecently(d *mention.Directory, hist []model.Message, jid string) bool {
+	for _, m := range hist[max(0, len(hist)-tagRecentMsgs):] {
+		if m.Speaker == "them" && m.SenderJID != "" && samePerson(d, m.SenderJID, jid) {
+			return true
+		}
+	}
+	return false
+}
+
+// samePerson reports whether two addresses are one member: the same user
+// part, or the same directory entry (a phone JID and a lid of one person).
+func samePerson(d *mention.Directory, a, b string) bool {
+	if mention.User(a) == mention.User(b) {
+		return true
+	}
+	x, okA := d.ByJID(a)
+	y, okB := d.ByJID(b)
+	return okA && okB && x.JID == y.JID
 }
 
 // humanizeIncoming rewrites "@<number>" tags in an incoming group message to
@@ -223,7 +323,7 @@ func (e *Engine) chatHistory(r *Runner, c model.ChatAssignment) []model.Message 
 		return r.historySnapshot()
 	}
 	h, _ := e.store.History(c.Key, e.effective(c).Profile.HistoryMessages)
-	return h
+	return fromContext(h, c.ContextFrom)
 }
 
 // previewOptions are the prompt options for PromptPreview (no chat = defaults).

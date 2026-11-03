@@ -7,6 +7,27 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
 Everything below is new unless noted.
 
+### Names, tags, languages and context
+- Nicknames: give anyone a name (People tab) that is used instead of their WhatsApp name in every
+  chat — in the app, in what the persona reads and when it tags them.
+- Fewer @tags: a tag now has to help — not again soon after one, the person being answered only
+  in a busy conversation, others only to pull them in. Tags the model adds anyway become names.
+- Languages (Settings › Behaviour and per chat): the languages it speaks (English and Hebrew by
+  default), stay quiet or answer other languages, reply in the language of the message or a fixed
+  one, and per person in the People tab. A light built-in detector decides; "ok" and emoji never
+  count as another language.
+- More natural typos: seven kinds of slip (swapped, dropped, doubled or neighbouring letters, two
+  words run together, a mixed-up word like "your"/"you're", a word typed twice), corrected in
+  rotating ways ("*work", "work*", "**work") or left alone. In one chat a kind of slip comes back
+  at most twice among the last ten and never twice in a row.
+- Ignore stickers (Behaviour › Advanced, off by default): a sticker gets no reply but is still
+  read as part of the conversation.
+- Keep going when a message is flagged (per chat, off by default): hand-off topics are flagged
+  in the feed and the Log instead of pausing the chat.
+- Memory tab › What it reads: the full prompt and messages of the next reply, your instructions
+  for the chat, an editable summary of older messages (summarise now, or automatically when the
+  history is full) and "Start fresh".
+
 ### Decision log
 - Each chat panel has a **Log** tab: every message with what the persona did about it and why
   (answered, stayed quiet, reacted, left for you, blocked, waiting for approval), the time from

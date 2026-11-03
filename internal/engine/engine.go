@@ -246,6 +246,15 @@ func (e *Engine) allRunners() []*Runner {
 // HandleIncoming routes a WhatsApp message to its chat's runner (by key, else by
 // JID/alt JID). Messages for unassigned or disabled chats are dropped. Never blocks.
 func (e *Engine) HandleIncoming(in model.Incoming) {
+	if !in.IsFromMe { // a nickname you gave them wins over their WhatsApp name
+		ids := []string{in.SenderJID}
+		if !in.IsGroup {
+			ids = append(ids, in.ChatJID, in.AltJID)
+		}
+		if nk := e.store.NicknameFor(ids...); nk != "" {
+			in.WAName, in.PushName, in.Nicknamed = in.PushName, nk, true
+		}
+	}
 	if r := e.route(in); r != nil {
 		r.enqueue(in)
 	}

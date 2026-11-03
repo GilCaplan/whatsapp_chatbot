@@ -216,8 +216,9 @@ export function openChatDrawer(key, { onClose, tab, onTab } = {}) {
   const fan = (type) => (data) => {
     for (const t of Object.values(tabs)) if (t.onBus) t.onBus(type, data);
     if (type === 'activity' && data && data.chatKey === key && data.type === 'incoming') ctx.people.reloadSoon(); // refreshes "spoke 1m ago"
+    if (type === 'nicknames.changed') ctx.people.reloadSoon();
   };
-  const offs = ['activity', 'settings.changed', 'chats.changed', 'memories.changed', 'recaps.changed', 'missions.changed']
+  const offs = ['activity', 'settings.changed', 'chats.changed', 'memories.changed', 'recaps.changed', 'missions.changed', 'nicknames.changed']
     .map((type) => bus.on(type, fan(type)));
 
   for (const t of Object.values(tabs)) if (t.load) t.load();

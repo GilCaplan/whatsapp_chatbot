@@ -123,3 +123,29 @@ func TestPersonaZoneMarker(t *testing.T) {
 		t.Error("WithZone must not modify its argument's profile")
 	}
 }
+
+func TestVariedTypoKinds(t *testing.T) {
+	only := func(k string) func(string) bool { return func(kind string) bool { return kind != k } }
+	s := Fixed{Frac: 0}
+	if tp, ok := VariedTypo("you're going to love it", s, only(TypoWord)); !ok || tp.Typed != "your going to love it" || tp.Word != "you're" || tp.NoFix {
+		t.Errorf("word mix-up: %+v %v", tp, ok)
+	}
+	if tp, ok := VariedTypo("There we go", s, only(TypoWord)); !ok || tp.Typed != "Their we go" {
+		t.Errorf("capital kept: %+v %v", tp, ok)
+	}
+	if tp, ok := VariedTypo("get some rest", s, only(TypoSpace)); !ok || tp.Typed != "getsome rest" || !tp.NoFix {
+		t.Errorf("run together: %+v %v", tp, ok)
+	}
+	if tp, ok := VariedTypo("see you there", s, only(TypoRepeat)); !ok || tp.Typed != "see see you there" || !tp.NoFix {
+		t.Errorf("doubled word: %+v %v", tp, ok)
+	}
+	if _, ok := VariedTypo("ask @Dana then", s, only(TypoSpace)); ok {
+		t.Error("a tag must not be run together")
+	}
+	if got := FixText(Typo{Word: "work"}, 1); got != "work*" {
+		t.Errorf("fix form = %q", got)
+	}
+	if _, ok := VariedTypo("see you tomorrow", s, func(string) bool { return true }); ok {
+		t.Error("every kind avoided: no typo")
+	}
+}

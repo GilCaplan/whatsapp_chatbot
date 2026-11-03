@@ -123,6 +123,15 @@ type Options struct {
 	// people from its other chats, and this generation's turn (retry/off).
 	Cross     CrossInput
 	CrossTurn CrossTurn
+
+	// What it reads (context.go): your instructions for this chat and the
+	// summary of older messages ("" = none).
+	Instructions string
+	Summary      string
+
+	// ReplyLanguage is the language to write in (English name, e.g. "Hebrew";
+	// "" = no rule); see language.go.
+	ReplyLanguage string
 }
 
 // Goal returns the chat's goal override, else the persona goal, else the default.
@@ -136,15 +145,17 @@ func SystemPrompt(p model.Persona, chat model.ChatAssignment, isGroup bool, last
 		o = opts[0]
 	}
 	note := ""
-	if ctx := PeopleSection(o, isGroup) + MemorySection(o.Memories, isGroup) + CrossSection(o.Cross, o.CrossTurn) + WorldSection(p.World, o.Now, o.MacZone) + LateSection(o.Late); ctx != "" {
+	if ctx := PeopleSection(o, isGroup) + SummarySection(o.Summary) + MemorySection(o.Memories, isGroup) + CrossSection(o.Cross, o.CrossTurn) + WorldSection(p.World, o.Now, o.MacZone) + LateSection(o.Late); ctx != "" {
 		note = ContextOpen + ctx + ContextClose
 	}
 	note += HistoryNote
 	if isGroup {
 		note += GroupNote
 	}
-	return fmt.Sprintf("%s%s%s%s%s\n\nGUIDANCE: %s%s",
-		Identity(p), AntiJailbreakRules, note, GoalSection(goals.Resolve(p, chat), o.Goal), StayYourself(p.Name), Guidance(p.MessageLength, lastMsg, o.LengthBias),
+	return fmt.Sprintf("%s%s%s%s%s%s%s\n\nGUIDANCE: %s%s",
+		Identity(p), AntiJailbreakRules, note, GoalSection(goals.Resolve(p, chat), o.Goal), InstructionsSection(o.Instructions),
+		StayYourself(p.Name), LanguageSection(o.ReplyLanguage),
+		Guidance(p.MessageLength, lastMsg, o.LengthBias),
 		emojiTurn(p.Emoji, ClassifyTone(lastMsg)))
 }
 

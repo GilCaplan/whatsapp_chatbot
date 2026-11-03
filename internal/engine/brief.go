@@ -45,6 +45,7 @@ func (e *Engine) isCrossSource(c model.ChatAssignment) bool {
 // briefTick counts a new message (theirs or the persona's) and (re)arms the
 // brief job once enough have arrived.
 func (e *Engine) briefTick(c model.ChatAssignment) {
+	e.compactTick(c) // every message also counts towards auto-compaction (context.go)
 	if !e.isCrossSource(c) {
 		return
 	}

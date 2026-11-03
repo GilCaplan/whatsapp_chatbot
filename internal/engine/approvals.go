@@ -270,12 +270,7 @@ func (e *Engine) Regenerate(ctx context.Context, id string) (model.PendingReply,
 	if !ok {
 		return model.PendingReply{}, fmt.Errorf("persona %q: %w", c.PersonaID, ErrNotFound)
 	}
-	var hist []model.Message
-	if r := e.runner(c.Key); r != nil {
-		hist = r.historySnapshot()
-	} else {
-		hist, _ = e.store.History(c.Key, e.effective(c).Profile.HistoryMessages)
-	}
+	hist := e.chatHistory(e.runner(c.Key), c) // from contextFrom on (context.go)
 	bp := e.effective(c).Profile
 	dir := e.directory(ctx, c, hist)
 	opts, cross := e.promptOptions(c, bp, dir, hist)

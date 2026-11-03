@@ -45,7 +45,21 @@ type RunnerState struct {
 	// the brief yet) and the messages since the last brief.
 	BriefCursor  time.Time `json:"briefCursor"`
 	BriefPending int       `json:"briefPending"`
+
+	// Typos lists the chat's recent slips (newest last, at most MaxTypoMarks)
+	// so the same kind and correction don't keep coming back.
+	Typos []TypoMark `json:"typos,omitempty"`
 }
+
+// TypoMark is one typo the persona made in a chat.
+type TypoMark struct {
+	At   time.Time `json:"at"`
+	Kind string    `json:"kind"`
+	Form int       `json:"form"` // correction shape (behavior.FixForms); -1 = not corrected
+}
+
+// MaxTypoMarks is how many recent typos a chat remembers.
+const MaxTypoMarks = 10
 
 // Prune drops reply/check-in timestamps older than 24 h before now.
 func (st *RunnerState) Prune(now time.Time) {
@@ -53,6 +67,10 @@ func (st *RunnerState) Prune(now time.Time) {
 	st.Replies = slices.DeleteFunc(st.Replies, old)
 	st.Proactive = slices.DeleteFunc(st.Proactive, old)
 	st.Scheduled = slices.DeleteFunc(st.Scheduled, old)
+	st.Typos = slices.DeleteFunc(st.Typos, func(m TypoMark) bool { return now.Sub(m.At) > 7*24*time.Hour })
+	if n := len(st.Typos); n > MaxTypoMarks {
+		st.Typos = st.Typos[n-MaxTypoMarks:]
+	}
 }
 
 // RepliesSince counts persona replies at or after t.
@@ -92,6 +110,7 @@ func (st RunnerState) clone() RunnerState {
 	st.Replies = slices.Clone(st.Replies)
 	st.Proactive = slices.Clone(st.Proactive)
 	st.Scheduled = slices.Clone(st.Scheduled)
+	st.Typos = slices.Clone(st.Typos)
 	if st.ScheduleNextAt != nil {
 		t := *st.ScheduleNextAt
 		st.ScheduleNextAt = &t

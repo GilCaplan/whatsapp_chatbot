@@ -69,6 +69,7 @@ type BehaviorProfile struct {
 	AIJudgement             bool `json:"aiJudgement"`             // group
 	ChimeInPercent          int  `json:"chimeInPercent"`          // group
 	IgnoreLinks             bool `json:"ignoreLinks"`
+	IgnoreStickers          bool `json:"ignoreStickers"` // a sticker gets no reply (kept as context)
 	ReactPercent            int  `json:"reactPercent"`
 	PauseWhenYouReply       bool `json:"pauseWhenYouReply"`
 	MaxRepliesPerHour       int  `json:"maxRepliesPerHour"` // 0 = unlimited
@@ -136,6 +137,7 @@ type BehaviorOverrides struct {
 	AIJudgement             *bool `json:"aiJudgement,omitempty"`
 	ChimeInPercent          *int  `json:"chimeInPercent,omitempty"`
 	IgnoreLinks             *bool `json:"ignoreLinks,omitempty"`
+	IgnoreStickers          *bool `json:"ignoreStickers,omitempty"`
 	ReactPercent            *int  `json:"reactPercent,omitempty"`
 	PauseWhenYouReply       *bool `json:"pauseWhenYouReply,omitempty"`
 	MaxRepliesPerHour       *int  `json:"maxRepliesPerHour,omitempty"`

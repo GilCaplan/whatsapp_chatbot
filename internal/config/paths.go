@@ -71,6 +71,8 @@ func (p Paths) LockFile() string     { return filepath.Join(p.Dir, "server.lock"
 func (p Paths) MemoriesDir() string     { return filepath.Join(p.Dir, "memories") }
 func (p Paths) BriefsDir() string       { return filepath.Join(p.Dir, "briefs") }
 func (p Paths) DecisionsDir() string    { return filepath.Join(p.Dir, "decisions") }
+func (p Paths) NicknamesFile() string   { return filepath.Join(p.Dir, "nicknames.json") }
+func (p Paths) SummariesDir() string    { return filepath.Join(p.Dir, "summaries") }
 func (p Paths) RecapsFile() string      { return filepath.Join(p.Dir, "recaps.json") }
 func (p Paths) MissionsFile() string    { return filepath.Join(p.Dir, "missions.json") }
 func (p Paths) SelfSamplesFile() string { return filepath.Join(p.Dir, "cache", "self-samples.jsonl") }

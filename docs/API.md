@@ -116,7 +116,7 @@ BehaviorProfile {
                                                         // when values no longer match the named preset
   // Responsiveness
   replyPercent, replyWhenNameMentioned*, replyWhenAtMentioned*, skipWhenOthersMentioned*,
-  aiJudgement*, chimeInPercent*, ignoreLinks, reactPercent, pauseWhenYouReply,
+  aiJudgement*, chimeInPercent*, ignoreLinks, ignoreStickers, reactPercent, pauseWhenYouReply,
   maxRepliesPerHour (0 = unlimited), maxRepliesPerDay (0 = unlimited), cooldownSec,
   historyMessages, historyChars, staleAfterMin,
   // Who it answers
@@ -367,7 +367,7 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 |---|---|---|
 | `GET /api/chats` | – | `[ChatAssignment & {personaName, pendingCount, historyCount, goal: ChatGoal, nextCheckInAt: null\|time, nextScheduledAt: null\|time, left: bool}]` (`nextCheckInAt` = scheduled automatic check-in, `nextScheduledAt` = next scheduled message, both from runtime.json; `left` = a group you are no longer in) |
 | `POST /api/chats` | `{jid, personaId, mode?, approvalMode?, enabled?, behavior?: BehaviorOverrides}` (mode wins over approvalMode) | `ChatAssignment` (201; server canonicalizes key/jid/altJid/name); 409 `already_assigned`; 400 `invalid_behavior` |
-| `PATCH /api/chats/{key}` | any of `{enabled, personaId, mode, approvalMode, goalOverride, goalStyle, goalPlanAhead, name, behavior, snoozedUntil, people, memory, missionId, cross}` | `ChatAssignment`; 400 `invalid_behavior` / `invalid_snooze` / `invalid_goal` / `invalid_people` / `invalid_mode` / `invalid_memory` / `invalid_cross`. `approvalMode:true` keeps co-pilot, `false` = auto; `memory:null` = the app setting; `cross: {mode?: string\|null, share?: bool\|null}` (absent = keep, null = the app default; `cross:null` resets both); `people.people[].cross: bool\|null` |
+| `PATCH /api/chats/{key}` | any of `{enabled, personaId, mode, approvalMode, goalOverride, goalStyle, goalPlanAhead, name, behavior, snoozedUntil, people, memory, missionId, cross, language, autoContinue, instructions, contextFrom, autoCompact}` | `ChatAssignment`; 400 `invalid_behavior` / `invalid_snooze` / `invalid_goal` / `invalid_people` / `invalid_mode` / `invalid_memory` / `invalid_cross` / `invalid_language` / `invalid_instructions` / `invalid_context`. `language`: a `LanguagePrefs` block or `null` (the app's); `autoContinue: true` also clears a pause; `instructions` ≤ 1000 characters; `contextFrom`: `null` (read all history), `"now"` (start fresh) — both forget the summary — or a time; `people.people[].language`: `""`, `"match"` or a language code. `approvalMode:true` keeps co-pilot, `false` = auto; `memory:null` = the app setting; `cross: {mode?: string\|null, share?: bool\|null}` (absent = keep, null = the app default; `cross:null` resets both); `people.people[].cross: bool\|null` |
 | `GET /api/chats/{key}/people` | – | `{kind, mode:"auto\|everyone\|selected", effectiveMode:"everyone\|selected", memberCount, threshold, answerAnyoneWhoAddressesIt, members:[{jid, name, phone, lid, isAdmin, isSelf, respond (effective), respondSource:"person\|mode", priority, notes, lastSpokeAt: null\|time, left, cross (effective), crossSource:"person\|default", dmChatKey ("" = no private chat with this persona), dmShares}], membersError?}` — group members (cached by WhatsApp, 10 min) merged with the chat's preferences; people with preferences who are no longer members are listed with `left:true`. Order: recent speakers, then by name, then you, then people who left. DMs list the single contact (for notes). |
 | `GET /api/chats/{key}/behavior` | – | `{kind:"dm\|group", effective: BehaviorProfile, sources:{field:"chat"\|"default"}, overrides: BehaviorOverrides, defaults: BehaviorProfile, snoozedUntil: null\|time, available: bool, nextChangeAt: null\|time, goal: ChatGoal, dials:{speed, chattiness, boldness: DialPos}}` |
 | `POST /api/chats/{key}/initiate` | `{hint?: string ≤ 300}` | `{ok:true, approval:bool}` — the persona starts a conversation now (below). 409 `chat_disabled` / `busy`, 400 `invalid_hint`, 404 |
@@ -585,6 +585,41 @@ by `[link]`/`[email]`/`[number]`; a bare photo/sticker is skipped (a caption is 
 
 Wave 3 endpoints whose feature has not landed yet answer **501** `{"code":"not_implemented"}`; the UI shows a
 friendly "coming soon" state for them.
+
+## Languages
+
+`settings.behavior.languages.{private,group}` and `ChatAssignment.language` (nil = the app's for the chat's kind) are a
+`LanguagePrefs` block `{languages: [code] (empty = ["en","he"]), others: "ignore"|"answer" ("" = ignore), reply:
+"match"|code ("" = match)}`; a person's `PersonPrefs.language` (`""` = the chat's, `"match"`, a code) wins for replies to
+them. Codes: en he ar ru uk es fr de it pt nl tr el hi th zh ja ko (`internal/lang`). A message the detector is sure is in
+a language the chat doesn't speak is skipped (activity `decision.skip`, `meta.reason: "language"`, `meta.language`) unless
+`others` is `answer`; short or unclear messages are never skipped. Replies follow the person's choice, else the chat's:
+`match` uses the language of their message, else the conversation's, else the first language listed.
+
+## Nicknames
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/nicknames` | – | `{items:[{ids:[jid], name, original, updatedAt}]}` |
+| `PUT /api/nicknames` | `{ids:[jid…], name, original?}` | the `Nickname`; `name: ""` removes it; 400 `invalid_nickname` (≤ 40 characters, no `@` or `:`). SSE `nicknames.changed` + `chats.changed` |
+
+A nickname replaces the person's WhatsApp/contact name everywhere (all chats): history, the persona's prompt, @tags,
+activity. `GET /api/chats/{key}/people` members carry `nickname` (`name` stays the WhatsApp name); `GET /api/chats` gives a
+direct chat with a nickname `name` = the nickname and `waName` = the original.
+
+## What the persona reads
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/chats/{key}/context` | – | `ChatContext {system, messages:[{role, content}], chars, historyKept, historyTotal, window, summary: ChatSummary\|null, instructions, contextFrom, autoCompact}` — exactly what the next reply sends, without the goal planner's private step |
+| `PUT /api/chats/{key}/summary` | `{text}` | `ChatSummary` (`edited: true`); 400 `invalid_summary` (1–1500 characters) |
+| `DELETE /api/chats/{key}/summary` | – | `{ok:true}` |
+| `POST /api/chats/{key}/compact` | `{keep?}` (default 8) | `ChatSummary` — folds everything but the last `keep` messages into the summary and moves `contextFrom` to the first kept one; 502 `compact_failed` (also when there is nothing older) |
+
+`ChatSummary {chatKey, text, through, messages, updatedAt, edited}`. The summary (`EARLIER IN THIS CHAT`) sits in the
+chat-context block of the prompt and the chat's `instructions` (`INSTRUCTIONS FOR THIS CHAT`) after the goal. With
+`autoCompact`, a chat whose history (from `contextFrom`) reaches `historyMessages` is compacted in the background, keeping
+the newer half. Activity `memory` with `meta.compacted`. Changes publish `memories.changed`.
 
 ## Decision log
 

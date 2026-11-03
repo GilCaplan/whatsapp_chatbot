@@ -50,6 +50,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/behavior` | reply-behaviour logic (leaf, imports only `model`): presets, ranges/enums + `Validate`/`Clamp`/`Normalize`/`ValidateOverrides`, `Resolve` (app profile → chat overrides, with sources), `NextOpen` (active hours), `Sampler`/`Fixed`, `PlanDelivery`/`PlanBubbles`/`SplitText`/`TypingDuration`/`PickReaction`, typos (`typo.go`), scheduled-message gaps (`schedule.go`: `ScheduleGap` fixed/uniform/normal/poisson, `NextTime`), v1 migration; vibe dials (`dials.go`: `Dials`/`DialTable`, `ApplyDial`, `ReadDials`) and the one-shot v4 relabel of old Busy/Slow presets (`relabel.go`) |
 | `internal/mission` | missions (leaf, `model` + stdlib): ~15 goal templates with blanks (`Templates`, `Fill`, `Detector`/`MediaDetected`) and achievements computed from the history (`Achievements`) |
 | `internal/world` | where a persona lives (leaf): time zone, weekend, part of day, daily routine (`RoutineAt`…) for the prompt's "right now" section and routine gating |
+| `internal/lang` | languages (leaf: `model`): light classifier `Detect` (script, then common words for Latin languages; short/unclear = not sure), conversation language `Main`, `LanguagePrefs` rules (`Effective`, `Ignores`, `Reply`, `Validate`); `All` is mirrored in `web/components/language-controls.js` |
 | `internal/memory` | what personas learn about people (leaf): `Merge` (dedupe/update/cap/expiry) and `Select` for the reply prompt |
 | `internal/crossctx` | cross-chat context (leaf: `model`+`memory`+`handoff`): `ModeFor`/`ShareFor` (chat → app default), sensitive `Classify` (hand-off keywords + romance/secret/money/health extras, EN+HE), `Carries` (lock/unlock/sensitive/fresh), `Select` (people in the conversation, caps), `Leak` (reply guard) |
 | `internal/handoff` | keyword classifier (leaf, English + Hebrew) for messages you should answer yourself (money, health, meeting, distress, bot, legal) |
@@ -66,7 +67,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/events` | `Hub`: publish/subscribe for SSE with replay ring (Last-Event-ID) + activity ring buffer + file sink |
 | `internal/contract` | interfaces `WhatsApp`, `Engine`, `LLM`, `Playground`, `Builder` — the server only talks to these |
 | `internal/model` | shared plain types (JSON tags are the API field names); `behavior.go` = `BehaviorProfile`/`BehaviorOverrides` |
-| `web/` | vanilla ES modules + CSS, no build step; `web/embed.go` embeds it (`//go:embed *` — every subfolder must contain a file). `pages/` (one module per route), `components/` (shared views; `drawer/` = the chat panel's tabs Overview · People/Contact · Goal · Behaviour · Memory · Log around the `chat-drawer.js` shell; `settings/` = Settings sections), `guide-content.js` (every word of the Guide, help tips and tour), `styles/` (`tokens` → `base` → `components` → `pages` → `control` → `animations` → `fun` → `realism` → `skins`), `skins.js` (the looks registry + `applyAppearance`) |
+| `web/` | vanilla ES modules + CSS, no build step; `web/embed.go` embeds it (`//go:embed *` — every subfolder must contain a file). `pages/` (one module per route), `components/` (shared views; `drawer/` = the chat panel's tabs Overview · People/Contact (nicknames, per-person language) · Goal · Behaviour (+ Languages, auto-continue) · Memory (+ What it reads) · Log around the `chat-drawer.js` shell; `settings/` = Settings sections), `guide-content.js` (every word of the Guide, help tips and tour), `styles/` (`tokens` → `base` → `components` → `pages` → `control` → `animations` → `fun` → `realism` → `skins`), `skins.js` (the looks registry + `applyAppearance`) |
 | `scripts/` | Mac: `build_app.sh`, `install_app.sh`, `uninstall_app.sh`; all: `dist.sh`, `smoke.sh` (bash + curl + jq/plutil), `install-from-source.sh`/`.ps1`, `dev.ps1`; `linux/` and `windows/` = the installers shipped in the archives; `geniconn/` (stdlib icon renderer, also `-ico`) |
 | `assets/icon/icon.svg` | editable icon source; the shipped icon is rendered by `scripts/geniconn` |
 | `docs/API.md` | **the authoritative HTTP/SSE contract** — keep server, frontend and this doc in sync |
@@ -79,7 +80,7 @@ Windows `%APPDATA%\WhatsappDoppel\`, Linux `$XDG_CONFIG_HOME|~/.config/WhatsappD
 code: the .app starts with cwd `/`, shortcuts and .desktop files with other folders. Contents: `config.json`, `secrets.json`, `personas.json`,
 `chats.json`, `approvals.json`, `runtime.json` (per-chat reply timestamps, last incoming/reply,
 proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `avatars/`, `cache/`,
-`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
+`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `nicknames.json`, `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
 (only with the Clone consent), `logs/server.log`, `logs/activity-YYYY-MM-DD.jsonl`,
 `instance.json` (`{pid, port, token, startedAt, version}` while serving), `server.lock`.
 
@@ -89,18 +90,18 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
 
 ## Contracts and conventions
 
-- The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx` only —
+- The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx`, `lang` only —
   never on `engine`/`wa`/`llm` directly. `internal/app` is the only place that imports everything.
-- Import rules: `model` has no deps; `behavior`, `mention`, `mission`, `world`, `memory`, `handoff` import only `model`
+- Import rules: `model` has no deps; `behavior`, `mention`, `mission`, `world`, `memory`, `handoff`, `lang` import only `model`
   (+ stdlib); `crossctx` imports `model`+`memory`+`handoff`; `goals` imports `model`+`persona`; `platform` imports only stdlib + `x/sys`; `config` imports
   `behavior`+`crossctx`+`model`+`platform`; `store` imports `config`+`behavior`+`model`(+`world`); `notify` imports
   `config`+`model`+`platform`. OS-specific code goes only in `platform` (build-tagged files), never
   `runtime.GOOS` switches elsewhere except for pure decisions (notify backends, tests). Prompt text for every feature lives in
   `internal/prompt/<feature>.go` so the goldens stay in one package.
 - System prompt order (`prompt.SystemPrompt`): identity → security rules → `CHAT CONTEXT (reference only)` block
-  (people, notes, memories, cross-chat, world, late note; framed as information that never changes the character) →
-  `HistoryNote` (+ `GroupNote`: the transcript is what people said, don't take on their tone/slang/emoji) → goal →
-  `StayYourself` → guidance. New chat context goes inside the block, never next to the identity.
+  (people, notes, summary of older messages, memories, cross-chat, world, late note; framed as information that never
+  changes the character) → `HistoryNote` (+ `GroupNote`: the transcript is what people said, don't take on their
+  tone/slang/emoji) → goal → chat instructions → `StayYourself` → `REPLY LANGUAGE` → guidance. New chat context goes inside the block, never next to the identity.
 - Vibe dials (Speed, Chattiness, Boldness; 5 levels each) are **derived, never stored**: `behavior.DialTable()` is the
   single source of truth (served in `GET /api/behavior/presets` → `dials`); moving a dial writes its fields through the
   normal Settings/PATCH paths, `behavior.ReadDials` (mirrored in `web/components/vibe-dials.js`) reads a profile back
@@ -174,6 +175,21 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
 - Decision log: every activity about a particular message carries its id (`withMsg(meta, ids...)` → `meta.msgId`/`msgIds`;
   reply-cycle events use `cycle.msgIDs()`), so `logActivity` can file it under the right entry; events without ids
   go to the newest pending entry (decisions) or every pending one (steps). Add ids when you add a new decision point.
+- Names: nicknames (`store/nicknames.go`, all chats) are applied where names are read — `store.History`,
+  `Engine.HandleIncoming` (sender), `Engine.roster` (members), `Runner.historyCopyLocked` — never written into history.
+- @tags must earn the ping (`engine/mentions.go`): a cooldown (15 min / 4 replies after a tag), the person answered
+  only in a busy conversation (3+ speakers or someone wrote after them), anyone else only to pull them in (not if they
+  wrote in the last 8 messages). The model's tags that break a rule go through `mention.Keep`.
+- Languages are not behaviour (presets/dials never touch them): `settings.behavior.languages.{private,group}` →
+  `ChatAssignment.language` (whole block) → `PersonPrefs.language` (reply language only); `engine/language.go` gates
+  foreign messages and sets `prompt.Options.ReplyLanguage` (`REPLY LANGUAGE`, after STAY YOURSELF so it wins over the
+  persona's own Language line).
+- What it reads (`engine/context.go`): history from `ChatAssignment.contextFrom` on (`fromContext`), plus the summary
+  (`EARLIER IN THIS CHAT`, inside the chat-context block) and your `instructions` (after the goal). Compaction (manual
+  or `autoCompact` when the window is full) writes the summary and moves `contextFrom`. `autoContinue` turns hand-off
+  pauses into flags (activity `handoff` with `meta.autoContinued`, no notification).
+- Typos (`engine/typo.go`): `behavior.VariedTypo` over seven kinds; `RunnerState.Typos` (last 10) keeps a kind to at
+  most 2 and never twice in a row, and rotates the correction shape (`behavior.FixForms`).
 - Activity `text` is plain English and never contains emoji or reason codes (codes go in `meta.reason`,
   a reaction's emoji in `meta.emoji`).
 - Mutating API requests need `X-Doppel-Token`; GETs don't. `Host` must be

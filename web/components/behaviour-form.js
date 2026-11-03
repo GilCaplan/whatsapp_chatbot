@@ -31,7 +31,7 @@ import { scheduleSummary, minutesText } from './initiate-controls.js';
 
 export const FORM_GROUPS = [
   { id: 'responsiveness', label: 'Responsiveness', icon: 'gauge', c: 'linear-gradient(135deg,#38bdf8,#2563eb)', sub: 'Whether it answers at all, and how often',
-    fields: ['replyPercent', 'replyWhenNameMentioned', 'replyWhenAtMentioned', 'skipWhenOthersMentioned', 'aiJudgement', 'chimeInPercent', 'ignoreLinks', 'reactPercent', 'pauseWhenYouReply', 'maxRepliesPerHour', 'maxRepliesPerDay', 'cooldownSec', 'historyMessages', 'historyChars', 'staleAfterMin'] },
+    fields: ['replyPercent', 'replyWhenNameMentioned', 'replyWhenAtMentioned', 'skipWhenOthersMentioned', 'aiJudgement', 'chimeInPercent', 'ignoreLinks', 'ignoreStickers', 'reactPercent', 'pauseWhenYouReply', 'maxRepliesPerHour', 'maxRepliesPerDay', 'cooldownSec', 'historyMessages', 'historyChars', 'staleAfterMin'] },
   { id: 'people', label: 'Who it answers', icon: 'group', c: 'linear-gradient(135deg,#fbbf24,#ea580c)', sub: 'Who gets a reply, and words that always or never get one',
     fields: ['respondToAllMaxMembers', 'answerAnyoneWhoAddressesIt', 'maxStreak', 'triggerWords', 'muteWords'] },
   { id: 'timing', label: 'Timing', icon: 'timer', c: 'linear-gradient(135deg,#a78bfa,#7c3aed)', sub: 'Noticing, reading, thinking and typing',
@@ -203,6 +203,7 @@ export function behaviourForm(opts) {
       ${isGroup ? html`<div class="bf-sub">${icon('message', 'ic-sm')}Every chat</div>` : ''}
       ${row({ fields: ['reactPercent'], stack: true, label: 'React instead of replying', help: "When it decides not to answer, sometimes leave a reaction on the message instead (picked from the persona's favourite emoji).", control: slider('reactPercent', { label: 'React instead of replying' }) })}
       ${row({ fields: ['ignoreLinks'], label: 'Ignore links', help: "Don't reply to messages that are only a link.", control: sw('ignoreLinks', 'Ignore links') })}
+      ${row({ fields: ['ignoreStickers'], label: 'Ignore stickers', help: 'A sticker gets no reply. It is still read as part of the conversation.', control: sw('ignoreStickers', 'Ignore stickers') })}
       ${row({ fields: ['pauseWhenYouReply'], label: 'Stand down when you answer yourself', help: 'If you reply from your phone while it is getting ready, it drops its own reply.', control: sw('pauseWhenYouReply', 'Stand down when you answer') })}
       <div class="bf-sub" id=${'bf-limits-' + kind}>${icon('hand', 'ic-sm')}Limits</div>
       ${row({ fields: ['maxRepliesPerHour'], label: 'Most replies per hour', help: '0 = no limit.', control: num('maxRepliesPerHour', { label: 'Most replies per hour' }) })}

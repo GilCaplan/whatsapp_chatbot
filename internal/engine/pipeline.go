@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -612,7 +611,7 @@ func (r *Runner) thinkLocked(fx *effects) {
 	if !cyc.immediate && !cyc.approval {
 		think, distracted = behavior.PlanThink(bp, r.e.rng)
 	}
-	hist := slices.Clone(r.history)
+	hist := r.historyCopyLocked()
 	var answered pendingMsg
 	if n := len(cyc.pending); n > 0 {
 		answered = cyc.pending[n-1]
