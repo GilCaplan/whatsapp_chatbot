@@ -29,6 +29,7 @@ account to create and no cloud service in between.
 - [Privacy and safety](#privacy-and-safety)
 - [License](#license)
 - [For developers](#for-developers)
+  - [Code map](#code-map): every folder and file
 
 ## What you can do
 
@@ -300,36 +301,333 @@ money (selling it, offering it as a paid service, using it in a business) is not
   `go run . serve --open`.
 - Optional: Ollama on `127.0.0.1:11434`; Node.js for `node --check` on the web files; `jq` for `make smoke`.
 
-### Architecture
+### Code map
 
 One Go binary serves a local web UI (vanilla ES modules, no build step, embedded with
 `go:embed`) and a JSON + Server-Sent-Events API on `127.0.0.1`. See **[CLAUDE.md](CLAUDE.md)**
 for package boundaries and conventions, and **[docs/API.md](docs/API.md)** for the full HTTP/SSE contract.
 
+The Go code lives in four groups, from the bottom up: **core** (data types, settings, storage,
+events: everything else builds on it), **logic** (pure decisions with no I/O, each package
+testable on its own), **runtime** (the moving parts: the reply engine, prompts, AI providers,
+WhatsApp, notifications) and **host** (the process: HTTP server, launcher, wiring, OS
+differences). A package only imports from its own group or the ones below it.
+
+```text
+whatsapp_doppel_go/
+├── main.go                  subcommands: launch (default), serve, status, quit, version
+├── internal/
+│   ├── core/                shared foundation
+│   │   ├── model/           plain data types (JSON tags = API field names)
+│   │   ├── contract/        interfaces between layers (the server only talks to these)
+│   │   ├── config/          config.json settings, secrets.json, data-dir paths
+│   │   ├── store/           JSON files + per-chat history (personas, chats, approvals, memories…)
+│   │   └── events/          pub/sub hub feeding SSE, activity ring buffer
+│   ├── logic/               pure rules, no I/O
+│   │   ├── behavior/        reply timing: presets, vibe dials, ranges, planner, typos, schedules
+│   │   ├── calendar/        your calendars, read-only (.ics, MACalendar), free slots
+│   │   ├── crossctx/        what may carry from one chat into another
+│   │   ├── ctxsys/          context systems (Classic, Lean, Fast, yours): knobs and charts
+│   │   ├── goals/           goal pursuit: overrides, "say the word", leak check
+│   │   ├── guard/           prompt-injection and character-break detection
+│   │   ├── handoff/         messages you should answer yourself (EN + HE)
+│   │   ├── lang/            language detection and reply-language rules
+│   │   ├── memory/          merge and pick what personas learned about people
+│   │   ├── mention/         @tags in groups
+│   │   ├── mission/         mission templates and achievements
+│   │   ├── persona/         built-in personas, validation, generated avatars
+│   │   └── world/           where a persona lives: time zone, weekend, daily routine
+│   ├── runtime/             the moving parts
+│   │   ├── engine/          per-chat runners and the reply cycle (and every feature that hooks into it)
+│   │   ├── prompt/          every prompt text (golden tests in testdata/)
+│   │   ├── llm/             AI providers: Ollama, Anthropic, OpenAI, Fake; registry
+│   │   ├── wa/              WhatsApp via whatsmeow (pairing, chats, groups, sending) and a Fake
+│   │   └── notify/          desktop notifications per OS
+│   └── host/                the process
+│       ├── app/             wires everything together for `serve`
+│       ├── server/          HTTP API, SSE, security middleware, static UI
+│       ├── launcher/        single instance: instance.json, server.lock, detached spawn
+│       └── platform/        every OS difference (one file per OS)
+├── web/                     the UI, served at /
+│   ├── index.html, app.js   shell, routing table, boot
+│   ├── pages/               one module per route (#/chats, #/personas, …)
+│   ├── components/          shared views, grouped by feature (see below)
+│   └── styles/              tokens → base → components → pages → … → skins
+├── scripts/                 build, install, release, smoke test; linux/ and windows/ installers
+├── assets/icon/             editable icon source (icon.svg)
+└── docs/                    API contract, architecture, feature rules, platform notes
 ```
-main.go               launch | serve | status | quit
-internal/app          wiring + process lifecycle (lock, instance.json, signals, notifier)
-internal/launcher     single instance: instance.json, server.lock, health probe, detached spawn
-internal/platform     OS differences: data dir, file lock, open URL/folder, spawn, alerts, console
-internal/server       HTTP API, SSE, security middleware, static UI
-internal/engine       per-chat reply pipeline (notice → seen → wait → think → typing → bubbles),
-                      group decisions, people rules, goals/openers, approvals/co-pilot, hand-off,
-                      reveal, memory & recap jobs, check-ins, playground
-internal/behavior     behaviour profiles: presets, dials, ranges, resolver, planner, sampler, typos
-internal/prompt       system prompt sections (identity, world, people, memory, agenda, expression)
-internal/llm          providers: Ollama, Anthropic (SDK), OpenAI, Fake; registry
-internal/goals        goal logic (style, reached detection)    internal/mission   templates, achievements
-internal/mention      @tag directory and encoding               internal/memory    merge/select memories
-internal/handoff      serious-topic classifier (EN + HE)        internal/notify    desktop notifications
-internal/world        time zones, weekends, routines           internal/guard     injection + character checks
-internal/persona      built-in personas, validation, avatars    internal/wa        whatsmeow lifecycle, Fake
-internal/store        JSON stores + per-chat history JSONL     internal/config    data dir, settings, secrets
-internal/events       pub/sub hub feeding SSE + activity        internal/contract  interfaces between layers
-internal/model        shared data types
-web/                  the UI (served at /)
-scripts/              build_app.sh, install_app.sh, uninstall_app.sh (Mac), dist.sh, smoke.sh,
-                      install-from-source.sh/.ps1, dev.ps1, linux/, windows/ (installers), geniconn/
+
+Tests sit next to the code they test (`*_test.go`). Below, every file with one line on what it
+holds. Click a folder to open it.
+
+<details>
+<summary><b>main.go and internal/core/</b></summary>
+
+```text
+main.go                         subcommands; version and devProjectDir set at build time (-ldflags -X)
+internal/core/model/
+  model.go                      personas, chats, messages, approvals, activity types: the shared types
+  behavior.go                   reply-behaviour profile and per-chat overrides
+  clone.go                      "Clone yourself" types
+  context.go                    chat summary and "what it reads"
+  cross.go                      cross-chat context types
+  ctxsys.go                     context systems, knobs, charts, sandbox runs
+  goal.go                       goal settings and progress
+  language.go                   language preferences
+  memory.go                     memories of people
+  mission.go                    missions and achievements
+  people.go                     group members, mentions, per-person preferences
+  rating.go                     connection ratings
+  recap.go                      daily recaps
+  safety.go                     hand-off and reveal state
+  secretary.go                  personal secretary, calendar sources, taken notes
+  world.go                      where a persona lives, daily routine
+internal/core/contract/
+  contract.go                   interfaces WhatsApp, Engine, LLM, Playground, Builder, Notifier
+internal/core/config/
+  config.go                     settings (config.json) with defaults and migrations; secrets (secrets.json, 0600)
+  paths.go                      every file and folder inside the data directory
+internal/core/store/
+  store.go                      personas, chats, approvals (JSON, atomic writes) and history (JSONL per chat)
+  runtime.go                    per-chat engine state that survives restarts (runtime.json)
+  briefs.go                     chat briefs for cross-chat context
+  contextsystems.go             your context systems
+  decisions.go                  decision log per chat
+  memories.go                   memories per chat
+  missions.go                   mission history
+  nicknames.go                  nicknames you give people
+  ratings.go                    connection ratings per chat
+  recaps.go                     daily recaps
+  secretary.go                  calendars and messages taken for you
+  selfsamples.go                samples of your own messages (Clone, only with consent)
+  summaries.go                  compacted older messages
+  wave3.go                      helpers shared by the per-feature files
+internal/core/events/
+  hub.go                        publish/subscribe for SSE, replay ring (Last-Event-ID), activity buffer, file sink
 ```
+</details>
+
+<details>
+<summary><b>internal/logic/</b></summary>
+
+```text
+behavior/
+  presets.go                    the reply-behaviour presets (Instant, Natural, …)
+  ranges.go                     allowed range of every field; Validate, Clamp, Normalize
+  resolve.go                    app profile → chat overrides, with where each value came from
+  dials.go                      vibe dials (Speed, Chattiness, Boldness) derived from the profile
+  plan.go                       delivery plan: bubbles, typing time, quotes, reactions
+  timing.go                     timing curves for delays
+  sampler.go                    the only source of randomness (tests use Fixed)
+  schedule.go                   gaps between scheduled messages
+  typo.go                       typos and their corrections
+  zone.go                       active hours in the persona's time zone
+  people.go                     limits of a chat's people settings
+  migrate.go                    v1 settings migration
+  relabel.go                    one-shot relabel of old presets
+calendar/
+  ics.go                        .ics parser (repeats, exceptions, all-day, time zones)
+  service.go                    fetch + cache sources, MACalendar client, busy times, free slots
+crossctx/
+  crossctx.go                   modes, sensitive topics, what carries, selection, reply leak check
+ctxsys/
+  ctxsys.go                     built-in systems, knob specs, resolve (chat → persona → app)
+  chart.go                      flowchart blocks, layout, chart → knobs
+goals/
+  goals.go                      resolve goal settings, "say the word", leak check, evidence, API view
+guard/
+  injection.go                  scored prompt-injection detector and sanitizer
+  breaks.go                     character-break detector
+handoff/
+  handoff.go                    keyword classifier: money, health, meeting, distress, bot, legal
+lang/
+  lang.go                       language detection, conversation language, reply-language rules
+memory/
+  memory.go                     merge new memories (dedupe, update, cap, expiry), pick for a reply
+mention/
+  mention.go                    member directory, validate/encode/humanize @tags
+mission/
+  mission.go                    mission templates with blanks, detectors
+  achievements.go               achievements computed from completed missions
+persona/
+  seeds.go                      the built-in personas
+  persona.go                    persona validation and defaults
+  secretary.go                  secretary limits
+  avatar.go                     generated avatar gradients
+world/
+  world.go                      time zone, weekend, part of day, daily routine
+```
+</details>
+
+<details>
+<summary><b>internal/runtime/</b></summary>
+
+```text
+engine/                         one package; files are named by feature
+  engine.go                     the Engine: routes messages to per-chat runners, Reload, Stop
+  runner.go                     a Runner owns one chat: incoming messages, gates, history
+  pipeline.go                   the reply cycle: idle → noticing → waiting → thinking → typing
+  clock.go                      the clock interface (tests step a fake clock)
+  decide.go                     group "should I reply?" decisions
+  people.go                     who it answers, streak guard
+  mentions.go                   @tags in replies, prompt options per chat
+  language.go                   foreign-language gate, reply language
+  expression.go                 emoji and length of replies
+  drafts.go                     co-pilot mode: three drafts in different tones
+  approvals.go                  replies waiting for your approval
+  typo.go                       planting typos and corrections
+  routine.go                    routine gating, "sorry, was at the gym" late notes
+  proactive.go                  check-ins after a silence
+  opener.go                     "Start a conversation"
+  schedule.go                   scheduled messages (never sent late)
+  goal.go                       goal pursuit: plan ahead, goal check, leak rewrite
+  handoff.go                    pause for you, resume
+  reveal.go                     "it was a persona" message
+  jobs.go                       serialised background jobs
+  memory.go                     memory extraction job
+  recap.go                      daily recaps
+  brief.go                      chat briefs for cross-chat context
+  cross.go                      cross-chat context selection and prompt section
+  context.go                    what the persona reads, compaction
+  ctxsys.go                     the chat's context system and its knobs
+  digest.go                     one background call that updates memory, brief and notes
+  replycheck.go                 reply check: code checks, judge, rewrite
+  replay.go                     context-system sandbox (nothing is sent)
+  decisionlog.go                decision log entries per message
+  ratings.go                    daily connection ratings in groups
+  secretary.go                  personal secretary: notes, urgent flags
+  clone.go                      Clone yourself builder
+  playground.go                 practice chats without WhatsApp
+prompt/                         every prompt text; golden files in testdata/
+  compose.go                    the reply system prompt, part by part, and the message list
+  goal.go                       goal section, plan-ahead request
+  cross.go, brief.go            cross-chat section and brief
+  context.go, memory.go         chat summary, memory extraction
+  people.go, world.go           people in the chat, time and place
+  language.go, expression.go    reply language, emoji and length
+  opener.go, drafts.go          openers, co-pilot drafts
+  handoff.go, recap.go          hand-off check, daily recap
+  rating.go, secretary.go       connection ratings, secretary job and note taking
+  ctxsys.go, clone.go           context-system prompts, Clone yourself
+  builder.go                    AI persona builder
+llm/
+  provider.go                   the Provider interface and request/response types
+  registry.go                   picks the provider for a persona, rebuilds on settings change
+  ollama.go, anthropic.go, openai.go   the providers
+  fake.go                       scripted provider for tests and --fake-llm
+  meter.go                      counts AI calls (sandbox)
+wa/
+  manager.go                    whatsmeow lifecycle: pairing, status, reconnect, logout, sending
+  chats.go, recent.go           contacts and groups, recent chats index
+  membership.go, participants.go   joined groups, members
+  avatars.go                    profile pictures
+  keys.go                       chat keys (dm:, group:, lid:)
+  db.go, migrate.go             SQLite session, legacy bot.db import
+  version.go                    keeps the WhatsApp Web version current
+  selfsamples.go                samples of your messages (Clone)
+  log.go                        whatsmeow logging
+  fake.go                       simulated WhatsApp for --fake-wa and tests
+notify/
+  notify.go                     desktop notifications, per-event settings, rate limits, backends per OS
+```
+</details>
+
+<details>
+<summary><b>internal/host/</b></summary>
+
+```text
+app/
+  app.go                        Run: config → store → hub → WhatsApp → AI → engine → server; lock, port, shutdown
+  selfsamples.go                wiring for Clone samples
+server/
+  server.go                     the HTTP server, live port change
+  routes.go                     every route (Go 1.22 patterns), grouped by feature
+  middleware.go                 Host/Origin guard, token, JSON errors, logging, recovery
+  respond.go                    JSON responses and errors
+  sse.go                        /api/events stream
+  static.go                     the embedded UI with the token filled in
+  ports.go                      port scan
+  avatar.go                     avatar upload processing
+  handlers_*.go                 one file per feature (chats, personas, settings, goal, secretary, …)
+launcher/
+  launch.go                     `launch`: reuse a running server or start one, open the browser
+  instance.go                   instance.json, health probe, quit
+  lock.go                       server.lock
+platform/                       one file per OS (build tags)
+  platform.go                   what lives here
+  datadir.go                    default data folder per OS
+  open_*.go                     open a URL or folder
+  lock_*.go                     file locks
+  spawn_*.go                    detached processes
+  alert_*.go                    native error dialogs
+  tty_*.go, console_*.go        terminal detection, Windows console
+```
+</details>
+
+<details>
+<summary><b>web/</b></summary>
+
+```text
+index.html                      the page; boot.js runs before first paint
+app.js                          shell (sidebar, topbar), routing table, overlays
+router.js, store.js, sse.js     hash router, app state, the single event stream
+api.js, dom.js, ui.js, util.js  fetch wrapper, rendering core, UI primitives, helpers
+system.js                       full-screen system overlays
+icons.js                        inline SVG icon sprite
+skins.js                        the looks and how one is applied
+guide-content.js                every word of the Guide, help tips and tour
+embed.go                        embeds the UI into the binary
+pages/                          one module per route
+  dashboard.js, chats.js, personas.js, persona-editor.js, approvals.js, activity.js,
+  playground.js, missions.js, context.js, settings.js, guide.js, onboarding.js
+components/
+  common/                       building blocks: elements, controls, help-tip, word-chips, avatar,
+                                mentions, status, feed, tour
+  art/                          inline-SVG pictures: art, badges, dial-face, glyphs, guide-art
+  chat/                         chat panel and its parts: chat-drawer, chat-picker, assign-sheet,
+                                initiate-controls, people-section, cross-block, memory-list,
+                                context-block, ratings-block, reveal-sheet, handoff-meta
+  drawer/                       the chat panel's tabs: overview, people, goal, behaviour, memory, log;
+                                banners (status above every tab), shared (helpers)
+  persona/                      persona-picker, build-chooser, ai-builder, clone-sheet,
+                                secretary-builder, world-card, routine-editor, language-controls
+  behaviour/                    behaviour-form, behaviour-meta, preset-cards, vibe-dials,
+                                reply-timeline, week-editor
+  context/                      context systems: context-params, context-sandbox,
+                                context-draft-sheet, flowchart
+  goals/                        goal-controls, mission-sheet
+  whatsapp/                     qr-card, wa-sheet
+  home/                         dashboard cards: notes-card, recap-card
+  settings/                     Settings sections in their own modules
+styles/                         tokens.css → base → components → pages → control → animations
+                                → fun → realism → skins
+```
+</details>
+
+<details>
+<summary><b>scripts/, docs/ and the root</b></summary>
+
+```text
+scripts/
+  smoke.sh                      end-to-end test against a throwaway fake server
+  build_app.sh, install_app.sh, uninstall_app.sh   Mac app bundle, install, remove
+  dist.sh                       release archives for every OS
+  install-from-source.sh/.ps1   one-command install from a checkout
+  dev.ps1                       the Makefile for Windows
+  linux/, windows/              installers shipped in the archives
+  geniconn/                     renders the app icon (stdlib only)
+docs/
+  API.md                        the HTTP/SSE contract (authoritative)
+  ARCHITECTURE.md               layers and how a message flows
+  FEATURES.md                   the rules of each feature
+  PLATFORMS.md                  macOS, Windows, Linux notes
+  RESPONSIBLE_USE.md            using Doppel responsibly
+Makefile                        build, run, test, vet, smoke, app, install, dist
+CLAUDE.md, INSTALL_FOR_AGENTS.md   guidance for AI coding agents
+CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, LICENSE
+```
+</details>
 
 ### Make targets
 

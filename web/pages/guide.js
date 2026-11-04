@@ -1,15 +1,15 @@
 // pages/guide.js — the Guide: how Doppel works, explained with pictures.
-// Copy: guide-content.js. Pictures: components/guide-art.js. Deep links:
+// Copy: guide-content.js. Pictures: components/art/guide-art.js. Deep links:
 // #/guide/<section> (the topbar "?" opens the section for the current page).
 
 import { html } from '../dom.js';
 import { icon } from '../icons.js';
 import { debounce, prefersReducedMotion } from '../util.js';
 import { GUIDE_SECTIONS } from '../guide-content.js';
-import { guideArt } from '../components/guide-art.js';
-import { art } from '../components/art.js';
-import { richText } from '../components/help-tip.js';
-import { startTour } from '../components/tour.js';
+import { guideArt } from '../components/art/guide-art.js';
+import { art } from '../components/art/art.js';
+import { richText } from '../components/common/help-tip.js';
+import { startTour } from '../components/common/tour.js';
 
 function block(b, i) {
   if (b.p) return html`<p class="gd-p" data-key=${'b' + i}>${richText(b.p)}</p>`;

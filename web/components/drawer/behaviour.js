@@ -11,15 +11,15 @@ import { api } from '../../api.js';
 import { store, isAway, personaById } from '../../store.js';
 import { toast, toggle } from '../../ui.js';
 import { debounce } from '../../util.js';
-import { behaviourForm } from '../behaviour-form.js';
-import { presetChips } from '../preset-cards.js';
-import { createTimeline } from '../reply-timeline.js';
-import { ALL_FIELDS, detectPreset, overrideCount, presetStyle, profileKey, same } from '../behaviour-meta.js';
+import { behaviourForm } from '../behaviour/behaviour-form.js';
+import { presetChips } from '../behaviour/preset-cards.js';
+import { createTimeline } from '../behaviour/reply-timeline.js';
+import { ALL_FIELDS, detectPreset, overrideCount, presetStyle, profileKey, same } from '../behaviour/behaviour-meta.js';
 import { patchChat, awayUntilText } from './shared.js';
-import { vibeDials } from '../vibe-dials.js';
-import { helpTip } from '../help-tip.js';
-import { routineSummary } from '../routine-editor.js';
-import { languageControls, langSummary } from '../language-controls.js';
+import { vibeDials } from '../behaviour/vibe-dials.js';
+import { helpTip } from '../common/help-tip.js';
+import { routineSummary } from '../persona/routine-editor.js';
+import { languageControls, langSummary } from '../persona/language-controls.js';
 
 /** Wave 3 (Engineer A): "Also follows Leo's routine: gym 07:00–08:30, …". */
 function routineNote(c) {

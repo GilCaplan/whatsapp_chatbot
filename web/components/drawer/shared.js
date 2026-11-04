@@ -8,7 +8,7 @@ import { api } from '../../api.js';
 import { store, loadChats } from '../../store.js';
 import { openSheet, toast } from '../../ui.js';
 import { clockTime } from '../../util.js';
-import { mentionNodes } from '../mentions.js';
+import { mentionNodes } from '../common/mentions.js';
 
 /** Merge a `behavior` patch (absent = keep, null = inherit) into overrides. */
 function mergeOverrides(cur, patch) {

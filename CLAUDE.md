@@ -8,7 +8,7 @@ Guidance for Claude Code sessions working in this repository.
 ONE WhatsApp account (via `go.mau.fi/whatsmeow`) and lets LLM personas reply in the chats
 the user assigns. LLM providers: Ollama (local, default), Anthropic (official Go SDK),
 OpenAI (plain HTTP). The old single-file CLI bot (`bot.go`/`persona.go`) was replaced; its
-logic lives on in `internal/engine`, `internal/prompt`, `internal/guard` and the persona seeds.
+logic lives on in `internal/runtime/engine`, `internal/runtime/prompt`, `internal/logic/guard` and the persona seeds.
 
 Module: `whatsappdoppel`, Go 1.26, pure Go: SQLite is `modernc.org/sqlite` (driver `"sqlite"`), so every
 target cross-compiles with `CGO_ENABLED=0` (only `go test -race` needs cgo).
@@ -39,6 +39,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 
 ## Where the details live
 
+- Packages are grouped under `internal/`: `core/` (model, contract, config, store, events), `logic/` (pure leaf packages), `runtime/` (engine, prompt, llm, wa, notify), `host/` (app, server, launcher, platform); web components under `web/components/<feature>/`. The README's Code map lists every file.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the package-by-package layout table and the data directory (files, legacy DB import).
 - **[docs/FEATURES.md](docs/FEATURES.md)** — how each feature is wired: dials, missions, looks, behaviour layers, goals, scheduled messages, WhatsApp sync, cross-chat context, decision log, nicknames, @tags, languages, prompt parts, ratings, context systems, secretary, long-term memory, typos. Read the entry for the feature you touch.
 - **[docs/PLATFORMS.md](docs/PLATFORMS.md)** — the .app bundle and Windows exe/resources/line-ending details.
@@ -47,13 +48,13 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 ## Contracts and conventions
 
 - The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx`, `lang`, `ctxsys` only —
-  never on `engine`/`wa`/`llm` directly. `internal/app` is the only place that imports everything.
+  never on `engine`/`wa`/`llm` directly. `internal/host/app` is the only place that imports everything.
 - Import rules: `model` has no deps; `behavior`, `ctxsys`, `mention`, `mission`, `world`, `memory`, `handoff`, `lang`, `calendar` import only `model`
   (+ stdlib); `crossctx` imports `model`+`memory`+`handoff`; `goals` imports `model`+`persona`; `platform` imports only stdlib + `x/sys`; `config` imports
   `behavior`+`crossctx`+`model`+`platform`; `store` imports `config`+`behavior`+`ctxsys`+`model`(+`world`); `notify` imports
   `config`+`model`+`platform`. OS-specific code goes only in `platform` (build-tagged files), never
   `runtime.GOOS` switches elsewhere except for pure decisions (notify backends, tests). Prompt text for every feature lives in
-  `internal/prompt/<feature>.go` so the goldens stay in one package.
+  `internal/runtime/prompt/<feature>.go` so the goldens stay in one package.
 - System prompt order (`prompt.SystemPrompt`): identity → security rules → `CHAT CONTEXT (reference only)` block
   (people, notes, summary of older messages, memories, cross-chat, world, late note; framed as information that never
   changes the character) → `HistoryNote` (+ `GroupNote`: the transcript is what people said, don't take on their
@@ -61,8 +62,8 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 - Copy and pictures: user-facing words are plain English for non-technical people; **no emoji anywhere** in UI or
   activity text — pictures are inline SVG (`art.js`, `glyphs.js`, `guide-art.js`, `dial-face.js`, `badges.js`). Guide,
   help-tip and tour copy lives only in `web/guide-content.js` (`GUIDE_SECTIONS`, `TIPS`, `TOUR_STEPS`, `PAGE_SECTION`);
-  `helpTip(id)` (`components/help-tip.js`) puts a "?" popover with "Learn more" next to a complex control; the topbar
-  "?" opens `#/guide/<section>` for the current page; the tour (`components/tour.js`) starts once right after
+  `helpTip(id)` (`components/common/help-tip.js`) puts a "?" popover with "Learn more" next to a complex control; the topbar
+  "?" opens `#/guide/<section>` for the current page; the tour (`components/common/tour.js`) starts once right after
   onboarding (`localStorage doppel.tour`) and is replayable from the Guide. Escape all user/WhatsApp text (the `html`
   tag does; only trusted static markup goes through `raw`). Respect `prefers-reduced-motion` (global rule in
   `animations.css`; avoid JS-driven motion).
@@ -93,8 +94,8 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 
 ## Testing
 
-- Unit tests use in-package fakes: `internal/server` has tiny fakes of the contract
-  interfaces (`fakes_test.go`) and runs a real listener; `internal/engine` uses a fake clock
+- Unit tests use in-package fakes: `internal/host/server` has tiny fakes of the contract
+  interfaces (`fakes_test.go`) and runs a real listener; `internal/runtime/engine` uses a fake clock
   (`h.advance(d)` steps through due timers and waits for the engine to settle) and an
   Instant-like profile by default (`instantLike`); realistic-timing tests override fields;
   `llm.NewFake()` records requests; `wa.NewFake(hub)` provides synthetic contacts/groups and

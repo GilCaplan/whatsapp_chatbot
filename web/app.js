@@ -2,18 +2,18 @@
 
 import { html, render, mountView } from './dom.js';
 import { installIcons, icon } from './icons.js';
-import { defineElements } from './components/elements.js';
+import { defineElements } from './components/common/elements.js';
 import { setErrorToaster, setToken, hasToken } from './api.js';
 import { store, bus, loadHealth, refreshAll, syncWhatsApp } from './store.js';
 import { startSSE } from './sse.js';
 import { initRouter, handle, navigate, currentPage, parseHash } from './router.js';
 import { toast, confirmSheet } from './ui.js';
-import { statusPill } from './components/status.js';
-import { openWASheet } from './components/wa-sheet.js';
+import { statusPill } from './components/common/status.js';
+import { openWASheet } from './components/whatsapp/wa-sheet.js';
 import { sleep } from './util.js';
 import { movingTo, showStopped } from './system.js';
 import { PAGE_SECTION } from './guide-content.js';
-import { startTour, tourDone } from './components/tour.js';
+import { startTour, tourDone } from './components/common/tour.js';
 import { applyAppearance, watchSystemMode } from './skins.js';
 
 import Onboarding from './pages/onboarding.js';

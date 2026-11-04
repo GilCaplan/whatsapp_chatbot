@@ -5,9 +5,9 @@ import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { store, loadActivity } from '../store.js';
 import { confirmSheet, toast, skeletonRows } from '../ui.js';
-import { feedRow } from '../components/feed.js';
-import { emptyState } from '../components/art.js';
-import { ACT_GROUPS, actMeta } from '../components/status.js';
+import { feedRow } from '../components/common/feed.js';
+import { emptyState } from '../components/art/art.js';
+import { ACT_GROUPS, actMeta } from '../components/common/status.js';
 
 const SHOW_MAX = 300;
 

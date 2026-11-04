@@ -5,11 +5,11 @@ import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { store, loadSettings, loadPersonas } from '../store.js';
 import { seg, toggle, toast, progressRing, spinner } from '../ui.js';
-import { createQRCard } from '../components/qr-card.js';
-import { personaTiles, personaPicker } from '../components/persona-picker.js';
-import { createChatPicker } from '../components/chat-picker.js';
-import { assignChat } from '../components/assign-sheet.js';
-import { openAIBuilder } from '../components/ai-builder.js';
+import { createQRCard } from '../components/whatsapp/qr-card.js';
+import { personaTiles, personaPicker } from '../components/persona/persona-picker.js';
+import { createChatPicker } from '../components/chat/chat-picker.js';
+import { assignChat } from '../components/chat/assign-sheet.js';
+import { openAIBuilder } from '../components/persona/ai-builder.js';
 import { fmtMs, fmtBytes } from '../util.js';
 
 const STEPS = [

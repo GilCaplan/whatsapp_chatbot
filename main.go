@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"whatsappdoppel/internal/app"
-	"whatsappdoppel/internal/config"
-	"whatsappdoppel/internal/launcher"
-	"whatsappdoppel/internal/platform"
+	"whatsappdoppel/internal/core/config"
+	"whatsappdoppel/internal/host/app"
+	"whatsappdoppel/internal/host/launcher"
+	"whatsappdoppel/internal/host/platform"
 )
 
 // Set via -ldflags "-X main.version=... -X main.devProjectDir=...".

@@ -1,19 +1,19 @@
 // pages/persona-editor.js — create / edit a persona (#/persona/<id> or #/persona/new).
 
-import { openSecretaryBuilder } from '../components/secretary-builder.js';
+import { openSecretaryBuilder } from '../components/persona/secretary-builder.js';
 import { html } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { store, loadPersonas, usageCount } from '../store.js';
 import { seg, field, toast, openMenu, spinner } from '../ui.js';
-import { personaAvatar, personaGradient } from '../components/avatar.js';
-import { emptyState } from '../components/art.js';
-import { glyph, GLYPHS, GLYPH_IDS } from '../components/glyphs.js';
+import { personaAvatar, personaGradient } from '../components/common/avatar.js';
+import { emptyState } from '../components/art/art.js';
+import { glyph, GLYPHS, GLYPH_IDS } from '../components/art/glyphs.js';
 import { duplicatePersona, deletePersona, resetPersona } from './personas.js';
-import { providerLabel } from '../components/status.js';
-import { personaGoalControls } from '../components/goal-controls.js';
+import { providerLabel } from '../components/common/status.js';
+import { personaGoalControls } from '../components/goals/goal-controls.js';
 import { GRADIENTS, debounce, rowsFor, copyText, initials, modKey } from '../util.js';
-import { worldCard } from '../components/world-card.js';
+import { worldCard } from '../components/persona/world-card.js';
 
 const FAV_SUGGEST = ['😂', '🤣', '😅', '🙏', '❤️', '🔥', '✨', '💅', '👀', '😭', '🥲', '😎', '👍', '🙌', '🤔', '💀', '😘', '🥰', '🍻', '🎉'];
 const MAX_UPLOAD = 5 * 1024 * 1024;

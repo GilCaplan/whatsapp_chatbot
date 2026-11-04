@@ -6,7 +6,7 @@
 
 import { html } from '../../dom.js';
 import { icon } from '../../icons.js';
-import { createRatingsStore, ratingsBlock } from '../ratings-block.js';
+import { createRatingsStore, ratingsBlock } from '../chat/ratings-block.js';
 
 /** "Leo remembers: Dana 3 · Josh 2" — each opens the Memory tab for that person. */
 function memoryStrip(ctx, c, p) {

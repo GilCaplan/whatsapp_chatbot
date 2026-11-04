@@ -14,11 +14,11 @@ import { api } from '../api.js';
 import { bus, store, reloadPersonasSoon } from '../store.js';
 import { confirmSheet, toast, seg, spinner } from '../ui.js';
 import { debounce, plural, relTime } from '../util.js';
-import { helpTip } from '../components/help-tip.js';
-import { paramsForm, paramRows } from '../components/context-params.js';
-import { createSandbox } from '../components/context-sandbox.js';
-import { openDraftSheet } from '../components/context-draft-sheet.js';
-import '../components/flowchart.js';
+import { helpTip } from '../components/common/help-tip.js';
+import { paramsForm, paramRows } from '../components/context/context-params.js';
+import { createSandbox } from '../components/context/context-sandbox.js';
+import { openDraftSheet } from '../components/context/context-draft-sheet.js';
+import '../components/context/flowchart.js';
 
 const STAGE_LABELS = {
   arrive: 'Arrives', gate: 'Rules', join: 'Joining in', goal: 'Goals', prompt: 'What it reads',

@@ -1,8 +1,8 @@
 # WhatsApp Doppel — local HTTP / SSE API
 
 The server binds **127.0.0.1 only** and serves the embedded web UI at `/`.
-All payloads are JSON. Go types live in `internal/model/model.go`, `internal/model/behavior.go`
-and `internal/config/config.go` — JSON field names below match their tags exactly.
+All payloads are JSON. Go types live in `internal/core/model/model.go`, `internal/core/model/behavior.go`
+and `internal/core/config/config.go` — JSON field names below match their tags exactly.
 
 ## Conventions
 
@@ -594,7 +594,7 @@ friendly "coming soon" state for them.
 `settings.behavior.languages.{private,group}` and `ChatAssignment.language` (nil = the app's for the chat's kind) are a
 `LanguagePrefs` block `{languages: [code] (empty = ["en","he"]), others: "ignore"|"answer" ("" = ignore), reply:
 "match"|code ("" = match)}`; a person's `PersonPrefs.language` (`""` = the chat's, `"match"`, a code) wins for replies to
-them. Codes: en he ar ru uk es fr de it pt nl tr el hi th zh ja ko (`internal/lang`). A message the detector is sure is in
+them. Codes: en he ar ru uk es fr de it pt nl tr el hi th zh ja ko (`internal/logic/lang`). A message the detector is sure is in
 a language the chat doesn't speak is skipped (activity `decision.skip`, `meta.reason: "language"`, `meta.language`) unless
 `others` is `answer`; short or unclear messages are never skipped. Replies follow the person's choice, else the chat's:
 `match` uses the language of their message, else the conversation's, else the first language listed.
@@ -687,7 +687,7 @@ after 30 minutes.
 
 ## Context systems
 
-How a chat decides when to use the AI and what it reads (`internal/ctxsys`). Three built-in
+How a chat decides when to use the AI and what it reads (`internal/logic/ctxsys`). Three built-in
 systems — `classic` (how replies always worked), `lean`, `fast` — are locked; yours (`cs-…`) are
 copies you can tune. A chat runs `ChatAssignment.contextSystem` → `Persona.contextSystem` →
 `settings.context.system` → `classic` (unknown ids fall through). Only `params` change how chats
