@@ -6,9 +6,9 @@ import { icon } from '../../icons.js';
 import { api } from '../../api.js';
 import { store } from '../../store.js';
 import { toggle, toast, confirmSheet, seg } from '../../ui.js';
-import { helpTip } from '../help-tip.js';
-import { SENSITIVE_CATS, catGlyph } from '../handoff-meta.js';
-import { numberField } from '../controls.js';
+import { helpTip } from '../common/help-tip.js';
+import { SENSITIVE_CATS, catGlyph } from '../chat/handoff-meta.js';
+import { numberField } from '../common/controls.js';
 import { debounce } from '../../util.js';
 
 const MODE_OPTS = [

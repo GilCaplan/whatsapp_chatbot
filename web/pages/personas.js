@@ -5,10 +5,10 @@ import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { store, usageCount, loadPersonas, loadChats } from '../store.js';
 import { openMenu, confirmSheet, toast } from '../ui.js';
-import { personaAvatar } from '../components/avatar.js';
-import { emptyState } from '../components/art.js';
-import { openBuildChooser } from '../components/build-chooser.js';
-import { providerLabel } from '../components/status.js';
+import { personaAvatar } from '../components/common/avatar.js';
+import { emptyState } from '../components/art/art.js';
+import { openBuildChooser } from '../components/persona/build-chooser.js';
+import { providerLabel } from '../components/common/status.js';
 
 export async function duplicatePersona(p, navigate) {
   const copy = await api.personas.duplicate(p.id);

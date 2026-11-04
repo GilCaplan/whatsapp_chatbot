@@ -10,11 +10,11 @@ import { api } from '../../api.js';
 import { store, loadChats, isAway } from '../../store.js';
 import { seg, confirmSheet, toast, spinner, busy } from '../../ui.js';
 import { debounce } from '../../util.js';
-import { personaPicker } from '../persona-picker.js';
-import { helpTip } from '../help-tip.js';
-import { MODES, modeOf } from '../handoff-meta.js';
-import { openRevealSheet } from '../reveal-sheet.js';
-import { generateRecap } from '../recap-card.js';
+import { personaPicker } from '../persona/persona-picker.js';
+import { helpTip } from '../common/help-tip.js';
+import { MODES, modeOf } from '../chat/handoff-meta.js';
+import { openRevealSheet } from '../chat/reveal-sheet.js';
+import { generateRecap } from '../home/recap-card.js';
 import { bubbles } from './shared.js';
 
 export function createOverviewTab(ctx) {

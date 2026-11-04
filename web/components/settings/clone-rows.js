@@ -8,7 +8,7 @@ import { icon } from '../../icons.js';
 import { api } from '../../api.js';
 import { toggle, toast, confirmSheet } from '../../ui.js';
 import { relTime } from '../../util.js';
-import { helpTip } from '../help-tip.js';
+import { helpTip } from '../common/help-tip.js';
 
 const st = { data: null, loading: false, loadedAt: 0 };
 

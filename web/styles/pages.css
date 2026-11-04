@@ -467,7 +467,7 @@ load-more { display: block; height: 1px; }
 .sp-chip { display: block; width: 26px; height: 8px; border-radius: min(var(--r-pill), 4px); background: var(--accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-text) 30%, transparent); }
 .sp-btn { display: block; width: 30px; height: 10px; border-radius: min(var(--r-pill), 5px); background: var(--accent-grad); }
 
-/* ── Context systems (pages/context.js, components/flowchart.js, context-sandbox.js) ── */
+/* ── Context systems (pages/context.js, components/context/flowchart.js, context-sandbox.js) ── */
 .ic-xs { width: 12px; height: 12px; vertical-align: -1px; }
 .spinner-sm { width: 14px; height: 14px; border-width: 2px; vertical-align: -2px; }
 .cs-badge { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }

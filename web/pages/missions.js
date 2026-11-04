@@ -1,6 +1,6 @@
 // pages/missions.js — Missions: playful goals your personas are working on,
 // what they pulled off (with the words that proved it) and the badges earned.
-// Data: GET /api/missions. "New mission" sheet: components/mission-sheet.js.
+// Data: GET /api/missions. "New mission" sheet: components/goals/mission-sheet.js.
 
 import { html } from '../dom.js';
 import { icon } from '../icons.js';
@@ -8,11 +8,11 @@ import { api } from '../api.js';
 import { bus, personaById, chatByKey } from '../store.js';
 import { confirmSheet, toast, busy } from '../ui.js';
 import { debounce, plural } from '../util.js';
-import { emptyState } from '../components/art.js';
-import { avatarStack } from '../components/avatar.js';
-import { missionBadge, medal } from '../components/badges.js';
-import { helpTip } from '../components/help-tip.js';
-import { openMissionSheet, CATEGORY_LABELS } from '../components/mission-sheet.js';
+import { emptyState } from '../components/art/art.js';
+import { avatarStack } from '../components/common/avatar.js';
+import { missionBadge, medal } from '../components/art/badges.js';
+import { helpTip } from '../components/common/help-tip.js';
+import { openMissionSheet, CATEGORY_LABELS } from '../components/goals/mission-sheet.js';
 
 const categoryLabel = (id) => (CATEGORY_LABELS.find((c) => c.id === id) || { label: 'A' }).label;
 

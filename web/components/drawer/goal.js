@@ -8,12 +8,12 @@ import { api } from '../../api.js';
 import { loadChats, isAway } from '../../store.js';
 import { toast } from '../../ui.js';
 import { debounce, rowsFor } from '../../util.js';
-import { chatGoalControls } from '../goal-controls.js';
-import { initiateControls } from '../initiate-controls.js';
+import { chatGoalControls } from '../goals/goal-controls.js';
+import { initiateControls } from '../chat/initiate-controls.js';
 import { patchChat } from './shared.js';
-import { openMissionSheet, loadMissionTemplates } from '../mission-sheet.js';
-import { missionBadge } from '../badges.js';
-import { helpTip } from '../help-tip.js';
+import { openMissionSheet, loadMissionTemplates } from '../goals/mission-sheet.js';
+import { missionBadge } from '../art/badges.js';
+import { helpTip } from '../common/help-tip.js';
 
 export function createGoalTab(ctx) {
   const { key } = ctx;

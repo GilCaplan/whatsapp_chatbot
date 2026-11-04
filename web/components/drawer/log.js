@@ -10,9 +10,9 @@ import { icon } from '../../icons.js';
 import { api } from '../../api.js';
 import { seg, toast, confirmSheet, skeletonRows } from '../../ui.js';
 import { relTime, clockTime, duration, debounce, toDate } from '../../util.js';
-import { emptyState } from '../art.js';
-import { helpTip } from '../help-tip.js';
-import { REASONS } from '../feed.js';
+import { emptyState } from '../art/art.js';
+import { helpTip } from '../common/help-tip.js';
+import { REASONS } from '../common/feed.js';
 
 // How each outcome looks: label, colour token, icon.
 const OUTCOMES = {

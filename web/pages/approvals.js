@@ -5,13 +5,13 @@ import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { store, personaById, chatByKey, loadApprovals } from '../store.js';
 import { toast } from '../ui.js';
-import { avatarStack } from '../components/avatar.js';
-import { bubbles } from '../components/chat-drawer.js';
-import { emptyState } from '../components/art.js';
-import { providerLabel } from '../components/status.js';
+import { avatarStack } from '../components/common/avatar.js';
+import { bubbles } from '../components/chat/chat-drawer.js';
+import { emptyState } from '../components/art/art.js';
+import { providerLabel } from '../components/common/status.js';
 import { rowsFor, modKey } from '../util.js';
-import { taggedIn } from '../components/mentions.js';
-import { TONES, catGlyph, modeOf, catLabel } from '../components/handoff-meta.js';
+import { taggedIn } from '../components/common/mentions.js';
+import { TONES, catGlyph, modeOf, catLabel } from '../components/chat/handoff-meta.js';
 
 export default function Approvals(ctx) {
   const update = () => ctx.update();

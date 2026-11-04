@@ -2,7 +2,7 @@
 // Wave 3: Engineer A owns the top half (what the persona learned about the
 // people here: toggle, list, "Remember this…", "Forget everything here");
 // Engineer B appends the daily recap block (recapBlock() from
-// web/components/recap-card.js) at the marked spot below.
+// web/components/home/recap-card.js) at the marked spot below.
 //
 // The memory store is shared with the People tab (ctx.memories: counts per
 // person); the People tab opens this tab filtered by person via the
@@ -13,12 +13,12 @@ import { icon } from '../../icons.js';
 import { api } from '../../api.js';
 import { store } from '../../store.js';
 import { toggle, toast } from '../../ui.js';
-import { recapBlock } from '../recap-card.js';
-import { helpTip } from '../help-tip.js';
-import { createMemoryStore, memoryList } from '../memory-list.js';
-import { createCrossStore, crossBlock } from '../cross-block.js';
+import { recapBlock } from '../home/recap-card.js';
+import { helpTip } from '../common/help-tip.js';
+import { createMemoryStore, memoryList } from '../chat/memory-list.js';
+import { createCrossStore, crossBlock } from '../chat/cross-block.js';
 import { patchChat } from './shared.js';
-import { createContextStore, contextBlock } from '../context-block.js';
+import { createContextStore, contextBlock } from '../chat/context-block.js';
 
 export function createMemoryTab(ctx) {
   const mem = createMemoryStore(ctx.key, ctx.update);

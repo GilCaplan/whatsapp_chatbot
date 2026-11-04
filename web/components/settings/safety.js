@@ -7,8 +7,8 @@ import { icon } from '../../icons.js';
 import { store } from '../../store.js';
 import { toggle, fieldRow } from '../../ui.js';
 import { debounce, rowsFor } from '../../util.js';
-import { helpTip } from '../help-tip.js';
-import { HANDOFF_CATS, catGlyph, renderReveal } from '../handoff-meta.js';
+import { helpTip } from '../common/help-tip.js';
+import { HANDOFF_CATS, catGlyph, renderReveal } from '../chat/handoff-meta.js';
 
 const MAX_TEMPLATE = 600;
 const DEFAULT_TEMPLATE = "Quick confession: for a while now you've been chatting with {persona}, an AI persona I set up. It was me behind it, and I'm taking over from here. Hope it was fun, tell me what you thought!";

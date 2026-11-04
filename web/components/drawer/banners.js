@@ -7,7 +7,7 @@ import { icon } from '../../icons.js';
 import { store, isAway } from '../../store.js';
 import { busy, toast } from '../../ui.js';
 import { awayUntilText, patchChat } from './shared.js';
-import { catGlyph, catLabel, catReason, waLink, resumeChat } from '../handoff-meta.js';
+import { catGlyph, catLabel, catReason, waLink, resumeChat } from '../chat/handoff-meta.js';
 
 /** The "Needs you" banner of a paused (hand-off) chat. */
 export function needsYouBanner(c, p, { compact = false } = {}) {

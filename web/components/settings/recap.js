@@ -4,7 +4,7 @@
 import { html } from '../../dom.js';
 import { icon } from '../../icons.js';
 import { toggle, fieldRow } from '../../ui.js';
-import { providerLabel } from '../status.js';
+import { providerLabel } from '../common/status.js';
 
 const KEEP = [7, 30, 90, 365];
 

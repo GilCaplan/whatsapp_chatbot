@@ -5,12 +5,12 @@ import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { store, personaById } from '../store.js';
 import { toggle, spinner, seg } from '../ui.js';
-import { personaAvatar } from '../components/avatar.js';
-import { personaPicker } from '../components/persona-picker.js';
-import { emptyState } from '../components/art.js';
-import { providerLabel } from '../components/status.js';
+import { personaAvatar } from '../components/common/avatar.js';
+import { personaPicker } from '../components/persona/persona-picker.js';
+import { emptyState } from '../components/art/art.js';
+import { providerLabel } from '../components/common/status.js';
 import { fmtMs, rowsFor, uid, clockTime } from '../util.js';
-import { mentionNodes } from '../components/mentions.js';
+import { mentionNodes } from '../components/common/mentions.js';
 
 const SUGGESTIONS = [
   { label: 'Say hi', text: 'heyyy how’s it going?' },

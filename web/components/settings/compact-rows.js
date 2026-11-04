@@ -6,9 +6,9 @@
 
 import { html } from '../../dom.js';
 import { toggle } from '../../ui.js';
-import { numberField } from '../controls.js';
+import { numberField } from '../common/controls.js';
 import { debounce } from '../../util.js';
-import { helpTip } from '../help-tip.js';
+import { helpTip } from '../common/help-tip.js';
 
 let pending = {};
 const saveSoon = debounce((h) => { const p = pending; pending = {}; h.save({ memory: { compact: p } }, 'memory'); }, 600);
