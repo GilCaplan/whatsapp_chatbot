@@ -7,7 +7,7 @@
 import { html } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
-import { toggle, toast, confirmSheet } from '../ui.js';
+import { toast, confirmSheet } from '../ui.js';
 import { debounce, rowsFor, relTime } from '../util.js';
 import { helpTip } from './help-tip.js';
 import { patchChat } from './drawer/shared.js';
@@ -68,10 +68,11 @@ export function createContextStore(key, update) {
     load();
   }
 
-  async function setAuto(on) {
-    if (st.data) st.data.autoCompact = on;
+  /** Long-term memory for this chat: 0 automatic, -1 off, N every N messages. */
+  async function setCompact(v) {
+    if (st.data) st.data.compact = { ...st.data.compact, setting: v };
     update();
-    try { await patchChat(key, { autoCompact: on }); } catch { /* toasted */ }
+    try { await patchChat(key, { compactEvery: v }); } catch { /* toasted */ }
     load();
   }
 
@@ -86,7 +87,7 @@ export function createContextStore(key, update) {
   }
 
   return {
-    st, load, reloadSoon, compact, forgetSummary, setFrom, setAuto, saveEdit,
+    st, load, reloadSoon, compact, forgetSummary, setFrom, setCompact, saveEdit,
     typeInstructions(v) { st.instr = v; update(); saveInstructions(); },
     typeSummary(v) { st.summary = v; update(); saveSummary(); },
     destroy() {
@@ -184,6 +185,22 @@ function promptParts(cs, d, name, onUpdate) {
     </div>`;
 }
 
+const COMPACT_CHOICES = [[0, 'Automatic'], [50, 'Every 50'], [100, 'Every 100'], [150, 'Every 150'], [200, 'Every 200'], [300, 'Every 300'], [-1, 'Off']];
+
+/** Long-term memory: one choice per chat and what it means right now. */
+function compactRow(cs, d) {
+  const k = d.compact || {};
+  const now = !k.on ? 'Off: older messages simply drop out of what it reads.'
+    : `It reads every message since the last summary, at least ${k.keep}. After ${k.nextIn} more, all but the last ${k.keep} fold into the summary${k.setting === 0 ? ` (every ${k.every}${k.fast ? ': a busy chat right now' : ''})` : ''}.`;
+  return html`<div class="field-row">
+    <div class="grow"><div class="field-label">Long-term memory</div>
+      <div class="field-help">${now}</div></div>
+    <select class="select select-sm" aria-label="Long-term memory" @change=${(e) => cs.setCompact(Number(e.target.value))}>
+      ${COMPACT_CHOICES.map(([v, l]) => html`<option value=${v} ?selected=${(k.setting || 0) === v}>${l}</option>`)}
+    </select>
+  </div>`;
+}
+
 function roleLabel(m, name) {
   return m.role === 'assistant' ? name : 'Chat';
 }
@@ -248,11 +265,7 @@ export function contextBlock({ ctx: cs, chat: c, persona: p, onUpdate }) {
       </div>
     </div>
 
-    <div class="field-row">
-      <div class="grow"><div class="field-label">Summarise automatically</div>
-        <div class="field-help">When its history is full, the older half is folded into the summary instead of being dropped.</div></div>
-      ${toggle(!!d.autoCompact, (v) => cs.setAuto(v), { label: 'Summarise automatically' })}
-    </div>
+    ${compactRow(cs, d)}
 
     <div class="row gap-8 row-wrap mt-8">
       <button class="btn btn-ghost btn-sm" title="It forgets everything said so far in this chat (the messages stay)"

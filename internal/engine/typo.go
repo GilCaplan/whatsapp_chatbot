@@ -112,7 +112,8 @@ func (e *Engine) recordSentBubble(r *Runner, c model.ChatAssignment, text, inten
 	if r != nil {
 		r.recordSent(msg, wire)
 	} else {
-		_ = e.store.AppendHistory(c.Key, msg, e.effective(c).Profile.HistoryMessages)
+		n, _ := e.historyCap(c, e.effective(c).Profile)
+		_ = e.store.AppendHistory(c.Key, msg, n)
 	}
 	e.store.TouchChat(c.Key, time.Now())
 	if kind == "" {

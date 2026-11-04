@@ -214,7 +214,7 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		AutoContinue *bool              `json:"autoContinue"`
 		Instructions *string            `json:"instructions"`
 		ContextFrom  json.RawMessage    `json:"contextFrom"`
-		AutoCompact  *bool              `json:"autoCompact"`
+		CompactEvery *int               `json:"compactEvery"`
 		PromptEdits  map[string]*string `json:"promptEdits"`
 	}
 	if !decodeJSON(w, r, &body) {
@@ -314,6 +314,10 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		language = &lp
+	}
+	if v := body.CompactEvery; v != nil && *v != 0 && *v != -1 && (*v < 20 || *v > 2000) {
+		writeError(w, http.StatusBadRequest, "invalid_context", "compactEvery must be 0 (automatic), -1 (off) or 20–2000")
+		return
 	}
 	for k, v := range body.PromptEdits { // key → text; null or "" = back to the original
 		if !slices.Contains(model.EditablePromptSections, k) {
@@ -418,8 +422,8 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		if hasFrom {
 			c.ContextFrom = from
 		}
-		if body.AutoCompact != nil {
-			c.AutoCompact = *body.AutoCompact
+		if body.CompactEvery != nil {
+			c.CompactEvery = *body.CompactEvery
 		}
 		if len(body.PromptEdits) > 0 {
 			edits := maps.Clone(c.PromptEdits) // a fresh map: snapshots may be read elsewhere

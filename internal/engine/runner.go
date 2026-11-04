@@ -76,8 +76,9 @@ func newRunner(e *Engine, c model.ChatAssignment) *Runner {
 	r := &Runner{e: e, key: c.Key, cfg: c, inbox: make(chan model.Incoming, inboxSize), aux: map[uint64]Timer{}}
 	r.ctx, r.cancel = context.WithCancel(e.ctx)
 	rp := e.effective(c).Profile
-	if h, err := e.store.History(c.Key, rp.HistoryMessages); err == nil {
-		r.history = trimHistory(h, rp.HistoryMessages, rp.HistoryChars)
+	n, chars := e.historyCap(c, rp) // long-term memory needs everything since the summary (context.go)
+	if h, err := e.store.History(c.Key, n); err == nil {
+		r.history = trimHistory(h, n, chars)
 	}
 	var latest model.PendingReply
 	for _, p := range e.store.Approvals() {
@@ -298,6 +299,7 @@ func (r *Runner) process(in model.Incoming) {
 	meta = mentionMeta(meta, mentionNames)
 	e.act(model.ActIncoming, c, p.Name, text, meta)
 	if speaker == "them" {
+		e.secretaryTick(c, in, text)                                              // messages for you (secretary.go)
 		e.goalIncoming(c, p, isGroup, senderName(in, c, isGroup), text, in.Media) // "say the word" goals (goal.go)
 		// Hand-off (handoff.go): a paused chat keeps messages as context; a
 		// sensitive message pauses it — even when the persona would stay quiet.
@@ -429,12 +431,14 @@ func (r *Runner) appendLocked(m model.Message, rp model.BehaviorProfile) model.M
 	if m.ID == "" {
 		m.ID = store.NewID()
 	}
-	r.history = trimHistory(append(r.history, m), rp.HistoryMessages, rp.HistoryChars)
+	n, chars := r.e.historyCap(r.cfg, rp)
+	r.history = trimHistory(append(r.history, m), n, chars)
 	return m
 }
 
 func (r *Runner) persist(m model.Message, rp model.BehaviorProfile) {
-	if err := r.e.store.AppendHistory(r.key, m, rp.HistoryMessages); err != nil {
+	n, _ := r.e.historyCap(r.config(), rp)
+	if err := r.e.store.AppendHistory(r.key, m, n); err != nil {
 		r.e.act(model.ActError, r.config(), "", "Couldn't save history: "+err.Error(), nil)
 	}
 }

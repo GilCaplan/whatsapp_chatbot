@@ -154,6 +154,22 @@ export const api = {
     qrURL: () => `/api/wa/qr.png?t=${Date.now()}`,
   },
 
+  /** The owner's calendars (read-only), for personal secretaries. */
+  calendars: {
+    /** → { items:[{ id, name, kind, where, hasKey, enabled }] } */
+    list: (o) => get('/api/calendars', o),
+    add: (body, o) => post('/api/calendars', body, o),
+    patch: (id, body, o) => patch(`/api/calendars/${enc(id)}`, body, o),
+    remove: (id, o) => del(`/api/calendars/${enc(id)}`, o),
+    /** → { ok, error, events, upcoming:[{ start, end, allDay, title }] } */
+    check: (id, o) => post(`/api/calendars/${enc(id)}/check`, {}, { timeout: 45000, ...o }),
+  },
+  /** Messages a secretary took for you. */
+  notes: {
+    list: (o) => get('/api/secretary/notes', o),
+    patch: (id, body, o) => patch(`/api/secretary/notes/${enc(id)}`, body, o),
+    remove: (id, o) => del(`/api/secretary/notes/${enc(id)}`, o),
+  },
   nicknames: {
     /** → { items:[{ ids, name, original, updatedAt }] } */
     list: (o) => get('/api/nicknames', o),

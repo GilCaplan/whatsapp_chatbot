@@ -51,6 +51,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/mission` | missions (leaf, `model` + stdlib): ~15 goal templates with blanks (`Templates`, `Fill`, `Detector`/`MediaDetected`) and achievements computed from the history (`Achievements`) |
 | `internal/world` | where a persona lives (leaf): time zone, weekend, part of day, daily routine (`RoutineAt`…) for the prompt's "right now" section and routine gating |
 | `internal/lang` | languages (leaf: `model`): light classifier `Detect` (script, then common words for Latin languages; short/unclear = not sure), conversation language `Main`, `LanguagePrefs` rules (`Effective`, `Ignores`, `Reply`, `Validate`); `All` is mirrored in `web/components/language-controls.js` |
+| `internal/calendar` | the owner's calendars, read-only (leaf: `model` + stdlib): `ParseICS` (RRULE daily/weekly/monthly/yearly, EXDATE, RECURRENCE-ID, all-day, TZID), the MACalendar client, `Service` (10-minute cache, `Busy`), `FreeSlots` |
 | `internal/memory` | what personas learn about people (leaf): `Merge` (dedupe/update/cap/expiry) and `Select` for the reply prompt |
 | `internal/crossctx` | cross-chat context (leaf: `model`+`memory`+`handoff`): `ModeFor`/`ShareFor` (chat → app default), sensitive `Classify` (hand-off keywords + romance/secret/money/health extras, EN+HE), `Carries` (lock/unlock/sensitive/fresh), `Select` (people in the conversation, caps), `Leak` (reply guard) |
 | `internal/handoff` | keyword classifier (leaf, English + Hebrew) for messages you should answer yourself (money, health, meeting, distress, bot, legal) |
@@ -80,7 +81,7 @@ Windows `%APPDATA%\WhatsappDoppel\`, Linux `$XDG_CONFIG_HOME|~/.config/WhatsappD
 code: the .app starts with cwd `/`, shortcuts and .desktop files with other folders. Contents: `config.json`, `secrets.json`, `personas.json`,
 `chats.json`, `approvals.json`, `runtime.json` (per-chat reply timestamps, last incoming/reply,
 proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `avatars/`, `cache/`,
-`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `ratings/<chatKey>.json` (connection ratings), `nicknames.json`, `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
+`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `ratings/<chatKey>.json` (connection ratings), `nicknames.json`, `calendars.json` + `notes.json` (secretary, 0600), `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
 (only with the Clone consent), `logs/server.log`, `logs/activity-YYYY-MM-DD.jsonl`,
 `instance.json` (`{pid, port, token, startedAt, version}` while serving), `server.lock`.
 
@@ -92,7 +93,7 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
 
 - The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx`, `lang` only —
   never on `engine`/`wa`/`llm` directly. `internal/app` is the only place that imports everything.
-- Import rules: `model` has no deps; `behavior`, `mention`, `mission`, `world`, `memory`, `handoff`, `lang` import only `model`
+- Import rules: `model` has no deps; `behavior`, `mention`, `mission`, `world`, `memory`, `handoff`, `lang`, `calendar` import only `model`
   (+ stdlib); `crossctx` imports `model`+`memory`+`handoff`; `goals` imports `model`+`persona`; `platform` imports only stdlib + `x/sys`; `config` imports
   `behavior`+`crossctx`+`model`+`platform`; `store` imports `config`+`behavior`+`model`(+`world`); `notify` imports
   `config`+`model`+`platform`. OS-specific code goes only in `platform` (build-tagged files), never
@@ -189,6 +190,14 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   chat only; delays are drawn with `behavior.Delay` along the profile's `timingCurve`.
 - Connection ratings (`engine/ratings.go`, `prompt/rating.go`): own daily timer at `recap.time` (independent of
   `recap.enabled`), groups with 20+ messages in 24 h, one JSON call through the job slot; `ratings/<chatKey>.json`.
+- Personal secretary (`model.SecretaryConfig` on the persona; `engine/secretary.go`, `prompt/secretary.go`): its job is a
+  prompt part right after the character; meeting help gets `OWNER'S FREE TIMES` (meeting hours minus calendar busy times,
+  never titles) inside the chat context; `secretaryTick` → job `secnote:<key>` (45 s, 5 s for urgent words/VIPs) writes
+  notes (`NoteCursor`), activity `secretary.note` notifies. Built with `web/components/secretary-builder.js` from the
+  Personas page's single "Build a persona" chooser (`build-chooser.js`).
+- Long-term memory (`engine/context.go`): `compactPlan` (settings `memory.compact` → chat `compactEvery`; fast chats use
+  `fastEvery`); the persona reads everything since `contextFrom`, `historyCap` sizes the window (and the store's keep) to
+  hold it; at keep+every messages all but keep fold into the summary.
 - What it reads (`engine/context.go`): history from `ChatAssignment.contextFrom` on (`fromContext`), plus the summary
   (`EARLIER IN THIS CHAT`, inside the chat-context block) and your `instructions` (after the goal). Compaction (manual
   or `autoCompact` when the window is full) writes the summary and moves `contextFrom`. `autoContinue` turns hand-off

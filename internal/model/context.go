@@ -61,5 +61,15 @@ type ChatContext struct {
 	Summary      *ChatSummary     `json:"summary"`
 	Instructions string           `json:"instructions"`
 	ContextFrom  *time.Time       `json:"contextFrom"`
-	AutoCompact  bool             `json:"autoCompact"`
+	Compact      CompactStatus    `json:"compact"`
+}
+
+// CompactStatus is how a chat's long-term memory works right now.
+type CompactStatus struct {
+	Setting int  `json:"setting"` // ChatAssignment.CompactEvery (0 automatic, -1 off, N)
+	On      bool `json:"on"`
+	Keep    int  `json:"keep"`   // always read word for word
+	Every   int  `json:"every"`  // new messages between summaries (now)
+	Fast    bool `json:"fast"`   // a fast chat right now (Every = fastEvery)
+	NextIn  int  `json:"nextIn"` // messages until the next summary
 }

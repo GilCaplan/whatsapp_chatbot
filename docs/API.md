@@ -368,7 +368,7 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 |---|---|---|
 | `GET /api/chats` | – | `[ChatAssignment & {personaName, pendingCount, historyCount, goal: ChatGoal, nextCheckInAt: null\|time, nextScheduledAt: null\|time, left: bool}]` (`nextCheckInAt` = scheduled automatic check-in, `nextScheduledAt` = next scheduled message, both from runtime.json; `left` = a group you are no longer in) |
 | `POST /api/chats` | `{jid, personaId, mode?, approvalMode?, enabled?, behavior?: BehaviorOverrides}` (mode wins over approvalMode) | `ChatAssignment` (201; server canonicalizes key/jid/altJid/name); 409 `already_assigned`; 400 `invalid_behavior` |
-| `PATCH /api/chats/{key}` | any of `{enabled, personaId, mode, approvalMode, goalOverride, goalStyle, goalPlanAhead, name, behavior, snoozedUntil, people, memory, missionId, cross, language, autoContinue, instructions, contextFrom, autoCompact}` | `ChatAssignment`; 400 `invalid_behavior` / `invalid_snooze` / `invalid_goal` / `invalid_people` / `invalid_mode` / `invalid_memory` / `invalid_cross` / `invalid_language` / `invalid_instructions` / `invalid_context`. `language`: a `LanguagePrefs` block or `null` (the app's); `autoContinue: true` also clears a pause; `instructions` ≤ 1000 characters; `contextFrom`: `null` (read all history), `"now"` (start fresh) — both forget the summary — or a time; `promptEdits`:
+| `PATCH /api/chats/{key}` | any of `{enabled, personaId, mode, approvalMode, goalOverride, goalStyle, goalPlanAhead, name, behavior, snoozedUntil, people, memory, missionId, cross, language, autoContinue, instructions, contextFrom, autoCompact}` | `ChatAssignment`; 400 `invalid_behavior` / `invalid_snooze` / `invalid_goal` / `invalid_people` / `invalid_mode` / `invalid_memory` / `invalid_cross` / `invalid_language` / `invalid_instructions` / `invalid_context`. `language`: a `LanguagePrefs` block or `null` (the app's); `autoContinue: true` also clears a pause; `instructions` ≤ 1000 characters; `contextFrom`: `null` (read all history), `"now"` (start fresh) — both forget the summary — or a time; `compactEvery`: `0` automatic, `-1` off, `20–2000` every N; `promptEdits`:
 `{character|safety|history|stay: text|null}` replaces that part of the system prompt in this chat only (null or "" = the
 original; ≤ 8000 characters; 400 `invalid_prompt_edit` for other parts); `people.people[].language`: `""`, `"match"` or a language code. `approvalMode:true` keeps co-pilot, `false` = auto; `memory:null` = the app setting; `cross: {mode?: string\|null, share?: bool\|null}` (absent = keep, null = the app default; `cross:null` resets both); `people.people[].cross: bool\|null` |
 | `GET /api/chats/{key}/people` | – | `{kind, mode:"auto\|everyone\|selected", effectiveMode:"everyone\|selected", memberCount, threshold, answerAnyoneWhoAddressesIt, members:[{jid, name, phone, lid, isAdmin, isSelf, respond (effective), respondSource:"person\|mode", priority, notes, lastSpokeAt: null\|time, left, cross (effective), crossSource:"person\|default", dmChatKey ("" = no private chat with this persona), dmShares}], membersError?}` — group members (cached by WhatsApp, 10 min) merged with the chat's preferences; people with preferences who are no longer members are listed with `left:true`. Order: recent speakers, then by name, then you, then people who left. DMs list the single contact (for notes). |
@@ -620,10 +620,38 @@ replaced in this chat `edited` + `original`), messages:[{role, content}], chars,
 | `DELETE /api/chats/{key}/summary` | – | `{ok:true}` |
 | `POST /api/chats/{key}/compact` | `{keep?}` (default 8) | `ChatSummary` — folds everything but the last `keep` messages into the summary and moves `contextFrom` to the first kept one; 502 `compact_failed` (also when there is nothing older) |
 
-`ChatSummary {chatKey, text, through, messages, updatedAt, edited}`. The summary (`EARLIER IN THIS CHAT`) sits in the
+`ChatContext.compact`: `{setting, on, keep, every, fast, nextIn}`. Long-term memory (settings `memory.compact {off, keep 30,
+every 70, fastEvery 200, fastMessages 150, fastHours 3}`, per chat `compactEvery`): the persona reads every message since
+`contextFrom` word for word; once `keep + every` are in, all but the last `keep` fold into the summary and `contextFrom`
+moves up (a chat with `fastMessages` in `fastHours` uses `fastEvery`). With it on, the history window is sized to hold
+everything since the summary (`historyMessages` becomes a minimum). `ChatSummary {chatKey, text, through, messages, updatedAt, edited}`. The summary (`EARLIER IN THIS CHAT`) sits in the
 chat-context block of the prompt and the chat's `instructions` (`INSTRUCTIONS FOR THIS CHAT`) after the goal. With
 `autoCompact`, a chat whose history (from `contextFrom`) reaches `historyMessages` is compacted in the background, keeping
 the newer half. Activity `memory` with `meta.compacted`. Changes publish `memories.changed`.
+
+## Personal secretary
+
+A persona with `secretary` (`SecretaryConfig {ownerName, tone: friendly|formal, takeMessages, flagUrgent, answerFaqs,
+meetings, meetDays:[mon..sun], meetFrom, meetTo ("HH:MM"), meetingMinutes, useCalendars, shareable, never, awayMessage,
+faqs:[{q, a}], vips:[name or number]}`) works as the owner's assistant: its job goes into the prompt after the character
+(it always says it is the owner's assistant), meetings get `OWNER'S FREE TIMES` (next 7 days, meeting hours minus the
+calendars' busy times; never titles), and a background job writes down what people want from the owner (activity
+`secretary.note`, meta `urgent`; urgent ones and VIPs run within seconds and notify with sound). SSE `notes.changed`.
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/calendars` | – | `{items:[{id, name, kind: ics\|macalendar, where (masked link), hasKey, enabled}]}` |
+| `POST /api/calendars` | `{kind, name?, url, apiKey?}` | 201 `{items}`; 400 `invalid_calendar` (link must be http(s):// or webcal://; MACalendar defaults to `http://127.0.0.1:8080`) |
+| `PATCH /api/calendars/{id}` | `{name?, url?, apiKey?, enabled?}` | `{items}` |
+| `DELETE /api/calendars/{id}` | – | `{items}` |
+| `POST /api/calendars/{id}/check` | – | `CalendarCheck {ok, error?, events (next 3 weeks), upcoming:[{start, end, allDay, title}]}` — titles are for the owner only |
+| `GET /api/secretary/notes` | – | `{items:[SecretaryNote {id, chatKey, chatName, from, fromJid?, text, urgent, callback?, meeting?, at, done}]}` newest first |
+| `PATCH /api/secretary/notes/{id}` | `{done}` | `{ok:true}` |
+| `DELETE /api/secretary/notes/{id}` | – | `{ok:true}`; id `done` clears every done note |
+
+Calendars are read-only: `.ics` feeds (repeating events, moved/cancelled occurrences, all-day, TZID incl. common Windows
+names) and the MACalendar app (`GET {url}/events?week_start=YYYY-MM-DD`, header `X-API-Key`); cached 10 minutes.
+`calendars.json` and `notes.json` are 0600.
 
 ## Connection ratings
 

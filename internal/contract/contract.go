@@ -98,6 +98,8 @@ type Engine interface {
 	// RateNow rates how connected the persona felt to each person who wrote
 	// in the chat in the last 24 hours (private; saved as today's ratings).
 	RateNow(ctx context.Context, chatKey string) (model.RatingDay, error)
+	// CalendarCheck reads one of the owner's calendars now (read-only).
+	CalendarCheck(ctx context.Context, src model.CalendarSource) model.CalendarCheck
 	// ExpressionPreview writes up to 3 sample replies of p (may be unsaved) at
 	// its emoji and length settings; lengthBias "" = the private profile's,
 	// roll picks other sample messages.

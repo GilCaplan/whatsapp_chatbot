@@ -1598,3 +1598,54 @@ count-ring { display: inline-grid; flex: none; }
 .rt-change.up { color: var(--green); }
 .rt-change.down { color: var(--red); }
 .rt-change.new { text-transform: uppercase; letter-spacing: .04em; font-size: 10px; }
+
+/* ── Build a persona (chooser) ── */
+.build-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.build-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; text-align: left; cursor: pointer;
+  border: 1px solid var(--hairline); border-radius: 18px; background: var(--fill-1); color: inherit; font: inherit;
+  transition: transform .35s var(--spring), border-color .2s, background-color .2s;
+}
+.build-tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--c1) 50%, var(--hairline)); background: var(--fill-2); }
+.build-ic { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--c1), var(--c2)); filter: var(--art-filter, none); }
+.build-title { font-weight: 700; font-size: 15px; }
+.build-line { font-size: 12.5px; color: var(--text-2); line-height: 1.4; }
+@media (max-width: 560px) { .build-grid { grid-template-columns: 1fr; } }
+
+/* ── Personal secretary builder ── */
+.sec-form { display: flex; flex-direction: column; gap: 12px; }
+.sec-duties { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sec-duty { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 14px; cursor: pointer; }
+.sec-duty.on { border-color: color-mix(in srgb, var(--blue) 45%, var(--hairline)); background: color-mix(in srgb, var(--blue) 7%, transparent); }
+.sec-duty input { margin-top: 3px; }
+.sec-duty-t { display: block; font-weight: 600; font-size: 13.5px; }
+.sec-duty-h { display: block; font-size: 12px; color: var(--text-2); }
+.sec-block { border: 1px solid var(--hairline); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.sec-days { display: flex; flex-wrap: wrap; gap: 6px; }
+.sec-time { width: 110px; display: inline-block; margin-left: 4px; }
+.sec-faq { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; }
+@media (max-width: 560px) { .sec-duties { grid-template-columns: 1fr; } .sec-faq { grid-template-columns: 1fr auto; } .sec-faq > :nth-child(2) { grid-column: 1; } }
+
+/* ── Settings › Calendars ── */
+.cal-row { border: 1px solid var(--hairline); border-radius: 14px; padding: 10px 12px; margin-top: 8px; }
+.cal-ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; color: var(--indigo); background: color-mix(in srgb, var(--indigo) 14%, transparent); flex: none; }
+.cal-check { margin: 8px 0 0 38px; color: var(--green); }
+.cal-check.bad { color: var(--red); }
+.cal-check .ic { vertical-align: -2px; margin-right: 4px; }
+.cal-up { margin: 6px 0 4px; padding-left: 16px; color: var(--text); }
+.cal-add { border: 1px dashed var(--hairline-strong); border-radius: 14px; padding: 12px; margin-top: 8px; }
+
+/* ── Messages for you (Dashboard) ── */
+.notes-card { margin-bottom: 16px; }
+.notes-card .card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.notes-card .card-head h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.note-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 4px; border-top: 1px solid var(--hairline); }
+.note-row.done { opacity: .6; }
+.note-ic { flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--blue); background: color-mix(in srgb, var(--blue) 13%, transparent); }
+.note-row.urgent .note-ic { color: var(--red); background: color-mix(in srgb, var(--red) 13%, transparent); }
+.note-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.note-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.note-text { font-size: 13.5px; overflow-wrap: anywhere; }
+.note-urgent { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); border-color: transparent; }
+.note-actions { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 560px) { .note-row { flex-wrap: wrap; } .note-actions { width: 100%; } }

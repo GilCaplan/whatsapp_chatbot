@@ -49,6 +49,9 @@ type RunnerState struct {
 	// Typos lists the chat's recent slips (newest last, at most MaxTypoMarks)
 	// so the same kind and correction don't keep coming back.
 	Typos []TypoMark `json:"typos,omitempty"`
+
+	// NoteCursor: the secretary has taken notes from the messages up to here.
+	NoteCursor time.Time `json:"noteCursor"`
 }
 
 // TypoMark is one typo the persona made in a chat.

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"whatsappdoppel/internal/behavior"
+	"whatsappdoppel/internal/calendar"
 	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/contract"
 	"whatsappdoppel/internal/events"
@@ -59,6 +60,8 @@ type Deps struct {
 	Sampler behavior.Sampler
 	// ProactiveEvery is the check-in scan interval (0 = 5 minutes).
 	ProactiveEvery time.Duration
+	// Calendar reads the owner's calendars for secretaries (nil = none).
+	Calendar *calendar.Service
 }
 
 type Engine struct {
@@ -67,6 +70,7 @@ type Engine struct {
 	hub   *events.Hub
 	wa    contract.WhatsApp
 	llm   *llm.Registry
+	cal   *calendar.Service // secretary.go
 	clock Clock
 	rng   behavior.Sampler
 
@@ -117,6 +121,7 @@ func New(d Deps) *Engine {
 		hub:            d.Hub,
 		wa:             d.WA,
 		llm:            d.LLM,
+		cal:            d.Calendar,
 		clock:          clk,
 		rng:            rng,
 		runners:        map[string]*Runner{},

@@ -879,11 +879,16 @@ func TestPlaygroundAndBuilder(t *testing.T) {
 	}
 }
 
+// The fixed history limits apply when long-term memory is off (with it on,
+// the window is everything since the last summary: context_test.go).
 func TestHistoryBounds(t *testing.T) {
-	h := newHarness(t, both(func(p *model.BehaviorProfile) {
-		p.HistoryMessages = 3
-		p.HistoryChars = 500
-	}), dmChat())
+	h := newHarness(t, func(s *config.Settings) {
+		s.Memory.Compact.Off = true
+		both(func(p *model.BehaviorProfile) {
+			p.HistoryMessages = 3
+			p.HistoryChars = 500
+		})(s)
+	}, dmChat())
 	for _, txt := range []string{"aaaa", "bbbb", "cccc", "dddd"} {
 		h.simulate(dmKey, txt, true) // own messages: context only
 	}

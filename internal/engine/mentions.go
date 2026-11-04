@@ -127,6 +127,9 @@ func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile,
 	if sm, ok := e.store.Summary(c.Key); ok {
 		o.Summary = sm.Text // older messages (context.go)
 	}
+	if _, s := e.secretaryOf(c); s != nil && s.Meetings {
+		o.FreeTimes, o.FreeKnown = e.freeTimes(s) // secretary.go
+	}
 	// Realism (wave 3): the time where the persona lives, and what it
 	// remembers about the people here (routine.go, memory.go).
 	o.Now, o.MacZone = e.clock.Now(), time.Local
@@ -302,7 +305,8 @@ func (e *Engine) recordSent(r *Runner, c model.ChatAssignment, text, wire string
 	if r != nil {
 		r.recordSent(msg, wire)
 	} else {
-		_ = e.store.AppendHistory(c.Key, msg, e.effective(c).Profile.HistoryMessages)
+		n, _ := e.historyCap(c, e.effective(c).Profile)
+		_ = e.store.AppendHistory(c.Key, msg, n)
 	}
 	e.store.TouchChat(c.Key, time.Now())
 	e.briefTick(c) // brief.go
@@ -322,7 +326,8 @@ func (e *Engine) chatHistory(r *Runner, c model.ChatAssignment) []model.Message 
 	if r != nil {
 		return r.historySnapshot()
 	}
-	h, _ := e.store.History(c.Key, e.effective(c).Profile.HistoryMessages)
+	n, _ := e.historyCap(c, e.effective(c).Profile)
+	h, _ := e.store.History(c.Key, n)
 	return fromContext(h, c.ContextFrom)
 }
 

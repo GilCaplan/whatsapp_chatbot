@@ -179,6 +179,8 @@ export const TIPS = {
     text: 'Normally a message about money, health, meeting up or asking if it is a bot pauses the chat until you tap Resume. With this on, such messages are only flagged and the persona keeps replying.' },
   context: { title: 'What it reads', section: 'memory',
     text: 'Everything the persona gets for its next reply here: its prompt, your instructions for this chat, a summary of older messages and the recent messages. Edit the instructions or the summary, summarise now, or start fresh.' },
+  compact: { title: 'Long-term memory', section: 'memory',
+    text: 'Each chat reads its recent messages word for word (at least 30). Every 70 new messages (200 in a busy chat) the older ones are folded into a short summary it keeps reading, so it remembers far back without a huge prompt. You can read and fix the summary in the chat\'s Memory tab.' },
   ratings: { title: 'Connection', section: 'chats',
     text: 'Once a day, when a group had at least 20 messages, the persona privately scores how connected it felt to each person who wrote (0 to 100) and says why in its own words. Only you see it.' },
   log: { title: 'Log', section: 'chats',

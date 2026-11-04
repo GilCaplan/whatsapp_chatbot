@@ -145,6 +145,15 @@ func validateSettings(s config.Settings) error {
 		inRange("recap.keepDays", s.Recap.KeepDays, 1, 365),
 		inRange("clone.maxSamples", s.SelfClone.MaxSamples, 50, 5000),
 	)
+	// Long-term memory.
+	k := s.Memory.Compact
+	checks = append(checks,
+		inRange("memory.compact.keep", k.Keep, 10, 200),
+		inRange("memory.compact.every", k.Every, 20, 1000),
+		inRange("memory.compact.fastEvery", k.FastEvery, 20, 2000),
+		inRange("memory.compact.fastMessages", k.FastMessages, 20, 5000),
+		inRange("memory.compact.fastHours", k.FastHours, 1, 48),
+	)
 	// v5: cross-chat context.
 	cr := s.Memory.Cross
 	checks = append(checks,

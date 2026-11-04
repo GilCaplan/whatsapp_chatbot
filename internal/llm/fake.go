@@ -144,6 +144,9 @@ func fakeDefault(req Request, n int) string {
 			"goalProgress": "", "toKnow": []string{"They asked about Saturday: nothing is agreed yet"}, "mood": "upbeat",
 		})
 		return string(b)
+	case req.JSON && strings.Contains(req.System, "message pad"):
+		// Secretary notes (prompt.Notes): the last request-like line becomes a note.
+		return fakeNotes(req)
 	case req.JSON && strings.Contains(req.System, "rate how connected you felt"):
 		// Connection ratings (prompt.Rating): everyone listed, in order, from 85 down.
 		return fakeRatings(req)
@@ -237,5 +240,27 @@ func fakeRatings(req Request) string {
 		}
 	}
 	b, _ := json.Marshal(map[string]any{"people": people})
+	return string(b)
+}
+
+// fakeNotes turns the last line that sounds like a request into a note.
+func fakeNotes(req Request) string {
+	notes := []map[string]any{}
+	for _, m := range req.Messages {
+		lines := strings.Split(m.Content, "\n")
+		for _, ln := range lines { // the first request-like line: theirs, before the assistant answers
+			_, rest, ok := strings.Cut(ln, "] ")
+			who, text, ok2 := strings.Cut(rest, ": ")
+			low := strings.ToLower(text)
+			if !ok || !ok2 || !(strings.Contains(low, "call") || strings.Contains(low, "meet") || strings.Contains(low, "tell") ||
+				strings.Contains(low, "urgent") || strings.Contains(low, "?")) {
+				continue
+			}
+			notes = append(notes, map[string]any{"from": who, "text": who + ": " + text, "urgent": strings.Contains(low, "urgent"),
+				"callback": "", "meeting": ""})
+			break
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"notes": notes})
 	return string(b)
 }

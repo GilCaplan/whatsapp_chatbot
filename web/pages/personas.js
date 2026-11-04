@@ -7,8 +7,7 @@ import { store, usageCount, loadPersonas, loadChats } from '../store.js';
 import { openMenu, confirmSheet, toast } from '../ui.js';
 import { personaAvatar } from '../components/avatar.js';
 import { emptyState } from '../components/art.js';
-import { openAIBuilder } from '../components/ai-builder.js';
-import { openCloneSheet } from '../components/clone-sheet.js';
+import { openBuildChooser } from '../components/build-chooser.js';
 import { providerLabel } from '../components/status.js';
 
 export async function duplicatePersona(p, navigate) {
@@ -103,30 +102,22 @@ export default function Personas(ctx) {
             @input=${(e) => { st.q = e.target.value; ctx.update(); }}>
         </div>
         <span class="grow"></span>
-        <button class="btn btn-glass" @click=${() => ctx.navigate('/persona/new')}>${icon('plus')}New persona</button>
-        <button class="btn btn-glass" data-tour="clone" @click=${() => openCloneSheet()} title="A persona that texts like you">${icon('user')}Clone yourself</button>
-        <button class="btn btn-brand" @click=${() => openAIBuilder()}>${icon('sparkles')}Build with AI</button>
+        <button class="btn btn-brand" data-tour="clone" @click=${() => openBuildChooser()} title="Like you, a personal secretary, from a description or from scratch">${icon('plus')}Build a persona</button>
       </div>
       ${!s.personasLoaded ? html`<div class="persona-grid">${[0, 1, 2, 3].map(() => html`<div class="card skeleton" style="height:220px"></div>`)}</div>`
         : !s.personas.length ? html`<div class="card">${emptyState({
           artName: 'personas',
           title: 'No personas yet',
           body: 'A persona is a character with a name, a vibe and a texting style. Describe one in a sentence and let AI fill in the rest.',
-          action: { label: 'Build with AI', icon: 'sparkles', onClick: () => openAIBuilder(), cls: 'btn-brand' },
-          secondary: { label: 'Start from scratch', icon: 'plus', onClick: () => ctx.navigate('/persona/new') },
+          action: { label: 'Build a persona', icon: 'plus', onClick: () => openBuildChooser(), cls: 'btn-brand' },
         })}</div>`
         : !list.length ? html`<div class="card">${emptyState({ artName: 'search', small: true, title: 'No matches', body: `No persona matches “${st.q}”.` })}</div>`
         : html`<div class="persona-grid stagger">
             ${list.map(card)}
-            <button class="card new-card" @click=${() => openAIBuilder()}>
-              <span class="pav" style="--s:56px;background:var(--brand-grad)">${icon('sparkles', 'ic-lg')}</span>
-              <span class="h3">Build with AI</span>
-              <span class="small muted">Describe someone in one line</span>
-            </button>
-            <button class="card new-card clone-card" @click=${() => openCloneSheet()}>
-              <span class="pav" style="--s:56px;background:linear-gradient(135deg,#34d399,#0ea5e9)">${icon('user', 'ic-lg')}</span>
-              <span class="h3">Clone yourself</span>
-              <span class="small muted">A persona that texts like you</span>
+            <button class="card new-card" @click=${() => openBuildChooser()}>
+              <span class="pav" style="--s:56px;background:var(--brand-grad)">${icon('plus', 'ic-lg')}</span>
+              <span class="h3">Build a persona</span>
+              <span class="small muted">Like you, a personal secretary, from a description or from scratch</span>
             </button>
           </div>`}
     </div>`;

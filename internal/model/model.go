@@ -54,9 +54,11 @@ type Persona struct {
 	LLM              *LLMChoice `json:"llm"`
 	// World is where the persona lives: city, country, time zone and daily
 	// routine (world.go). The zero value means "same as this Mac, no routine".
-	World     World     `json:"world"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	World World `json:"world"`
+	// Secretary makes it the owner's personal secretary (secretary.go); nil = an ordinary persona.
+	Secretary *SecretaryConfig `json:"secretary,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 // ─── Chats ───────────────────────────────────────────────────
@@ -116,7 +118,9 @@ type ChatAssignment struct {
 	// are summarised automatically as the history fills up.
 	Instructions string     `json:"instructions"`
 	ContextFrom  *time.Time `json:"contextFrom"`
-	AutoCompact  bool       `json:"autoCompact"`
+	// CompactEvery: long-term memory for this chat — 0 = automatic (settings
+	// memory.compact), -1 = off, N = fold into the summary every N messages.
+	CompactEvery int `json:"compactEvery,omitempty"`
 	// PromptEdits replace parts of the system prompt in this chat only
 	// (key → text, keys in EditablePromptSections); the persona is unchanged.
 	PromptEdits map[string]string `json:"promptEdits,omitempty"`

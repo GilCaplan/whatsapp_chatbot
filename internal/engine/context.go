@@ -14,18 +14,61 @@ import (
 	"whatsappdoppel/internal/prompt"
 )
 
-// What the persona reads (model.ChatContext): the chat's history from
-// ContextFrom on, plus the summary of what came before and your
-// instructions for the chat. Compacting folds the older messages into the
-// summary and moves ContextFrom up — by hand (Compact) or, with AutoCompact,
-// whenever the history it reads is full.
+// What the persona reads (model.ChatContext): every message since
+// ContextFrom word for word, plus the long-term summary of what came before
+// and your instructions for the chat. Long-term memory (settings
+// memory.compact, per chat CompactEvery): once Every new messages have come
+// in on top of the Keep it always reads, all but the last Keep are folded
+// into the summary and ContextFrom moves up — so it reads Keep..Keep+Every
+// messages and nothing falls between the summary and the history. A fast
+// chat folds every FastEvery. "Summarise now" does the same by hand.
 
 const (
-	compactKeep     = 8 // messages kept verbatim after compacting by hand
-	compactIdle     = 30 * time.Second
-	compactTimeout  = 90 * time.Second
-	compactKeepFrac = 2 // auto-compact keeps half the history window
+	compactIdle    = 30 * time.Second
+	compactTimeout = 90 * time.Second
+	compactSlack   = 10 // extra history kept in memory past Keep+Every
 )
+
+// compactPlan is how a chat's long-term memory works right now.
+type compactPlan struct {
+	on, fast    bool
+	keep, every int
+	maxEvery    int // the largest Every it may use (sizes the history window)
+}
+
+func (e *Engine) compactPlan(c model.ChatAssignment, all []model.Message) compactPlan {
+	k := e.cfg.Get().Memory.Compact
+	p := compactPlan{on: !k.Off, keep: k.Keep, every: k.Every, maxEvery: max(k.Every, k.FastEvery)}
+	switch {
+	case c.CompactEvery < 0:
+		p.on = false
+	case c.CompactEvery > 0:
+		p.on, p.every, p.maxEvery = true, c.CompactEvery, c.CompactEvery
+	default:
+		since := e.clock.Now().Add(-time.Duration(k.FastHours) * time.Hour)
+		n := 0
+		for i := len(all) - 1; i >= 0 && !all[i].TS.Before(since); i-- {
+			n++
+		}
+		if p.fast = n >= k.FastMessages; p.fast {
+			p.every = k.FastEvery
+		}
+	}
+	p.keep, p.every = max(p.keep, 1), max(p.every, 1)
+	return p
+}
+
+// historyCap is how many messages (and characters) a chat keeps in memory
+// for the prompt: with long-term memory, enough for everything since the
+// last summary; otherwise the behaviour's historyMessages/historyChars.
+func (e *Engine) historyCap(c model.ChatAssignment, bp model.BehaviorProfile) (int, int) {
+	p := e.compactPlan(c, nil)
+	if !p.on {
+		return bp.HistoryMessages, bp.HistoryChars
+	}
+	n := max(bp.HistoryMessages, p.keep+p.maxEvery+compactSlack)
+	return n, max(bp.HistoryChars, n*120)
+}
 
 // ErrNothingToCompact: every message it reads is among the ones kept anyway.
 var ErrNothingToCompact = errors.New("nothing older to compact yet")
@@ -48,21 +91,25 @@ func fromContext(hist []model.Message, from *time.Time) []model.Message {
 	return hist[i:]
 }
 
-// compactTick (re)arms auto-compaction when the history it reads is full.
+// compactTick (re)arms the long-term summary once Keep+Every messages
+// since the last one have come in.
 func (e *Engine) compactTick(c model.ChatAssignment) {
 	cur, ok := e.store.Chat(c.Key)
-	if !ok || !cur.AutoCompact {
+	if !ok {
 		return
 	}
-	window := e.effective(cur).Profile.HistoryMessages
 	all, err := e.store.History(cur.Key, 0)
-	if err != nil || window <= 0 || len(fromContext(all, cur.ContextFrom)) < window {
+	if err != nil {
 		return
 	}
-	key, keep := cur.Key, max(compactKeep, window/compactKeepFrac)
+	p := e.compactPlan(cur, all)
+	if !p.on || len(fromContext(all, cur.ContextFrom)) < p.keep+p.every {
+		return
+	}
+	key, keep := cur.Key, p.keep
 	e.schedule(compactJob(key), compactIdle, func(ctx context.Context) {
 		cc, ok := e.store.Chat(key)
-		if !ok || !cc.AutoCompact {
+		if !ok || !e.compactPlan(cc, nil).on {
 			return
 		}
 		if _, err := e.compactChat(ctx, cc, keep); err != nil && !errors.Is(err, ErrNothingToCompact) && !errors.Is(err, errCompactStale) && ctx.Err() == nil {
@@ -71,15 +118,15 @@ func (e *Engine) compactTick(c model.ChatAssignment) {
 	})
 }
 
-// Compact folds everything but the last keep messages (0 = compactKeep) into
-// the chat summary now. It waits for the background slot.
+// Compact folds everything but the last keep messages (0 = memory.compact.keep)
+// into the chat summary now. It waits for the background slot.
 func (e *Engine) Compact(ctx context.Context, chatKey string, keep int) (model.ChatSummary, error) {
 	c, ok := e.store.Chat(chatKey)
 	if !ok {
 		return model.ChatSummary{}, fmt.Errorf("chat %q: %w", chatKey, ErrNotFound)
 	}
 	if keep <= 0 {
-		keep = compactKeep
+		keep = e.cfg.Get().Memory.Compact.Keep
 	}
 	e.cancelJob(compactJob(chatKey))
 	var sm model.ChatSummary
@@ -185,13 +232,19 @@ func (e *Engine) ChatContext(chatKey string) (model.ChatContext, error) {
 	opts, _ := e.promptOptions(c, bp, e.directory(e.ctx, c, hist), hist)
 	req := prompt.Compose(p, c, hist, isGroupChat(c), opts)
 	out := model.ChatContext{System: req.System, Sections: prompt.ComposeSections(p, c, hist, isGroupChat(c), opts), Messages: make([]model.ContextMessage, 0, len(req.Messages)), Chars: len(req.System),
-		HistoryKept: len(hist), Window: bp.HistoryMessages, Instructions: c.Instructions, ContextFrom: c.ContextFrom, AutoCompact: c.AutoCompact}
+		HistoryKept: len(hist), Window: bp.HistoryMessages, Instructions: c.Instructions, ContextFrom: c.ContextFrom}
 	for _, m := range req.Messages {
 		out.Messages = append(out.Messages, model.ContextMessage{Role: m.Role, Content: m.Content})
 		out.Chars += len(m.Content)
 	}
 	if all, err := e.store.History(chatKey, 0); err == nil {
 		out.HistoryTotal = len(all)
+		p := e.compactPlan(c, all)
+		out.Compact = model.CompactStatus{Setting: c.CompactEvery, On: p.on, Keep: p.keep, Every: p.every, Fast: p.fast,
+			NextIn: max(0, p.keep+p.every-len(fromContext(all, c.ContextFrom)))}
+		if p.on {
+			out.Window, _ = e.historyCap(c, bp)
+		}
 	}
 	if sm, ok := e.store.Summary(chatKey); ok {
 		out.Summary = &sm

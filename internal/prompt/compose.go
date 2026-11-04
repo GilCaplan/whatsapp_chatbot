@@ -132,6 +132,11 @@ type Options struct {
 	// Edits replace editable parts of the prompt for this chat (key → text).
 	Edits map[string]string
 
+	// Personal secretary (secretary.go): the owner's free times for meeting
+	// suggestions, one line per day; FreeKnown = the calendars could be read.
+	FreeTimes []string
+	FreeKnown bool
+
 	// ReplyLanguage is the language to write in (English name, e.g. "Hebrew";
 	// "" = no rule); see language.go.
 	ReplyLanguage string
@@ -171,10 +176,12 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 		out = append(out, s)
 	}
 	add("character", "Character", "", Identity(p))
+	add("secretary", "Secretary's job", "", SecretarySection(p.Secretary))
 	add("safety", "Safety rules", "", AntiJailbreakRules)
 	ctx := []model.PromptSection{
 		{Key: "people", Label: "People and your notes", Text: PeopleSection(o, isGroup)},
 		{Key: "summary", Label: "Summary of older messages", Text: SummarySection(o.Summary)},
+		{Key: "free", Label: "Free times for meetings", Text: freeTimes(p, o)},
 		{Key: "memories", Label: "Memories", Text: MemorySection(o.Memories, isGroup)},
 		{Key: "cross", Label: "From its other chats", Text: CrossSection(o.Cross, o.CrossTurn)},
 		{Key: "world", Label: "Right now (time and place)", Text: WorldSection(p.World, o.Now, o.MacZone)},
@@ -359,4 +366,12 @@ Would %s naturally respond to this? Reply with only YES or NO.`, p.Name, p.Name,
 func ParseDecision(answer string) bool {
 	a := strings.ToUpper(strings.TrimLeft(strings.TrimSpace(answer), "\"'`*.:- "))
 	return strings.HasPrefix(a, "YES")
+}
+
+// freeTimes is the free-times part for a secretary that helps with meetings.
+func freeTimes(p model.Persona, o Options) string {
+	if p.Secretary == nil || !p.Secretary.Meetings {
+		return ""
+	}
+	return FreeTimesSection(o.FreeTimes, o.FreeKnown)
 }

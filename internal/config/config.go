@@ -125,8 +125,23 @@ type SafetySettings struct {
 
 // MemorySettings: learn about the people in chats (per chat: ChatAssignment.Memory).
 type MemorySettings struct {
-	Enabled bool          `json:"enabled"`
-	Cross   CrossSettings `json:"cross"` // v5
+	Enabled bool            `json:"enabled"`
+	Cross   CrossSettings   `json:"cross"`   // v5
+	Compact CompactSettings `json:"compact"` // long-term memory (engine/context.go)
+}
+
+// CompactSettings: long-term memory. A chat's persona reads every message
+// since the last summary word for word (at least Keep); once Every more have
+// come in, all but the last Keep are folded into the chat's summary. A fast
+// chat (FastMessages in the last FastHours) folds every FastEvery instead.
+// Per chat: ChatAssignment.CompactEvery. Zero values = the defaults.
+type CompactSettings struct {
+	Off          bool `json:"off"`
+	Keep         int  `json:"keep"`
+	Every        int  `json:"every"`
+	FastEvery    int  `json:"fastEvery"`
+	FastMessages int  `json:"fastMessages"`
+	FastHours    int  `json:"fastHours"`
 }
 
 // CrossSettings: personas use what they learned in their other chats with
@@ -271,7 +286,7 @@ func Defaults() Settings {
 			Enabled: true, GroupMode: model.CrossDiscreet, DMMode: model.CrossOpen,
 			Sensitive: CrossSensitive{Money: true, Health: true, Meeting: true, Distress: true, Bot: true, Legal: true, Romance: true, Secret: true},
 			FreshDays: 14, MaxPeople: 4, MaxItems: 8,
-		}},
+		}, Compact: CompactSettings{Keep: 30, Every: 70, FastEvery: 200, FastMessages: 150, FastHours: 3}},
 		Recap:     RecapSettings{Enabled: false, Time: "21:00", KeepDays: 30},
 		SelfClone: CloneSettings{CollectSamples: false, MaxSamples: 500},
 	}
@@ -443,6 +458,13 @@ func normalizeV5(s *Settings, d Settings) {
 	}
 	if c.MaxItems <= 0 {
 		c.MaxItems = dc.MaxItems
+	}
+	k, dk := &s.Memory.Compact, d.Memory.Compact
+	for _, f := range []struct{ v, d *int }{{&k.Keep, &dk.Keep}, {&k.Every, &dk.Every}, {&k.FastEvery, &dk.FastEvery},
+		{&k.FastMessages, &dk.FastMessages}, {&k.FastHours, &dk.FastHours}} {
+		if *f.v <= 0 {
+			*f.v = *f.d
+		}
 	}
 }
 

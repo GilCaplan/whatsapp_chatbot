@@ -27,6 +27,7 @@ const (
 	TypeMemoriesChanged  = "memories.changed" // data: {chatKey}
 	TypeNicknamesChanged = "nicknames.changed"
 	TypeRatingsChanged   = "ratings.changed"  // data: {chatKey}
+	TypeNotesChanged     = "notes.changed"    // the secretary's messages for you
 	TypeRecapsChanged    = "recaps.changed"   // data: {}
 	TypeMissionsChanged  = "missions.changed" // data: {}
 )

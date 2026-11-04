@@ -74,6 +74,8 @@ func (p Paths) DecisionsDir() string    { return filepath.Join(p.Dir, "decisions
 func (p Paths) NicknamesFile() string   { return filepath.Join(p.Dir, "nicknames.json") }
 func (p Paths) SummariesDir() string    { return filepath.Join(p.Dir, "summaries") }
 func (p Paths) RatingsDir() string      { return filepath.Join(p.Dir, "ratings") }
+func (p Paths) CalendarsFile() string   { return filepath.Join(p.Dir, "calendars.json") }
+func (p Paths) NotesFile() string       { return filepath.Join(p.Dir, "notes.json") }
 func (p Paths) RecapsFile() string      { return filepath.Join(p.Dir, "recaps.json") }
 func (p Paths) MissionsFile() string    { return filepath.Join(p.Dir, "missions.json") }
 func (p Paths) SelfSamplesFile() string { return filepath.Join(p.Dir, "cache", "self-samples.jsonl") }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/model"
 )
 
@@ -56,17 +57,43 @@ func TestCompactAndContext(t *testing.T) {
 	}
 }
 
+// Long-term memory: once Keep+Every messages since the last summary are in,
+// all but the last Keep fold into the summary; a chat can turn it off.
 func TestAutoCompact(t *testing.T) {
-	c := dmChat()
-	c.AutoCompact = true
-	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.HistoryMessages = 10 }), c)
-	h.seedHistory(dmKey, 10)
+	small := func(s *config.Settings) {
+		s.Memory.Compact = config.CompactSettings{Keep: 10, Every: 20, FastEvery: 50, FastMessages: 1000, FastHours: 3}
+	}
+	h := newHarness(t, small, dmChat())
+	h.seedHistory(dmKey, 29)
+	c, _ := h.st.Chat(dmKey)
 	h.e.compactTick(c)
 	h.advance(time.Minute)
-	if _, ok := h.st.Summary(dmKey); !ok {
-		t.Fatal("no summary after the history filled up")
+	if _, ok := h.st.Summary(dmKey); ok {
+		t.Fatal("29 messages (< 10+20): no summary yet")
 	}
-	if got, _ := h.st.Chat(dmKey); got.ContextFrom == nil {
-		t.Error("contextFrom not moved")
+	h.seedHistory(dmKey, 1)
+	h.e.compactTick(c)
+	h.advance(time.Minute)
+	sm, ok := h.st.Summary(dmKey)
+	if !ok || sm.Messages != 20 {
+		t.Fatalf("summary = %+v %v", sm, ok)
+	}
+	got, _ := h.st.Chat(dmKey)
+	if got.ContextFrom == nil || len(fromContext(h.history(dmKey), got.ContextFrom)) != 10 {
+		t.Errorf("it should read the last 10: contextFrom %v", got.ContextFrom)
+	}
+	ctx, _ := h.e.ChatContext(dmKey)
+	if !ctx.Compact.On || ctx.Compact.Keep != 10 || ctx.Compact.Every != 20 || ctx.Compact.NextIn != 20 {
+		t.Errorf("status = %+v", ctx.Compact)
+	}
+
+	off := dmChat()
+	off.CompactEvery = -1
+	h2 := newHarness(t, small, off)
+	h2.seedHistory(dmKey, 40)
+	h2.e.compactTick(off)
+	h2.advance(time.Minute)
+	if _, ok := h2.st.Summary(dmKey); ok {
+		t.Error("compactEvery -1 must not summarise")
 	}
 }

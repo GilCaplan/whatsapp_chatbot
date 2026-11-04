@@ -12,16 +12,19 @@ import { emptyState } from '../components/art.js';
 import { waMeta, statusDot } from '../components/status.js';
 import { openWASheet, logoutAndRelink } from '../components/wa-sheet.js';
 import { openAssignSheet } from '../components/assign-sheet.js';
-import { openAIBuilder } from '../components/ai-builder.js';
+import { openBuildChooser } from '../components/build-chooser.js';
 import { patchChat, awayUntilText } from '../components/chat-drawer.js';
 import { greeting, duration, toDate, prettyPhone } from '../util.js';
 import { catGlyph, catLabel, catReason, catPhrase, waLink, resumeChat, modeOf } from '../components/handoff-meta.js';
 import { recapCard, generateRecap } from '../components/recap-card.js';
+import { createNotesStore, notesCard } from '../components/notes-card.js';
 
 export default function Dashboard(ctx) {
   const go = (p) => ctx.navigate(p);
   const rc = { items: [], loaded: false, busy: false };
   let offRecaps = null;
+  let offNotes = null;
+  const notes = createNotesStore(() => ctx.update());
 
   async function loadRecaps() {
     try {
@@ -216,9 +219,8 @@ export default function Dashboard(ctx) {
   function quick() {
     return html`<section class="quick">
       <button class="quick-btn" @click=${() => openAssignSheet()}><span class="q-ic" style="--c:var(--teal)">${icon('link')}</span><span>Assign a chat</span></button>
-      <button class="quick-btn" @click=${() => openAIBuilder()}><span class="q-ic" style="--c:var(--violet)">${icon('sparkles')}</span><span>Build persona with AI</span></button>
+      <button class="quick-btn" @click=${() => openBuildChooser()}><span class="q-ic" style="--c:var(--violet)">${icon('plus')}</span><span>Build a persona</span></button>
       <button class="quick-btn" @click=${() => go('/playground')}><span class="q-ic" style="--c:var(--pink)">${icon('playground')}</span><span>Try in Playground</span></button>
-      <button class="quick-btn" @click=${() => go('/persona/new')}><span class="q-ic" style="--c:var(--blue)">${icon('plus')}</span><span>New persona</span></button>
     </section>`;
   }
 
@@ -237,6 +239,7 @@ export default function Dashboard(ctx) {
         ${quick()}
       </section>
       ${needsStrip()}
+      ${notesCard(notes, go)}
       <div class="dash-grid">
         ${waCard()}
         ${stats()}
@@ -253,7 +256,9 @@ export default function Dashboard(ctx) {
     mount() {
       loadRecaps();
       offRecaps = bus.on('recaps.changed', loadRecaps);
+      notes.load();
+      offNotes = bus.on('notes.changed', notes.reloadSoon);
     },
-    unmount() { if (offRecaps) offRecaps(); },
+    unmount() { if (offRecaps) offRecaps(); if (offNotes) offNotes(); },
   };
 }

@@ -120,3 +120,51 @@ func TestPromptEditsPatch(t *testing.T) {
 		t.Errorf("reset = %d %+v", code, back.PromptEdits)
 	}
 }
+
+func TestCalendarsAndNotesAPI(t *testing.T) {
+	e := newEnv(t)
+	var apiErr apiError
+	if code := e.do("POST", "/api/calendars", map[string]any{"kind": "ics", "url": "ftp://x"}, &apiErr); code != 400 || apiErr.Code != "invalid_calendar" {
+		t.Errorf("bad link = %d %+v", code, apiErr)
+	}
+	var list struct {
+		Items []struct {
+			ID, Name, Kind, Where string
+			HasKey, Enabled       bool
+		}
+	}
+	secret := "https://calendar.google.com/calendar/ical/me%40gmail.com/private-abc123/basic.ics"
+	if code := e.do("POST", "/api/calendars", map[string]any{"kind": "ics", "name": "Work", "url": secret}, &list); code != 201 || len(list.Items) != 1 {
+		t.Fatalf("add = %d %+v", code, list)
+	}
+	c := list.Items[0]
+	if c.Where != "https://calendar.google.com/…" || !c.Enabled || strings.Contains(c.Where, "private") {
+		t.Errorf("not masked: %+v", c)
+	}
+	if code := e.do("POST", "/api/calendars", map[string]any{"kind": "macalendar", "apiKey": "k"}, &list); code != 201 || list.Items[1].Where != "127.0.0.1:8080" || !list.Items[1].HasKey {
+		t.Errorf("macalendar = %d %+v", code, list.Items)
+	}
+	var ck model.CalendarCheck
+	if code := e.do("POST", "/api/calendars/"+c.ID+"/check", nil, &ck); code != 200 || !ck.OK {
+		t.Errorf("check = %d %+v", code, ck)
+	}
+	if code := e.do("PATCH", "/api/calendars/"+c.ID, map[string]any{"enabled": false}, &list); code != 200 || list.Items[0].Enabled {
+		t.Errorf("disable = %d %+v", code, list.Items)
+	}
+	if code := e.do("DELETE", "/api/calendars/"+c.ID, nil, &list); code != 200 || len(list.Items) != 1 {
+		t.Errorf("delete = %d %+v", code, list.Items)
+	}
+	_ = e.st.UpdateSecretaryNotes(func(all []model.SecretaryNote) []model.SecretaryNote {
+		return append(all, model.SecretaryNote{ID: "n1", ChatKey: "dm:1", From: "Dana", Text: "call back"}, model.SecretaryNote{ID: "n2", Text: "old", Done: true})
+	})
+	if code := e.do("PATCH", "/api/secretary/notes/n1", map[string]any{"done": true}, nil); code != 200 {
+		t.Errorf("done = %d", code)
+	}
+	if code := e.do("DELETE", "/api/secretary/notes/done", nil, nil); code != 200 {
+		t.Errorf("clear done = %d", code)
+	}
+	var notes struct{ Items []model.SecretaryNote }
+	if code := e.do("GET", "/api/secretary/notes", nil, &notes); code != 200 || len(notes.Items) != 0 {
+		t.Errorf("notes = %d %+v", code, notes)
+	}
+}

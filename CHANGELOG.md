@@ -24,6 +24,15 @@ Everything below is new unless noted.
   context, goal, instructions, language, guidance, conversation) with each part's share; the
   character, safety rules, "how to read the conversation" and "stay yourself" parts can be
   edited for one chat without changing the persona.
+- One "Build a persona" button (Personas page, Dashboard): like you, a personal secretary, from a
+  description or from scratch.
+- Personal secretary: says it's your assistant, takes messages ("Messages for you" on the
+  Dashboard), notifies you at once about urgent ones and VIPs, answers your FAQs and offers
+  meeting times from your read-only calendars (never confirming). Settings › Calendars: any
+  calendar link (Google, Outlook, iCloud) or the MACalendar app; secretaries only see busy times.
+- Long-term memory on by default: each chat reads everything since its last summary (at least 30
+  messages) and folds the older ones into the summary every 70 messages (200 in a busy chat);
+  Settings › Memory and per chat in Memory › What it reads.
 - Connection ratings (People tab, groups): once a day with at least 20 messages the persona
   privately scores, 0 to 100, how connected it felt to each person who wrote, with a line why
   and the change since last time; "Rate now" on demand. Only you see it.

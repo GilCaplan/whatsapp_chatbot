@@ -74,6 +74,9 @@ func Normalize(p *model.Persona) error {
 		p.FallbackReply = DefaultFallbackReply
 	}
 	normalizeAvatar(p)
+	if p.Secretary != nil {
+		normalizeSecretary(p.Secretary) // secretary.go
+	}
 	// Where the persona lives (wave 3): a bad zone or time is an error so the
 	// editor can say so; everything else is cleaned up.
 	if err := world.Validate(p.World); err != nil {
