@@ -480,6 +480,7 @@ func (s *Server) handleDeleteChat(w http.ResponseWriter, r *http.Request) {
 	_ = s.d.Store.DeleteRecaps(key)
 	_ = s.d.Store.DeleteBrief(key)
 	_ = s.d.Store.DeleteSummary(key) // or a new assignment would read the old summary
+	_ = s.d.Store.DeleteRatings(key)
 	// Pending replies for a chat that is no longer assigned can never be sent.
 	for _, p := range s.d.Store.Approvals() {
 		if p.ChatKey != key {

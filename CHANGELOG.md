@@ -24,6 +24,9 @@ Everything below is new unless noted.
   context, goal, instructions, language, guidance, conversation) with each part's share; the
   character, safety rules, "how to read the conversation" and "stay yourself" parts can be
   edited for one chat without changing the persona.
+- Connection ratings (People tab, groups): once a day with at least 20 messages the persona
+  privately scores, 0 to 100, how connected it felt to each person who wrote, with a line why
+  and the change since last time; "Rate now" on demand. Only you see it.
 - Timing curve (Behaviour › Advanced): delays drawn evenly, on a bell curve, mostly quick with
   a long tail, or always the middle of their range.
 - Ignore stickers (Behaviour › Advanced, off by default): a sticker gets no reply but is still

@@ -310,6 +310,7 @@ func (e *Engine) settingsChanged() {
 		return
 	}
 	e.scheduleRecap()
+	e.armRatings(0) // same time of day (ratings.go)
 	for _, r := range e.allRunners() {
 		r.syncSchedule() // the app profiles may hold the schedule
 	}

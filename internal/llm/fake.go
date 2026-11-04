@@ -144,6 +144,9 @@ func fakeDefault(req Request, n int) string {
 			"goalProgress": "", "toKnow": []string{"They asked about Saturday: nothing is agreed yet"}, "mood": "upbeat",
 		})
 		return string(b)
+	case req.JSON && strings.Contains(req.System, "rate how connected you felt"):
+		// Connection ratings (prompt.Rating): everyone listed, in order, from 85 down.
+		return fakeRatings(req)
 	case req.JSON && strings.Contains(req.System, "private brief"):
 		// Chat brief for other chats (prompt.Brief).
 		return `{"topics":["weekend plans"],"commitments":["bring wine on Saturday"],"tone":"warm","people":[],"sensitive":[]}`
@@ -216,5 +219,23 @@ func fakeMemories(req Request) string {
 		}
 	}
 	b, _ := json.Marshal(out)
+	return string(b)
+}
+
+// fakeRatings rates the people a prompt.Rating request lists.
+func fakeRatings(req Request) string {
+	var people []map[string]any
+	for _, m := range req.Messages {
+		_, list, ok := strings.Cut(m.Content, "People to rate (use these names exactly): ")
+		if !ok {
+			continue
+		}
+		list, _, _ = strings.Cut(list, "\n")
+		whys := []string{"we kept the jokes going all day", "asked how my day was", "friendly, mostly chatting with others", "barely talked to me"}
+		for i, name := range strings.Split(list, ", ") {
+			people = append(people, map[string]any{"name": name, "score": max(85-i*15, 10), "why": whys[min(i, len(whys)-1)]})
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"people": people})
 	return string(b)
 }

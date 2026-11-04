@@ -94,7 +94,8 @@ type Engine struct {
 
 	pg *playground
 
-	recap recapSched // daily recap timer (recap.go)
+	recap   recapSched // daily recap timer (recap.go)
+	ratings recapSched // daily connection ratings timer (ratings.go)
 
 	jobs jobRunner // background jobs: memory extraction (jobs.go)
 }
@@ -133,6 +134,7 @@ func New(d Deps) *Engine {
 		e.armAutoSend(p)
 	}
 	e.scheduleRecap()
+	e.armRatings(0)
 	if e.cfg != nil {
 		e.cfg.OnChange(e.settingsChanged) // v4 settings (recap time) apply without a restart
 	}
@@ -149,6 +151,7 @@ func (e *Engine) Builder() contract.Builder { return builder{e} }
 // stop, new ones start, changed ones get the new config (history is kept).
 // In-flight reply cycles keep their plan; new messages use the new behaviour.
 func (e *Engine) Reload() {
+	defer e.ensureRatings() // groups may have been turned on or off (ratings.go)
 	want := map[string]model.ChatAssignment{}
 	for _, c := range e.store.Chats() {
 		if c.Enabled {
@@ -224,6 +227,7 @@ func (e *Engine) Stop() {
 	}
 	e.apMu.Unlock()
 	e.stopRecap()
+	e.stopRatings()
 	e.stopJobs()
 }
 

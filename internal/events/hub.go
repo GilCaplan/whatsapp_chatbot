@@ -26,6 +26,7 @@ const (
 	// Wave 3.
 	TypeMemoriesChanged  = "memories.changed" // data: {chatKey}
 	TypeNicknamesChanged = "nicknames.changed"
+	TypeRatingsChanged   = "ratings.changed"  // data: {chatKey}
 	TypeRecapsChanged    = "recaps.changed"   // data: {}
 	TypeMissionsChanged  = "missions.changed" // data: {}
 )

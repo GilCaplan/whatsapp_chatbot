@@ -95,6 +95,9 @@ type Engine interface {
 	// Compact folds all but the last keep messages (0 = default) into the
 	// chat summary now; ErrNothingToCompact-like errors are plain errors.
 	Compact(ctx context.Context, chatKey string, keep int) (model.ChatSummary, error)
+	// RateNow rates how connected the persona felt to each person who wrote
+	// in the chat in the last 24 hours (private; saved as today's ratings).
+	RateNow(ctx context.Context, chatKey string) (model.RatingDay, error)
 	// ExpressionPreview writes up to 3 sample replies of p (may be unsaved) at
 	// its emoji and length settings; lengthBias "" = the private profile's,
 	// roll picks other sample messages.

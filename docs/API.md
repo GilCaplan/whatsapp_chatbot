@@ -625,6 +625,20 @@ chat-context block of the prompt and the chat's `instructions` (`INSTRUCTIONS FO
 `autoCompact`, a chat whose history (from `contextFrom`) reaches `historyMessages` is compacted in the background, keeping
 the newer half. Activity `memory` with `meta.compacted`. Changes publish `memories.changed`.
 
+## Connection ratings
+
+At `recap.time` each day, every enabled group with at least 20 messages in the last 24 hours gets one private call in
+which the persona scores, in character, how connected it felt (0–100) to each person who wrote, with one line why.
+Nothing is sent to WhatsApp. `ratings/<chatKey>.json` keeps 90 days (one entry per day; a new rating that day replaces it).
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/chats/{key}/ratings` | – | `{items:[RatingDay]}` newest day first |
+| `POST /api/chats/{key}/ratings` | – | `RatingDay` — rates the last 24 hours now (any number of messages); 502 `rating_failed` |
+
+`RatingDay {chatKey, date (YYYY-MM-DD), at, messages, onDemand?, scores:[{name, jid?, score, why, change?}]}` (scores best
+first; `change` = since that person's previous day). Activity `rating`; SSE `ratings.changed {chatKey}`.
+
 ## Decision log
 
 Per chat, one entry per message someone sent (and per opener the persona wrote first): what the persona did about

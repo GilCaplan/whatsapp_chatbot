@@ -179,6 +179,8 @@ export const TIPS = {
     text: 'Normally a message about money, health, meeting up or asking if it is a bot pauses the chat until you tap Resume. With this on, such messages are only flagged and the persona keeps replying.' },
   context: { title: 'What it reads', section: 'memory',
     text: 'Everything the persona gets for its next reply here: its prompt, your instructions for this chat, a summary of older messages and the recent messages. Edit the instructions or the summary, summarise now, or start fresh.' },
+  ratings: { title: 'Connection', section: 'chats',
+    text: 'Once a day, when a group had at least 20 messages, the persona privately scores how connected it felt to each person who wrote (0 to 100) and says why in its own words. Only you see it.' },
   log: { title: 'Log', section: 'chats',
     text: 'Every message in this chat with what the persona did about it: answered (and how long it took), stayed quiet (and why), reacted or left it for you. Tap a row to see each step.' },
   memory: { title: 'Memory', section: 'memory',

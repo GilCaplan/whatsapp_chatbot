@@ -192,6 +192,10 @@ export const api = {
     deleteSummary: (key, o) => del(`/api/chats/${enc(key)}/summary`, o),
     /** body: { keep? } → ChatSummary */
     compact: (key, body, o) => post(`/api/chats/${enc(key)}/compact`, body, { timeout: 150000, ...o }),
+    /** Connection ratings, newest day first → { items:[RatingDay] } */
+    ratings: (key, o) => get(`/api/chats/${enc(key)}/ratings`, o),
+    /** Rate the last 24 hours now → RatingDay */
+    rateNow: (key, o) => post(`/api/chats/${enc(key)}/ratings`, {}, { timeout: 150000, ...o }),
     /** Decision log, newest first → { items:[LogEntry] } */
     log: (key, o) => get(`/api/chats/${enc(key)}/log`, o),
     clearLog: (key, o) => del(`/api/chats/${enc(key)}/log`, o),

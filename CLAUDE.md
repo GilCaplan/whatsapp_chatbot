@@ -80,7 +80,7 @@ Windows `%APPDATA%\WhatsappDoppel\`, Linux `$XDG_CONFIG_HOME|~/.config/WhatsappD
 code: the .app starts with cwd `/`, shortcuts and .desktop files with other folders. Contents: `config.json`, `secrets.json`, `personas.json`,
 `chats.json`, `approvals.json`, `runtime.json` (per-chat reply timestamps, last incoming/reply,
 proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `avatars/`, `cache/`,
-`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `nicknames.json`, `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
+`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `ratings/<chatKey>.json` (connection ratings), `nicknames.json`, `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
 (only with the Clone consent), `logs/server.log`, `logs/activity-YYYY-MM-DD.jsonl`,
 `instance.json` (`{pid, port, token, startedAt, version}` while serving), `server.lock`.
 
@@ -187,6 +187,8 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
 - The system prompt is built from labelled parts (`prompt.SystemSections`; `SystemPrompt` joins them). A chat's
   `promptEdits` replace the editable parts (`model.EditablePromptSections`: character, safety, history, stay) in that
   chat only; delays are drawn with `behavior.Delay` along the profile's `timingCurve`.
+- Connection ratings (`engine/ratings.go`, `prompt/rating.go`): own daily timer at `recap.time` (independent of
+  `recap.enabled`), groups with 20+ messages in 24 h, one JSON call through the job slot; `ratings/<chatKey>.json`.
 - What it reads (`engine/context.go`): history from `ChatAssignment.contextFrom` on (`fromContext`), plus the summary
   (`EARLIER IN THIS CHAT`, inside the chat-context block) and your `instructions` (after the goal). Compaction (manual
   or `autoCompact` when the window is full) writes the summary and moves `contextFrom`. `autoContinue` turns hand-off

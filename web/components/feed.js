@@ -11,6 +11,8 @@ import { langName } from './language-controls.js';
 const META_LABELS = {
   reason: 'Why',
   language: 'Language',
+  people: 'People rated',
+  onDemand: 'On request',
   autoContinued: 'Kept going',
   delaySeconds: 'Delay',
   typingSeconds: 'Typing for',
@@ -153,6 +155,7 @@ function metaValue(k, v, meta) {
     case 'scheduled':
     case 'joined':
     case 'manual':
+    case 'onDemand':
     case 'autoContinued': return v ? 'Yes' : 'No';
     case 'language': return langName(v);
     case 'trigger': return TRIGGERS[v] || String(v);

@@ -223,6 +223,9 @@ func (e *fakeEngine) PromptPreview(personaID, chatKey string) (string, error) {
 func (e *fakeEngine) ChatContext(chatKey string) (model.ChatContext, error) {
 	return model.ChatContext{System: "SYSTEM", Messages: []model.ContextMessage{{Role: "user", Content: "hi"}}, Chars: 8}, nil
 }
+func (e *fakeEngine) RateNow(ctx context.Context, chatKey string) (model.RatingDay, error) {
+	return model.RatingDay{ChatKey: chatKey, Date: "2026-11-04", Scores: []model.PersonScore{{Name: "Dana", Score: 80, Why: "fun"}}}, nil
+}
 func (e *fakeEngine) Compact(ctx context.Context, chatKey string, keep int) (model.ChatSummary, error) {
 	return model.ChatSummary{ChatKey: chatKey, Text: "they said hi", Messages: 3}, nil
 }
