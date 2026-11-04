@@ -23,7 +23,7 @@ func TestSystemPromptGroupParticipants(t *testing.T) {
 	sys := SystemPrompt(p, model.ChatAssignment{}, true, "hey", opts)
 	golden(t, "leo_group_people.golden", sys)
 	for _, want := range []string{
-		GroupNote + "\n\nPEOPLE IN THIS GROUP: Dana, Noam, Maya K., Maya L.\nTagging: writing @ followed by a name exactly as listed (e.g. @Dana) pings that person.",
+		ContextOpen + "\n\nPEOPLE IN THIS GROUP: Dana, Noam, Maya K., Maya L.\nTagging: writing @ followed by a name exactly as listed (e.g. @Dana) pings that person.",
 		"never tag everyone. At most one person per reply; most replies tag nobody.",
 		"Don't tag the person you are simply replying to",
 		"\n\nABOUT THE PEOPLE HERE:\n- Noam: my little brother, tease him about Arsenal",

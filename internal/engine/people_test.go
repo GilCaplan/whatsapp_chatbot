@@ -116,26 +116,42 @@ func TestTagReplyPercent(t *testing.T) {
 	h := newHarness(t, groupReplies(nil, func(p *model.BehaviorProfile) { p.TagReplyPercent = 100 }), groupChat())
 	h.wa.setRoster(groupJID, smallRoster())
 	replyWith(h, "Dana, absolutely")
-	// One speaker: no tag.
-	h.groupFrom(danaLID, "Dana", "G1", "pizza tonight?")
+	// Two people chatting and Dana wrote last: clear without a tag.
+	h.groupFrom(noamPN, "Noam", "G1", "I'm in")
+	h.groupFrom(danaLID, "Dana", "G2", "pizza tonight?")
 	h.advance(10 * time.Second)
 	if s := h.wa.Sent(); len(s) != 1 || s[0].text != "Dana, absolutely" || len(s[0].mentions) != 0 {
-		t.Fatalf("one speaker: %+v", s)
+		t.Fatalf("two speakers: %+v", s)
 	}
-	// Two people talking: the reply addresses the person it answers.
-	h.groupFrom(noamPN, "Noam", "G2", "I'm in")
-	h.groupFrom(danaLID, "Dana", "G3", "great, 8pm?")
+	// Three people talking: the reply tags the person it answers.
+	h.groupFrom(aviPN, "Avi", "G3", "8 or 9?")
+	h.groupFrom(danaLID, "Dana", "G4", "great, 8pm?")
 	h.advance(10 * time.Second)
 	s := h.wa.Sent()
 	if len(s) != 2 || s[1].text != "@200000000000001 absolutely" || !slices.Equal(s[1].mentions, []string{danaLID}) {
-		t.Fatalf("two speakers: %+v", s)
+		t.Fatalf("busy: %+v", s)
 	}
-	// Already tagging someone up to mentionMax: no extra tag.
+	// Right after a tag no new one: the model's tag of someone who is in the
+	// conversation anyway goes, and an opening tag disappears.
 	replyWith(h, "@Noam you bring drinks")
-	h.groupFrom(danaLID, "Dana", "G4", "who brings drinks?")
+	h.groupFrom(aviPN, "Avi", "G5", "who brings drinks?")
 	h.advance(10 * time.Second)
-	if s := h.wa.Sent(); len(s) != 3 || s[2].text != "@972501111112 you bring drinks" || len(s[2].mentions) != 1 {
-		t.Fatalf("mentionMax respected: %+v", s[2])
+	if s := h.wa.Sent(); len(s) != 3 || s[2].text != "you bring drinks" || len(s[2].mentions) != 0 {
+		t.Fatalf("cooldown: %+v", s[2])
+	}
+}
+
+// Without a recent tag, the model may tag someone to pull them in, but not
+// someone who is already talking (their plain name is used).
+func TestTagOnlyToPullIn(t *testing.T) {
+	h := newHarness(t, groupReplies(nil, nil), groupChat())
+	h.wa.setRoster(groupJID, smallRoster())
+	replyWith(h, "ask @Noam, and @Dana knows too")
+	h.groupFrom(danaLID, "Dana", "G1", "who has the keys?")
+	h.advance(10 * time.Second)
+	s := h.wa.Sent()
+	if len(s) != 1 || s[0].text != "ask @972501111112, and Dana knows too" || !slices.Equal(s[0].mentions, []string{noamPN}) {
+		t.Fatalf("sent = %+v", s)
 	}
 }
 
@@ -410,8 +426,12 @@ func TestPlaygroundGroupSpeakers(t *testing.T) {
 	if a.Speaker != "Dana" || b.Speaker != "Noam" {
 		t.Fatalf("speakers %q %q", a.Speaker, b.Speaker)
 	}
-	if b.Reply != "@Noam sounds good" || !slices.Equal(b.Mentions, []string{"Noam"}) || a.Reply != "sounds good" {
-		t.Errorf("replies %q / %q %v", a.Reply, b.Reply, b.Mentions)
+	if a.Reply != "sounds good" || b.Reply != "sounds good" || len(b.Mentions) != 0 {
+		t.Errorf("two people: replies %q / %q %v", a.Reply, b.Reply, b.Mentions)
+	}
+	c, _ := pg.Send(t.Context(), id, "third", true) // a third person: busy enough to tag
+	if c.Speaker == "" || c.Reply != "@"+c.Speaker+" sounds good" || !slices.Equal(c.Mentions, []string{c.Speaker}) {
+		t.Errorf("three people: %+v", c)
 	}
 	dm, _ := pg.Send(t.Context(), id, "dm", false)
 	if dm.Speaker != "" || len(dm.Mentions) != 0 {

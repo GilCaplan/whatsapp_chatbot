@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,16 @@ type BehaviorSettings struct {
 	TriggerPrefix string                `json:"triggerPrefix"` // your own "<prefix> text" makes the persona reply at once
 	Private       model.BehaviorProfile `json:"private"`
 	Group         model.BehaviorProfile `json:"group"`
+	// Languages it speaks and replies in, per kind (internal/lang; zero
+	// values = English and Hebrew, ignore others, match the message). Kept
+	// out of the profiles so presets and dials never touch them.
+	Languages LanguageSettings `json:"languages"`
+}
+
+// LanguageSettings are the app-wide language preferences per chat kind.
+type LanguageSettings struct {
+	Private model.LanguagePrefs `json:"private"`
+	Group   model.LanguagePrefs `json:"group"`
 }
 
 // For returns the profile for a chat kind ("group" or anything else = private).
@@ -43,6 +54,14 @@ func (b BehaviorSettings) For(kind string) model.BehaviorProfile {
 		return b.Group
 	}
 	return b.Private
+}
+
+// LanguagesFor returns the language preferences for a chat kind.
+func (b BehaviorSettings) LanguagesFor(kind string) model.LanguagePrefs {
+	if kind == behavior.KindGroup {
+		return b.Languages.Group
+	}
+	return b.Languages.Private
 }
 
 // Legacy (v1) blocks: read once from old files, migrated into Behavior and
@@ -106,8 +125,28 @@ type SafetySettings struct {
 
 // MemorySettings: learn about the people in chats (per chat: ChatAssignment.Memory).
 type MemorySettings struct {
-	Enabled bool          `json:"enabled"`
-	Cross   CrossSettings `json:"cross"` // v5
+	Enabled bool            `json:"enabled"`
+	Cross   CrossSettings   `json:"cross"`   // v5
+	Compact CompactSettings `json:"compact"` // long-term memory (engine/context.go)
+}
+
+// ContextSettings: the app default context system ("" = ctxsys.Default).
+type ContextSettings struct {
+	System string `json:"system"`
+}
+
+// CompactSettings: long-term memory. A chat's persona reads every message
+// since the last summary word for word (at least Keep); once Every more have
+// come in, all but the last Keep are folded into the chat's summary. A fast
+// chat (FastMessages in the last FastHours) folds every FastEvery instead.
+// Per chat: ChatAssignment.CompactEvery. Zero values = the defaults.
+type CompactSettings struct {
+	Off          bool `json:"off"`
+	Keep         int  `json:"keep"`
+	Every        int  `json:"every"`
+	FastEvery    int  `json:"fastEvery"`
+	FastMessages int  `json:"fastMessages"`
+	FastHours    int  `json:"fastHours"`
 }
 
 // CrossSettings: personas use what they learned in their other chats with
@@ -184,6 +223,10 @@ type Settings struct {
 	Recap         RecapSettings        `json:"recap"`
 	SelfClone     CloneSettings        `json:"clone"` // "Clone yourself" (Settings.Clone is the deep copy)
 
+	// Context is the app's context system (ctxsys; per persona and per chat
+	// too). Zero = Classic.
+	Context ContextSettings `json:"context"`
+
 	// Deprecated v1 blocks; nil after migration.
 	Replies   *LegacyReplySettings    `json:"replies,omitempty"`
 	Approvals *LegacyApprovalSettings `json:"approvals,omitempty"`
@@ -193,6 +236,8 @@ type Settings struct {
 func (s Settings) Clone() Settings {
 	s.Behavior.Private = behavior.Clone(s.Behavior.Private)
 	s.Behavior.Group = behavior.Clone(s.Behavior.Group)
+	s.Behavior.Languages.Private.Languages = slices.Clone(s.Behavior.Languages.Private.Languages)
+	s.Behavior.Languages.Group.Languages = slices.Clone(s.Behavior.Languages.Group.Languages)
 	if s.Replies != nil {
 		r := *s.Replies
 		s.Replies = &r
@@ -250,7 +295,7 @@ func Defaults() Settings {
 			Enabled: true, GroupMode: model.CrossDiscreet, DMMode: model.CrossOpen,
 			Sensitive: CrossSensitive{Money: true, Health: true, Meeting: true, Distress: true, Bot: true, Legal: true, Romance: true, Secret: true},
 			FreshDays: 14, MaxPeople: 4, MaxItems: 8,
-		}},
+		}, Compact: CompactSettings{Keep: 30, Every: 70, FastEvery: 200, FastMessages: 150, FastHours: 3}},
 		Recap:     RecapSettings{Enabled: false, Time: "21:00", KeepDays: 30},
 		SelfClone: CloneSettings{CollectSamples: false, MaxSamples: 500},
 	}
@@ -422,6 +467,13 @@ func normalizeV5(s *Settings, d Settings) {
 	}
 	if c.MaxItems <= 0 {
 		c.MaxItems = dc.MaxItems
+	}
+	k, dk := &s.Memory.Compact, d.Memory.Compact
+	for _, f := range []struct{ v, d *int }{{&k.Keep, &dk.Keep}, {&k.Every, &dk.Every}, {&k.FastEvery, &dk.FastEvery},
+		{&k.FastMessages, &dk.FastMessages}, {&k.FastHours, &dk.FastHours}} {
+		if *f.v <= 0 {
+			*f.v = *f.d
+		}
 	}
 }
 

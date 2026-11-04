@@ -173,3 +173,23 @@ func TestNames(t *testing.T) {
 		t.Errorf("Names = %v", got)
 	}
 }
+
+func TestKeep(t *testing.T) {
+	d := roster()
+	onlyNoam := func(e Entry) bool { return e.Display == "Noam" }
+	for _, c := range []struct{ in, want string }{
+		{"@Dana sure", "sure"},
+		{"@Dana, sure", "sure"},
+		{"sure @Dana", "sure Dana"},
+		{"@Noam and @Dana", "@Noam and Dana"},
+		{"@Dana and @Noam", "Dana and @Noam"},
+		{"no tags", "no tags"},
+	} {
+		if got, _ := Keep(c.in, d, onlyNoam); got != c.want {
+			t.Errorf("Keep(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	if _, kept := Keep("@Noam hi @Noam", d, onlyNoam); len(kept) != 1 {
+		t.Errorf("kept = %+v", kept)
+	}
+}

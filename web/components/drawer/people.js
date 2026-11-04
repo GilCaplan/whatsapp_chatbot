@@ -6,6 +6,7 @@
 
 import { html } from '../../dom.js';
 import { icon } from '../../icons.js';
+import { createRatingsStore, ratingsBlock } from '../ratings-block.js';
 
 /** "Leo remembers: Dana 3 · Josh 2" — each opens the Memory tab for that person. */
 function memoryStrip(ctx, c, p) {
@@ -28,8 +29,13 @@ function memoryStrip(ctx, c, p) {
 }
 
 export function createPeopleTab(ctx) {
+  const ratings = createRatingsStore(ctx.key, ctx.update);
   return {
     id: 'people',
-    view: (c, p) => html`${memoryStrip(ctx, c, p)}${ctx.people.view(c)}`,
+    view: (c, p) => html`${memoryStrip(ctx, c, p)}${c.kind === 'group' ? ratingsBlock(ratings, c, p) : ''}${ctx.people.view(c)}`,
+    load: () => ratings.load(),
+    onBus(type, data) {
+      if (type === 'ratings.changed' && (!data || data.chatKey === ctx.key)) ratings.reloadSoon();
+    },
   };
 }

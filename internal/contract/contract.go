@@ -55,6 +55,11 @@ type WhatsApp interface {
 	OwnJIDs() []string
 
 	SetMessageHandler(fn func(model.Incoming))
+	// InGroup reports whether you are a member of a group (from the cached
+	// group list; known is false until it has loaded). Never blocks.
+	InGroup(jid string) (member, known bool)
+	// SetGroupHandler registers a callback for groups you join or leave.
+	SetGroupHandler(fn func(model.GroupChange))
 	Close()
 }
 
@@ -84,6 +89,17 @@ type Engine interface {
 	Initiate(ctx context.Context, chatKey, hint string) error
 	// PromptPreview renders the system prompt the persona would get (chatKey optional).
 	PromptPreview(personaID, chatKey string) (string, error)
+	// ChatContext is what the persona reads for its next reply in a chat
+	// (system prompt + messages as sent, summary, instructions).
+	ChatContext(chatKey string) (model.ChatContext, error)
+	// Compact folds all but the last keep messages (0 = default) into the
+	// chat summary now; ErrNothingToCompact-like errors are plain errors.
+	Compact(ctx context.Context, chatKey string, keep int) (model.ChatSummary, error)
+	// RateNow rates how connected the persona felt to each person who wrote
+	// in the chat in the last 24 hours (private; saved as today's ratings).
+	RateNow(ctx context.Context, chatKey string) (model.RatingDay, error)
+	// CalendarCheck reads one of the owner's calendars now (read-only).
+	CalendarCheck(ctx context.Context, src model.CalendarSource) model.CalendarCheck
 	// ExpressionPreview writes up to 3 sample replies of p (may be unsaved) at
 	// its emoji and length settings; lengthBias "" = the private profile's,
 	// roll picks other sample messages.
@@ -107,6 +123,22 @@ type Engine interface {
 	CrossView(ctx context.Context, chatKey string) (model.CrossView, error)
 	// RefreshBrief writes a chat's brief (what other chats may use) now.
 	RefreshBrief(ctx context.Context, chatKey string) (model.Brief, error)
+
+	// ── context systems (ctxsys) ──
+
+	// MakeCard (re)writes a persona's short card for card-style prompts
+	// (chars 0 = the app system's card size).
+	MakeCard(ctx context.Context, personaID string, chars int) (model.Persona, error)
+	// DraftSystem drafts an unsaved context system from a description (the
+	// AI draws the chart, code reads the knobs off it); it also returns what
+	// the chart changed against base, in plain English.
+	DraftSystem(ctx context.Context, text, base string) (model.ContextSystem, []string, error)
+	// StartReplay answers a chat's recent messages again with some systems,
+	// in the background (nothing is sent); Replay reads a run, CancelReplay
+	// stops one.
+	StartReplay(req model.ReplayRequest) (model.Replay, error)
+	Replay(id string) (model.Replay, bool)
+	CancelReplay(id string) bool
 }
 
 // LLM is the provider registry facade used by the server.

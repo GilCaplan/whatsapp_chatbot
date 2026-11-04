@@ -1,5 +1,6 @@
 // pages/persona-editor.js — create / edit a persona (#/persona/<id> or #/persona/new).
 
+import { openSecretaryBuilder } from '../components/secretary-builder.js';
 import { html } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
@@ -69,6 +70,19 @@ function normalize(p) {
 }
 
 const snapshot = (f) => JSON.stringify({ ...f, createdAt: undefined, updatedAt: undefined });
+
+/** A secretary's job at a glance, with the builder to change it. */
+function secretaryCard(f, onSaved) {
+  const s = f.secretary;
+  const duties = [s.takeMessages && 'takes messages', s.flagUrgent && 'flags urgent ones', s.answerFaqs && 'answers your questions',
+    s.meetings && `offers meeting times (${(s.meetDays || []).join(', ')} ${s.meetFrom}–${s.meetTo})`].filter(Boolean);
+  return html`<section class="card section sec-card">
+    <div class="section-head"><span class="s-icon">${icon('inbox')}</span>
+      <div class="grow"><h2>Personal secretary</h2><p>${s.ownerName || 'Your'}'s assistant: ${duties.join(', ') || 'answers for you'}. It always says it is an assistant.</p></div>
+      <button class="btn btn-glass btn-sm" ?disabled=${!f.id} title=${f.id ? '' : 'Save it first'} @click=${() => openSecretaryBuilder({ persona: f, onSaved })}>${icon('edit')}Change secretary settings</button>
+    </div>
+  </section>`;
+}
 
 export default function PersonaEditor(ctx) {
   const update = () => ctx.update();
@@ -485,6 +499,7 @@ export default function PersonaEditor(ctx) {
       ${header()}
       <div class="editor-grid">
         <div class="editor-main">
+          ${f.secretary ? secretaryCard(f, (saved) => { st.form = normalize(saved); st.original = snapshot(st.form); update(); }) : ''}
           <section class="card section">
             <div class="section-head"><span class="s-icon">${icon('user')}</span><div><h2>Who they are</h2><p>The basics: picture, name and background.</p></div></div>
             ${avatarEditor()}

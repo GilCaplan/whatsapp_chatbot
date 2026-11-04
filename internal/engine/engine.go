@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"whatsappdoppel/internal/behavior"
+	"whatsappdoppel/internal/calendar"
 	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/contract"
 	"whatsappdoppel/internal/events"
@@ -59,6 +60,8 @@ type Deps struct {
 	Sampler behavior.Sampler
 	// ProactiveEvery is the check-in scan interval (0 = 5 minutes).
 	ProactiveEvery time.Duration
+	// Calendar reads the owner's calendars for secretaries (nil = none).
+	Calendar *calendar.Service
 }
 
 type Engine struct {
@@ -67,6 +70,7 @@ type Engine struct {
 	hub   *events.Hub
 	wa    contract.WhatsApp
 	llm   *llm.Registry
+	cal   *calendar.Service // secretary.go
 	clock Clock
 	rng   behavior.Sampler
 
@@ -80,6 +84,9 @@ type Engine struct {
 	mu      sync.RWMutex
 	runners map[string]*Runner
 	stopped bool
+	loaded  bool // the first Reload (app start) ran
+
+	openers openerWhy // decision log: why the next opener is written (decisionlog.go)
 
 	proMu          sync.Mutex
 	proTimer       Timer
@@ -91,9 +98,13 @@ type Engine struct {
 
 	pg *playground
 
-	recap recapSched // daily recap timer (recap.go)
+	recap   recapSched // daily recap timer (recap.go)
+	ratings recapSched // daily connection ratings timer (ratings.go)
 
 	jobs jobRunner // background jobs: memory extraction (jobs.go)
+
+	cardTried sync.Map       // persona id → when making its card last failed (ctxsys.go)
+	replays   replayRegistry // context-system sandbox runs (replay.go)
 }
 
 // New builds the engine, starts runners for enabled chats and re-arms
@@ -113,6 +124,7 @@ func New(d Deps) *Engine {
 		hub:            d.Hub,
 		wa:             d.WA,
 		llm:            d.LLM,
+		cal:            d.Calendar,
 		clock:          clk,
 		rng:            rng,
 		runners:        map[string]*Runner{},
@@ -130,6 +142,7 @@ func New(d Deps) *Engine {
 		e.armAutoSend(p)
 	}
 	e.scheduleRecap()
+	e.armRatings(0)
 	if e.cfg != nil {
 		e.cfg.OnChange(e.settingsChanged) // v4 settings (recap time) apply without a restart
 	}
@@ -146,6 +159,7 @@ func (e *Engine) Builder() contract.Builder { return builder{e} }
 // stop, new ones start, changed ones get the new config (history is kept).
 // In-flight reply cycles keep their plan; new messages use the new behaviour.
 func (e *Engine) Reload() {
+	defer e.ensureRatings() // groups may have been turned on or off (ratings.go)
 	want := map[string]model.ChatAssignment{}
 	for _, c := range e.store.Chats() {
 		if c.Enabled {
@@ -167,12 +181,32 @@ func (e *Engine) Reload() {
 			delete(e.runners, key)
 		}
 	}
-	for key, c := range want {
-		e.runners[key] = newRunner(e, c)
+	var started, kept []*Runner
+	for _, r := range e.runners {
+		kept = append(kept, r)
 	}
+	for key, c := range want {
+		r := newRunner(e, c)
+		e.runners[key] = r
+		started = append(started, r)
+	}
+	// Runners made at app start just resume their schedule; later ones are
+	// chats whose replies were just turned on.
+	first := !e.loaded
+	e.loaded = true
 	e.mu.Unlock()
 	for _, r := range stop {
 		r.stop()
+	}
+	for _, r := range kept {
+		r.syncSchedule()
+	}
+	for _, r := range started {
+		if first {
+			r.syncSchedule()
+		} else {
+			r.scheduleStart(trigStart)
+		}
 	}
 	e.syncProactive()
 }
@@ -201,6 +235,7 @@ func (e *Engine) Stop() {
 	}
 	e.apMu.Unlock()
 	e.stopRecap()
+	e.stopRatings()
 	e.stopJobs()
 }
 
@@ -223,6 +258,15 @@ func (e *Engine) allRunners() []*Runner {
 // HandleIncoming routes a WhatsApp message to its chat's runner (by key, else by
 // JID/alt JID). Messages for unassigned or disabled chats are dropped. Never blocks.
 func (e *Engine) HandleIncoming(in model.Incoming) {
+	if !in.IsFromMe { // a nickname you gave them wins over their WhatsApp name
+		ids := []string{in.SenderJID}
+		if !in.IsGroup {
+			ids = append(ids, in.ChatJID, in.AltJID)
+		}
+		if nk := e.store.NicknameFor(ids...); nk != "" {
+			in.WAName, in.PushName, in.Nicknamed = in.PushName, nk, true
+		}
+	}
 	if r := e.route(in); r != nil {
 		r.enqueue(in)
 	}
@@ -436,6 +480,7 @@ func (e *Engine) act(typ string, c model.ChatAssignment, personaName, text strin
 		Text:        guard.Truncate(text, 500),
 		Meta:        meta,
 	})
+	e.logActivity(typ, c, text, meta)
 }
 
 func containsStr(s []string, v string) bool {

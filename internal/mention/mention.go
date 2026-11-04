@@ -445,6 +445,52 @@ func Normalize(text string, d *Directory, p Policy) (string, []Entry) {
 	return out, tagged
 }
 
+// Keep rewrites the "@Name" tags of a (normalized) reply: those keep
+// accepts stay tags, the others become the plain name — or go away when the
+// reply opens with its only tag ("@Dana sure" → "sure"). It returns the tags
+// kept.
+func Keep(text string, d *Directory, keep func(Entry) bool) (string, []Entry) {
+	var kept []Entry
+	lead := len(text) - len(strings.TrimLeft(text, " "))
+	droppedLead := false
+	toks := d.scan(text)
+	people := 0
+	for _, t := range toks {
+		if t.entry != nil {
+			people++
+		}
+	}
+	out := rewrite(text, toks, func(t token) string {
+		switch {
+		case t.own:
+			return ""
+		case t.entry == nil:
+			return text[t.start:t.end]
+		}
+		e := *t.entry
+		if keep(e) && !slices.ContainsFunc(kept, func(x Entry) bool { return x.JID == e.JID }) {
+			kept = append(kept, e)
+			return "@" + e.Display
+		}
+		// "@Dana and @Noam" keeps "Dana"; "@Dana's idea", "@Dana!" or a
+		// bare "@Dana" keep the name too (dropping it would leave "'s idea").
+		rest := text[t.end:]
+		next, _ := utf8.DecodeRuneInString(rest)
+		if t.start == lead && people == 1 && strings.TrimLeft(rest, leadSeps) != "" && strings.ContainsRune(leadSeps, next) {
+			droppedLead = true
+			return ""
+		}
+		return e.Display
+	})
+	if droppedLead {
+		out = strings.TrimLeft(out, leadSeps)
+	}
+	return out, kept
+}
+
+// leadSeps may follow a leading tag that Keep drops ("@Dana, sure").
+const leadSeps = " ,:;-–—"
+
 // Encode rewrites "@Display" (and "@<digits>") tags to the wire form
 // "@<user>" and returns the JIDs for MentionedJID, deduplicated, in order.
 func Encode(display string, d *Directory) (string, []string) {

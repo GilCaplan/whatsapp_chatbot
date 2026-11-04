@@ -154,6 +154,48 @@ export const api = {
     qrURL: () => `/api/wa/qr.png?t=${Date.now()}`,
   },
 
+  /** Context systems (ctxsys): built-in Classic/Lean/Fast + yours, charts, sandbox. */
+  context: {
+    catalog: (o) => get('/api/context/catalog', o),
+    systems: (o) => get('/api/context/systems', o),
+    create: (body, o) => post('/api/context/systems', body, o),
+    save: (id, body, o) => put(`/api/context/systems/${enc(id)}`, body, o),
+    remove: (id, o) => del(`/api/context/systems/${enc(id)}`, o),
+    infer: (body, o) => post('/api/context/infer', body, o),
+    layout: (chart, o) => post('/api/context/layout', { chart }, o),
+    /** {text, base} → {system, changes}: an unsaved system drafted by the AI */
+    draft: (body, o) => post('/api/context/draft', body, { timeout: 200000, ...o }),
+    instances: (o) => get('/api/context/instances', o),
+    replay: (body, o) => post('/api/context/replay', body, o),
+    replayGet: (id, o) => get(`/api/context/replay/${enc(id)}`, o),
+    replayStop: (id, o) => del(`/api/context/replay/${enc(id)}`, o),
+    setPersona: (id, systemId, o) => put(`/api/personas/${enc(id)}/context`, { systemId }, o),
+    makeCard: (id, chars, o) => post(`/api/personas/${enc(id)}/card`, chars ? { chars } : {}, { timeout: 200000, ...o }),
+    saveCard: (id, card, o) => put(`/api/personas/${enc(id)}/card`, { card }, o),
+  },
+
+  /** The owner's calendars (read-only), for personal secretaries. */
+  calendars: {
+    /** → { items:[{ id, name, kind, where, hasKey, enabled }] } */
+    list: (o) => get('/api/calendars', o),
+    add: (body, o) => post('/api/calendars', body, o),
+    patch: (id, body, o) => patch(`/api/calendars/${enc(id)}`, body, o),
+    remove: (id, o) => del(`/api/calendars/${enc(id)}`, o),
+    /** → { ok, error, events, upcoming:[{ start, end, allDay, title }] } */
+    check: (id, o) => post(`/api/calendars/${enc(id)}/check`, {}, { timeout: 45000, ...o }),
+  },
+  /** Messages a secretary took for you. */
+  notes: {
+    list: (o) => get('/api/secretary/notes', o),
+    patch: (id, body, o) => patch(`/api/secretary/notes/${enc(id)}`, body, o),
+    remove: (id, o) => del(`/api/secretary/notes/${enc(id)}`, o),
+  },
+  nicknames: {
+    /** → { items:[{ ids, name, original, updatedAt }] } */
+    list: (o) => get('/api/nicknames', o),
+    /** body: { ids:[jid…], name ('' removes), original? } → Nickname */
+    set: (body, o) => put('/api/nicknames', body, o),
+  },
   chats: {
     list: (o) => get('/api/chats', o),
     create: (body, o) => post('/api/chats', body, o),
@@ -179,6 +221,20 @@ export const api = {
     patchMemory: (key, id, body, o) => patch(`/api/chats/${enc(key)}/memories/${enc(id)}`, body, o),
     deleteMemory: (key, id, o) => del(`/api/chats/${enc(key)}/memories/${enc(id)}`, o),
     clearMemories: (key, o) => del(`/api/chats/${enc(key)}/memories`, o),
+    /** What the persona reads → ChatContext { system, messages, chars, historyKept, historyTotal, window, summary, instructions, contextFrom, autoCompact } */
+    context: (key, o) => get(`/api/chats/${enc(key)}/context`, o),
+    /** body: { text } → ChatSummary (your edit) */
+    putSummary: (key, body, o) => put(`/api/chats/${enc(key)}/summary`, body, o),
+    deleteSummary: (key, o) => del(`/api/chats/${enc(key)}/summary`, o),
+    /** body: { keep? } → ChatSummary */
+    compact: (key, body, o) => post(`/api/chats/${enc(key)}/compact`, body, { timeout: 150000, ...o }),
+    /** Connection ratings, newest day first → { items:[RatingDay] } */
+    ratings: (key, o) => get(`/api/chats/${enc(key)}/ratings`, o),
+    /** Rate the last 24 hours now → RatingDay */
+    rateNow: (key, o) => post(`/api/chats/${enc(key)}/ratings`, {}, { timeout: 150000, ...o }),
+    /** Decision log, newest first → { items:[LogEntry] } */
+    log: (key, o) => get(`/api/chats/${enc(key)}/log`, o),
+    clearLog: (key, o) => del(`/api/chats/${enc(key)}/log`, o),
     /** → { added, updated } */
     extractMemories: (key, o) => post(`/api/chats/${enc(key)}/memories/extract`, {}, { timeout: 120000, ...o }),
     /** Cross-chat context → { enabled, kind, mode, modeSource, share, shareSource, sources:[…], brief, briefPending } */

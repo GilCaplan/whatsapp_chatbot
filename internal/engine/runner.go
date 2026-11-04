@@ -13,6 +13,7 @@ import (
 
 	"whatsappdoppel/internal/behavior"
 	"whatsappdoppel/internal/guard"
+	"whatsappdoppel/internal/lang"
 	"whatsappdoppel/internal/model"
 	"whatsappdoppel/internal/store"
 )
@@ -56,6 +57,8 @@ type Runner struct {
 	timerGen uint64 // invalidates stale timer callbacks
 	aux      map[uint64]Timer
 	auxSeq   uint64
+	sched    Timer  // next scheduled message (schedule.go)
+	schedGen uint64 // invalidates stale schedule callbacks
 
 	typSeq     uint64 // order of typing on/off decisions
 	typMu      sync.Mutex
@@ -73,8 +76,9 @@ func newRunner(e *Engine, c model.ChatAssignment) *Runner {
 	r := &Runner{e: e, key: c.Key, cfg: c, inbox: make(chan model.Incoming, inboxSize), aux: map[uint64]Timer{}}
 	r.ctx, r.cancel = context.WithCancel(e.ctx)
 	rp := e.effective(c).Profile
-	if h, err := e.store.History(c.Key, rp.HistoryMessages); err == nil {
-		r.history = trimHistory(h, rp.HistoryMessages, rp.HistoryChars)
+	n, chars := e.historyCap(c, rp) // long-term memory needs everything since the summary (context.go)
+	if h, err := e.store.History(c.Key, n); err == nil {
+		r.history = trimHistory(h, n, chars)
 	}
 	var latest model.PendingReply
 	for _, p := range e.store.Approvals() {
@@ -118,6 +122,7 @@ func (r *Runner) stop() {
 	r.mu.Lock()
 	r.stopped = true
 	r.stopTimerLocked()
+	r.stopScheduleLocked()
 	for id, t := range r.aux {
 		t.Stop()
 		delete(r.aux, id)
@@ -151,10 +156,17 @@ func (r *Runner) preferredJID() string {
 	return r.sendJID
 }
 
+// historySnapshot is a copy of the remembered history, with nicknames.
 func (r *Runner) historySnapshot() []model.Message {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return slices.Clone(r.history)
+	return r.historyCopyLocked()
+}
+
+func (r *Runner) historyCopyLocked() []model.Message {
+	h := slices.Clone(fromContext(r.history, r.cfg.ContextFrom)) // older ones are in the summary (context.go)
+	r.e.store.ApplyNicknames(h)                                  // set or changed after the messages came in
+	return h
 }
 
 func (r *Runner) setPending(id string) {
@@ -260,8 +272,11 @@ func (r *Runner) process(in model.Incoming) {
 		if speaker == "them" {
 			r.keepAsContext(in, text, mentionNames, bp, now)
 		}
+		if speaker == "them" {
+			e.logArrived(c.Key, in.MessageID, in.Timestamp, in.PushName, text)
+		}
 		e.act(model.ActDecisionSkip, c, "", "Old message from while offline — kept as context, not answered",
-			map[string]any{"reason": "stale", "sentAt": in.Timestamp})
+			withMsg(map[string]any{"reason": "stale", "sentAt": in.Timestamp}, in.MessageID))
 		return
 	}
 
@@ -271,7 +286,10 @@ func (r *Runner) process(in model.Incoming) {
 		e.act(model.ActError, c, "", fmt.Sprintf("Persona %q not found — assign another persona", c.PersonaID), nil)
 		return
 	}
-	meta := map[string]any{"fromMe": in.IsFromMe, "group": isGroup}
+	meta := withMsg(map[string]any{"fromMe": in.IsFromMe, "group": isGroup}, in.MessageID)
+	if !in.Timestamp.IsZero() {
+		meta["sentAt"] = in.Timestamp
+	}
 	if in.PushName != "" && !in.IsFromMe {
 		meta["sender"] = in.PushName
 	}
@@ -281,6 +299,7 @@ func (r *Runner) process(in model.Incoming) {
 	meta = mentionMeta(meta, mentionNames)
 	e.act(model.ActIncoming, c, p.Name, text, meta)
 	if speaker == "them" {
+		e.secretaryTick(c, in, text)                                              // messages for you (secretary.go)
 		e.goalIncoming(c, p, isGroup, senderName(in, c, isGroup), text, in.Media) // "say the word" goals (goal.go)
 		// Hand-off (handoff.go): a paused chat keeps messages as context; a
 		// sensitive message pauses it — even when the persona would stay quiet.
@@ -290,7 +309,18 @@ func (r *Runner) process(in model.Incoming) {
 	}
 
 	if bp.IgnoreLinks && hasLink(text) {
-		e.act(model.ActDecisionSkip, c, p.Name, "Ignored a message with a link", map[string]any{"reason": "link"})
+		e.act(model.ActDecisionSkip, c, p.Name, "Ignored a message with a link", withMsg(map[string]any{"reason": "link"}, in.MessageID))
+		return
+	}
+	if bp.IgnoreStickers && in.Media == model.MediaSticker && speaker == "them" {
+		e.act(model.ActDecisionSkip, c, p.Name, "Ignored a sticker", withMsg(map[string]any{"reason": "sticker"}, in.MessageID))
+		r.keepAsContext(in, text, mentionNames, bp, now)
+		return
+	}
+	if code := e.foreignLanguage(c, text); speaker == "them" && code != "" { // language.go
+		e.act(model.ActDecisionSkip, c, p.Name, "Staying quiet — the message is in "+lang.Name(code)+", not one of its languages",
+			withMsg(map[string]any{"reason": "language", "language": code}, in.MessageID))
+		r.keepAsContext(in, text, mentionNames, bp, now)
 		return
 	}
 
@@ -301,18 +331,21 @@ func (r *Runner) process(in model.Incoming) {
 		// people, trigger words, the streak guard.
 		switch gt := r.peopleGate(c, bp, p, in, raw, isGroup, roster, now); gt.action {
 		case gateSkip:
-			e.act(model.ActDecisionSkip, c, p.Name, gt.text, gt.meta)
+			e.act(model.ActDecisionSkip, c, p.Name, gt.text, withMsg(gt.meta, in.MessageID))
 			r.keepAsContext(in, text, mentionNames, bp, now)
 			return
 		case gateForce:
-			e.act(model.ActDecisionReply, c, p.Name, gt.text, gt.meta)
+			e.act(model.ActDecisionReply, c, p.Name, gt.text, withMsg(gt.meta, in.MessageID))
 			forced = true
 		}
 	}
 	if isGroup && speaker == "them" && !forced {
-		d := e.decide(r.ctx, p, bp, raw, in.MentionedJIDs)
+		r.mu.Lock()
+		recent := r.historyCopyLocked()
+		r.mu.Unlock()
+		d := e.decide(r.ctx, p, bp, e.paramsOf(c), raw, in.PushName, in.MentionedJIDs, recent)
 		if !d.Reply {
-			e.act(model.ActDecisionSkip, c, p.Name, decisionText(d.Reason, p.Name), d.Meta)
+			e.act(model.ActDecisionSkip, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
 			if open, _ := eff.Available(now); open && e.rng.Hit(bp.ReactPercent) {
 				r.mu.Lock()
 				if !r.stopped {
@@ -322,13 +355,13 @@ func (r *Runner) process(in model.Incoming) {
 			}
 			return
 		}
-		e.act(model.ActDecisionReply, c, p.Name, decisionText(d.Reason, p.Name), d.Meta)
+		e.act(model.ActDecisionReply, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
 	}
 
 	g := guard.Inspect(text, bp.InjectionFilter)
 	if g.Blocked {
 		e.act(model.ActBlockedInjection, c, p.Name, "Ignored a likely prompt-injection attempt: "+guard.Truncate(text, 200),
-			map[string]any{"score": g.Score, "matches": g.Matches, "level": bp.InjectionFilter})
+			withMsg(map[string]any{"score": g.Score, "matches": g.Matches, "level": bp.InjectionFilter}, in.MessageID))
 		return
 	}
 	if g.Text == "" {
@@ -401,12 +434,14 @@ func (r *Runner) appendLocked(m model.Message, rp model.BehaviorProfile) model.M
 	if m.ID == "" {
 		m.ID = store.NewID()
 	}
-	r.history = trimHistory(append(r.history, m), rp.HistoryMessages, rp.HistoryChars)
+	n, chars := r.e.historyCap(r.cfg, rp)
+	r.history = trimHistory(append(r.history, m), n, chars)
 	return m
 }
 
 func (r *Runner) persist(m model.Message, rp model.BehaviorProfile) {
-	if err := r.e.store.AppendHistory(r.key, m, rp.HistoryMessages); err != nil {
+	n, _ := r.e.historyCap(r.config(), rp)
+	if err := r.e.store.AppendHistory(r.key, m, n); err != nil {
 		r.e.act(model.ActError, r.config(), "", "Couldn't save history: "+err.Error(), nil)
 	}
 }
@@ -433,6 +468,9 @@ func newMessage(in model.Incoming, speaker, text string, now time.Time) model.Me
 	}
 	if speaker == "them" {
 		m.Name = in.PushName
+		if in.Nicknamed { // a nickname: never written into history (store/nicknames.go)
+			m.Name = in.WAName
+		}
 		m.SenderJID = in.SenderJID
 	}
 	return m

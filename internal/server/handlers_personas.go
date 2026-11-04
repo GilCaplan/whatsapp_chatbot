@@ -105,6 +105,12 @@ func (s *Server) handlePutPersona(w http.ResponseWriter, r *http.Request) {
 	p.ID = cur.ID
 	p.BuiltIn = cur.BuiltIn
 	p.CreatedAt = cur.CreatedAt
+	// The card and context system have their own endpoints; a changed
+	// character makes the card be written again when it is next needed.
+	p.ContextSystem, p.Card, p.CardAt = cur.ContextSystem, cur.Card, cur.CardAt
+	if characterChanged(cur, p) {
+		p.Card, p.CardAt = "", nil
+	}
 	// The avatar file is managed by the avatar endpoints: keep its kind/version
 	// authoritative so a stale editor can't point at a missing file.
 	if cur.Avatar.Kind == "upload" && p.Avatar.Kind != "generated" {

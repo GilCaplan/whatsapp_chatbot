@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 // ─── Reply behaviour ─────────────────────────────────────────
 //
 // A BehaviorProfile describes HOW a persona replies (timing, chance, shape),
@@ -29,12 +31,29 @@ type Availability struct {
 	CatchUpMaxMin int        `json:"catchUpMaxMin"` // random delay after opening, minutes
 }
 
-// Proactive controls check-in messages after a long silence.
+// Proactive controls the messages the persona starts on its own: check-ins
+// after a long silence (Enabled … SpreadMinutes) and scheduled messages.
 type Proactive struct {
 	Enabled       bool `json:"enabled"`
 	AfterHours    int  `json:"afterHours"`
 	MaxPerDay     int  `json:"maxPerDay"`
 	SpreadMinutes int  `json:"spreadMinutes"` // random delay once the silence threshold passes
+
+	Schedule ProactiveSchedule `json:"schedule"`
+}
+
+// ProactiveSchedule plans openers instead of waiting for a silence: one when
+// the persona starts in the chat, one at each fixed moment, and/or repeats
+// from the start on (the first fixed moment, else when it started). A moment
+// that comes while WhatsApp is disconnected — or the chat can't take a
+// message — is skipped, never sent late, so missed messages don't pile up.
+type ProactiveSchedule struct {
+	OnStart   bool        `json:"onStart"`   // when replies are turned on in the chat or you join the group
+	Times     []time.Time `json:"times"`     // fixed moments (at most 20)
+	Repeat    string      `json:"repeat"`    // off|fixed|uniform|normal|poisson
+	EveryMin  int         `json:"everyMin"`  // average gap between repeats
+	SpreadMin int         `json:"spreadMin"` // uniform: ± this; normal: standard deviation
+	MaxPerDay int         `json:"maxPerDay"` // scheduled messages in 24 h (0 = 12)
 }
 
 // BehaviorProfile is one complete set of reply-behaviour values.
@@ -50,6 +69,7 @@ type BehaviorProfile struct {
 	AIJudgement             bool `json:"aiJudgement"`             // group
 	ChimeInPercent          int  `json:"chimeInPercent"`          // group
 	IgnoreLinks             bool `json:"ignoreLinks"`
+	IgnoreStickers          bool `json:"ignoreStickers"` // a sticker gets no reply (kept as context)
 	ReactPercent            int  `json:"reactPercent"`
 	PauseWhenYouReply       bool `json:"pauseWhenYouReply"`
 	MaxRepliesPerHour       int  `json:"maxRepliesPerHour"` // 0 = unlimited
@@ -67,21 +87,23 @@ type BehaviorProfile struct {
 	MuteWords                  []string `json:"muteWords"`                  // never reply to a message containing one
 
 	// Timing
-	NoticeMinSec        int  `json:"noticeMinSec"`
-	NoticeMaxSec        int  `json:"noticeMaxSec"`
-	MarkRead            bool `json:"markRead"`
-	WaitForMoreSec      int  `json:"waitForMoreSec"`
-	BurstCapSec         int  `json:"burstCapSec"`
-	ThinkMinSec         int  `json:"thinkMinSec"`
-	ThinkMaxSec         int  `json:"thinkMaxSec"`
-	DistractedPercent   int  `json:"distractedPercent"`
-	DistractedMinSec    int  `json:"distractedMinSec"`
-	DistractedMaxSec    int  `json:"distractedMaxSec"`
-	TypingIndicator     bool `json:"typingIndicator"`
-	TypingCharsPerSec   int  `json:"typingCharsPerSec"`
-	TypingJitterPercent int  `json:"typingJitterPercent"`
-	TypingMinSec        int  `json:"typingMinSec"`
-	TypingMaxSec        int  `json:"typingMaxSec"`
+	NoticeMinSec      int  `json:"noticeMinSec"`
+	NoticeMaxSec      int  `json:"noticeMaxSec"`
+	MarkRead          bool `json:"markRead"`
+	WaitForMoreSec    int  `json:"waitForMoreSec"`
+	BurstCapSec       int  `json:"burstCapSec"`
+	ThinkMinSec       int  `json:"thinkMinSec"`
+	ThinkMaxSec       int  `json:"thinkMaxSec"`
+	DistractedPercent int  `json:"distractedPercent"`
+	DistractedMinSec  int  `json:"distractedMinSec"`
+	DistractedMaxSec  int  `json:"distractedMaxSec"`
+	// TimingCurve: how delays are drawn in their range (behavior.TimingCurves; "" = uniform).
+	TimingCurve         string `json:"timingCurve"`
+	TypingIndicator     bool   `json:"typingIndicator"`
+	TypingCharsPerSec   int    `json:"typingCharsPerSec"`
+	TypingJitterPercent int    `json:"typingJitterPercent"`
+	TypingMinSec        int    `json:"typingMinSec"`
+	TypingMaxSec        int    `json:"typingMaxSec"`
 
 	// Message shape
 	SplitPercent      int    `json:"splitPercent"`
@@ -117,6 +139,7 @@ type BehaviorOverrides struct {
 	AIJudgement             *bool `json:"aiJudgement,omitempty"`
 	ChimeInPercent          *int  `json:"chimeInPercent,omitempty"`
 	IgnoreLinks             *bool `json:"ignoreLinks,omitempty"`
+	IgnoreStickers          *bool `json:"ignoreStickers,omitempty"`
 	ReactPercent            *int  `json:"reactPercent,omitempty"`
 	PauseWhenYouReply       *bool `json:"pauseWhenYouReply,omitempty"`
 	MaxRepliesPerHour       *int  `json:"maxRepliesPerHour,omitempty"`
@@ -132,21 +155,22 @@ type BehaviorOverrides struct {
 	TriggerWords               *[]string `json:"triggerWords,omitempty"`
 	MuteWords                  *[]string `json:"muteWords,omitempty"`
 
-	NoticeMinSec        *int  `json:"noticeMinSec,omitempty"`
-	NoticeMaxSec        *int  `json:"noticeMaxSec,omitempty"`
-	MarkRead            *bool `json:"markRead,omitempty"`
-	WaitForMoreSec      *int  `json:"waitForMoreSec,omitempty"`
-	BurstCapSec         *int  `json:"burstCapSec,omitempty"`
-	ThinkMinSec         *int  `json:"thinkMinSec,omitempty"`
-	ThinkMaxSec         *int  `json:"thinkMaxSec,omitempty"`
-	DistractedPercent   *int  `json:"distractedPercent,omitempty"`
-	DistractedMinSec    *int  `json:"distractedMinSec,omitempty"`
-	DistractedMaxSec    *int  `json:"distractedMaxSec,omitempty"`
-	TypingIndicator     *bool `json:"typingIndicator,omitempty"`
-	TypingCharsPerSec   *int  `json:"typingCharsPerSec,omitempty"`
-	TypingJitterPercent *int  `json:"typingJitterPercent,omitempty"`
-	TypingMinSec        *int  `json:"typingMinSec,omitempty"`
-	TypingMaxSec        *int  `json:"typingMaxSec,omitempty"`
+	NoticeMinSec        *int    `json:"noticeMinSec,omitempty"`
+	NoticeMaxSec        *int    `json:"noticeMaxSec,omitempty"`
+	MarkRead            *bool   `json:"markRead,omitempty"`
+	WaitForMoreSec      *int    `json:"waitForMoreSec,omitempty"`
+	BurstCapSec         *int    `json:"burstCapSec,omitempty"`
+	ThinkMinSec         *int    `json:"thinkMinSec,omitempty"`
+	ThinkMaxSec         *int    `json:"thinkMaxSec,omitempty"`
+	DistractedPercent   *int    `json:"distractedPercent,omitempty"`
+	DistractedMinSec    *int    `json:"distractedMinSec,omitempty"`
+	DistractedMaxSec    *int    `json:"distractedMaxSec,omitempty"`
+	TimingCurve         *string `json:"timingCurve,omitempty"`
+	TypingIndicator     *bool   `json:"typingIndicator,omitempty"`
+	TypingCharsPerSec   *int    `json:"typingCharsPerSec,omitempty"`
+	TypingJitterPercent *int    `json:"typingJitterPercent,omitempty"`
+	TypingMinSec        *int    `json:"typingMinSec,omitempty"`
+	TypingMaxSec        *int    `json:"typingMaxSec,omitempty"`
 
 	SplitPercent      *int    `json:"splitPercent,omitempty"`
 	SplitMaxParts     *int    `json:"splitMaxParts,omitempty"`

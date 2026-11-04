@@ -277,6 +277,12 @@ api POST "/api/chats/$EKEY/handoff/resume"
 [[ "$CODE" == 200 && -z "$(json handoff.category <<<"$RESP" || true)" ]] || fail "resume hand-off ($CODE): $RESP"
 pass "hand-off paused and resumed"
 
+# Decision log: the weekend message was answered (with its reply time), the bot question left for you.
+api GET "/api/chats/$EKEY/log"
+[[ "$CODE" == 200 && "$(json items.0.outcome <<<"$RESP")" == paused && "$(json items.1.outcome <<<"$RESP")" == replied \
+  && "$(json items.1.delaySeconds <<<"$RESP")" =~ ^[0-9.]+$ ]] || fail "decision log ($CODE): $RESP"
+pass "decision log: answered after $(json items.1.delaySeconds <<<"$RESP")s, then left for you"
+
 # Co-pilot: three drafts wait in Approvals, never auto-sent.
 api PATCH "/api/chats/$EKEY" '{"mode":"copilot"}'
 [[ "$CODE" == 200 && "$(json mode <<<"$RESP")" == copilot ]] || fail "PATCH mode copilot ($CODE): $RESP"

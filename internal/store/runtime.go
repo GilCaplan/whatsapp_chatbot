@@ -24,6 +24,14 @@ type RunnerState struct {
 	Proactive        []time.Time `json:"proactive"` // proactive check-ins, pruned to 24 h
 	ProactiveDueAt   *time.Time  `json:"proactiveDueAt"`
 	QueuedWakeAt     *time.Time  `json:"queuedWakeAt"`
+	// Scheduled messages (proactive.schedule): the next moment of any kind,
+	// the next repeat and the repeat settings it was drawn with, fixed
+	// moments handled up to here, and the messages started in the last 24 h.
+	ScheduleAt     *time.Time  `json:"scheduleAt,omitempty"`
+	ScheduleNextAt *time.Time  `json:"scheduleNextAt,omitempty"`
+	ScheduleRepeat string      `json:"scheduleRepeat,omitempty"`
+	ScheduleDoneTo time.Time   `json:"scheduleDoneTo"`
+	Scheduled      []time.Time `json:"scheduled,omitempty"`
 	// Goal is the chat's progress on its goal (nil = not started).
 	Goal *model.GoalStatus `json:"goal,omitempty"`
 
@@ -37,19 +45,55 @@ type RunnerState struct {
 	// the brief yet) and the messages since the last brief.
 	BriefCursor  time.Time `json:"briefCursor"`
 	BriefPending int       `json:"briefPending"`
+
+	// Typos lists the chat's recent slips (newest last, at most MaxTypoMarks)
+	// so the same kind and correction don't keep coming back.
+	Typos []TypoMark `json:"typos,omitempty"`
+
+	// NoteCursor: the secretary has taken notes from the messages up to here.
+	NoteCursor time.Time `json:"noteCursor"`
+	// DigestPending counts messages from them since the last digest (a
+	// context system with one digest call; engine/digest.go).
+	DigestPending int `json:"digestPending,omitempty"`
 }
+
+// TypoMark is one typo the persona made in a chat.
+type TypoMark struct {
+	At   time.Time `json:"at"`
+	Kind string    `json:"kind"`
+	Form int       `json:"form"` // correction shape (behavior.FixForms); -1 = not corrected
+}
+
+// MaxTypoMarks is how many recent typos a chat remembers.
+const MaxTypoMarks = 10
 
 // Prune drops reply/check-in timestamps older than 24 h before now.
 func (st *RunnerState) Prune(now time.Time) {
 	old := func(t time.Time) bool { return now.Sub(t) > 24*time.Hour }
 	st.Replies = slices.DeleteFunc(st.Replies, old)
 	st.Proactive = slices.DeleteFunc(st.Proactive, old)
+	st.Scheduled = slices.DeleteFunc(st.Scheduled, old)
+	st.Typos = slices.DeleteFunc(st.Typos, func(m TypoMark) bool { return now.Sub(m.At) > 7*24*time.Hour })
+	if n := len(st.Typos); n > MaxTypoMarks {
+		st.Typos = st.Typos[n-MaxTypoMarks:]
+	}
 }
 
 // RepliesSince counts persona replies at or after t.
 func (st RunnerState) RepliesSince(t time.Time) int {
 	n := 0
 	for _, r := range st.Replies {
+		if !r.Before(t) {
+			n++
+		}
+	}
+	return n
+}
+
+// ScheduledSince counts scheduled messages started at or after t.
+func (st RunnerState) ScheduledSince(t time.Time) int {
+	n := 0
+	for _, r := range st.Scheduled {
 		if !r.Before(t) {
 			n++
 		}
@@ -71,6 +115,16 @@ func (st RunnerState) ProactiveSince(t time.Time) int {
 func (st RunnerState) clone() RunnerState {
 	st.Replies = slices.Clone(st.Replies)
 	st.Proactive = slices.Clone(st.Proactive)
+	st.Scheduled = slices.Clone(st.Scheduled)
+	st.Typos = slices.Clone(st.Typos)
+	if st.ScheduleNextAt != nil {
+		t := *st.ScheduleNextAt
+		st.ScheduleNextAt = &t
+	}
+	if st.ScheduleAt != nil {
+		t := *st.ScheduleAt
+		st.ScheduleAt = &t
+	}
 	if st.ProactiveDueAt != nil {
 		t := *st.ProactiveDueAt
 		st.ProactiveDueAt = &t

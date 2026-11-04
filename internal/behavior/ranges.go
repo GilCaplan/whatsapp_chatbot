@@ -70,6 +70,10 @@ var ranges = map[string]Range{
 	"proactive.afterHours":       {1, 720},
 	"proactive.maxPerDay":        {1, 10},
 	"proactive.spreadMinutes":    {0, 720},
+
+	"proactive.schedule.everyMin":  {5, 20160}, // 5 minutes … 2 weeks
+	"proactive.schedule.spreadMin": {0, 10080},
+	"proactive.schedule.maxPerDay": {1, 96},
 }
 
 var enums = map[string][]string{
@@ -78,6 +82,8 @@ var enums = map[string][]string{
 	"typoFixStyle":              {"correction", "edit", "none"},
 	"availability.outsideHours": {"queue", "silent"},
 	"availability.week.day":     Days,
+	"proactive.schedule.repeat": RepeatKinds,
+	"timingCurve":               TimingCurves,
 }
 
 // enumDefaults is what Clamp substitutes for an empty or unknown enum value.
@@ -309,7 +315,7 @@ func validateProactive(p model.Proactive) error {
 			return err
 		}
 	}
-	return nil
+	return validateSchedule(p.Schedule)
 }
 
 // Word lists (triggerWords, muteWords).
@@ -446,6 +452,7 @@ func clampProactive(p *model.Proactive) {
 	clampInt("proactive.afterHours", &p.AfterHours)
 	clampInt("proactive.maxPerDay", &p.MaxPerDay)
 	clampInt("proactive.spreadMinutes", &p.SpreadMinutes)
+	clampSchedule(&p.Schedule)
 }
 
 // NormalizeWeek returns exactly 7 entries mon..sun with valid "HH:MM" ranges.

@@ -19,6 +19,7 @@ type fakeWA struct {
 	chats   []model.ChatItem
 	sent    []string
 	rosters map[string][]model.Participant
+	left    map[string]bool // group JID → no longer a member
 }
 
 func newFakeWA() *fakeWA {
@@ -91,7 +92,13 @@ func (f *fakeWA) MarkRead(ctx context.Context, chatJID, senderJID string, ids []
 func (f *fakeWA) Typing(ctx context.Context, jid string, on bool) {}
 func (f *fakeWA) OwnJIDs() []string                               { return []string{"15550000@s.whatsapp.net"} }
 func (f *fakeWA) SetMessageHandler(fn func(model.Incoming))       {}
-func (f *fakeWA) Close()                                          {}
+func (f *fakeWA) SetGroupHandler(fn func(model.GroupChange))      {}
+func (f *fakeWA) InGroup(jid string) (bool, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.left[jid], true
+}
+func (f *fakeWA) Close() {}
 
 // ─── fake Engine ─────────────────────────────────────────────
 
@@ -213,6 +220,18 @@ func (e *fakeEngine) Simulate(chatKey, text string, fromMe bool, senderJID strin
 func (e *fakeEngine) PromptPreview(personaID, chatKey string) (string, error) {
 	return "SYSTEM for " + personaID, nil
 }
+func (e *fakeEngine) ChatContext(chatKey string) (model.ChatContext, error) {
+	return model.ChatContext{System: "SYSTEM", Messages: []model.ContextMessage{{Role: "user", Content: "hi"}}, Chars: 8}, nil
+}
+func (e *fakeEngine) CalendarCheck(ctx context.Context, src model.CalendarSource) model.CalendarCheck {
+	return model.CalendarCheck{OK: true, Events: 1, Upcoming: []model.CalendarItem{{Title: "Dentist"}}}
+}
+func (e *fakeEngine) RateNow(ctx context.Context, chatKey string) (model.RatingDay, error) {
+	return model.RatingDay{ChatKey: chatKey, Date: "2026-11-04", Scores: []model.PersonScore{{Name: "Dana", Score: 80, Why: "fun"}}}, nil
+}
+func (e *fakeEngine) Compact(ctx context.Context, chatKey string, keep int) (model.ChatSummary, error) {
+	return model.ChatSummary{ChatKey: chatKey, Text: "they said hi", Messages: 3}, nil
+}
 func (e *fakeEngine) ExpressionPreview(ctx context.Context, p model.Persona, lengthBias string, count, roll int) (model.ExpressionPreview, error) {
 	out := model.ExpressionPreview{Provider: "fake", Model: "fake-1"}
 	for i := range count {
@@ -238,3 +257,21 @@ func (l *fakeLLM) OllamaStatus(ctx context.Context) model.OllamaStatus {
 }
 func (l *fakeLLM) OllamaPull(name string) (string, error) { return "job1", nil }
 func (l *fakeLLM) Rebuild()                               { l.rebuilds.Add(1) }
+
+func (e *fakeEngine) MakeCard(ctx context.Context, personaID string, chars int) (model.Persona, error) {
+	return model.Persona{ID: personaID, Card: "You are a test card."}, nil
+}
+
+func (e *fakeEngine) DraftSystem(ctx context.Context, text, base string) (model.ContextSystem, []string, error) {
+	return model.ContextSystem{Name: "Drafted", Base: base, Chart: model.ContextChart{Nodes: []model.ChartNode{{ID: "in", Block: "message_in", Label: "Message arrives"}}, Edges: []model.ChartEdge{}}}, []string{}, nil
+}
+
+func (e *fakeEngine) StartReplay(req model.ReplayRequest) (model.Replay, error) {
+	return model.Replay{ID: "rp-1", ChatKey: req.ChatKey, Status: "done", Results: []model.ReplayResult{}}, nil
+}
+
+func (e *fakeEngine) Replay(id string) (model.Replay, bool) {
+	return model.Replay{ID: id, Status: "done", Results: []model.ReplayResult{}}, id == "rp-1"
+}
+
+func (e *fakeEngine) CancelReplay(id string) bool { return id == "rp-1" }

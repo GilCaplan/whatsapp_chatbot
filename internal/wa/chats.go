@@ -24,21 +24,67 @@ type contactCache struct {
 
 func (m *Manager) invalidateContacts() { m.contactsGen.Add(1) }
 
-// contactList returns the cached contacts, rebuilding when invalidated or stale.
+// contactList returns the merged address book. Only the very first call
+// builds it in the foreground: a stale cache (contacts changed or older than
+// contactsTTL) is served while one rebuild runs in the background. Right after
+// linking WhatsApp sends thousands of contact updates; rebuilding 14k rows per
+// request used to stall the chat list for as long as that sync lasted.
 func (m *Manager) contactList(ctx context.Context, cli *whatsmeow.Client) (*contactCache, error) {
+	m.contactsMu.Lock()
+	c := m.contacts
+	m.contactsMu.Unlock()
+	if c == nil {
+		return m.buildContactsNow(ctx, cli)
+	}
+	if c.gen != m.contactsGen.Load() || time.Since(c.at) >= contactsTTL {
+		m.rebuildContactsLater(cli)
+	}
+	return c, nil
+}
+
+// buildContactsNow (re)builds the cache unless a concurrent caller just did.
+func (m *Manager) buildContactsNow(ctx context.Context, cli *whatsmeow.Client) (*contactCache, error) {
+	m.contactsBuildMu.Lock()
+	defer m.contactsBuildMu.Unlock()
 	gen := m.contactsGen.Load()
 	m.contactsMu.Lock()
-	defer m.contactsMu.Unlock()
-	if c := m.contacts; c != nil && c.gen == gen && time.Since(c.at) < contactsTTL {
-		return c, nil
+	cur := m.contacts
+	m.contactsMu.Unlock()
+	if cur != nil && cur.gen == gen && time.Since(cur.at) < contactsTTL {
+		return cur, nil
 	}
 	c, err := buildContacts(ctx, cli, m.selfIDs())
 	if err != nil {
 		return nil, err
 	}
 	c.gen = gen
-	m.contacts = c
+	if m.isCurrent(cli) {
+		m.contactsMu.Lock()
+		m.contacts = c
+		m.contactsMu.Unlock()
+	}
 	return c, nil
+}
+
+// rebuildContactsLater starts one background rebuild after a short pause, so
+// a burst of contact updates costs a single rebuild.
+func (m *Manager) rebuildContactsLater(cli *whatsmeow.Client) {
+	if !m.contactsBuilding.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer m.contactsBuilding.Store(false)
+		select {
+		case <-time.After(contactsSettle):
+		case <-m.baseCtx.Done():
+			return
+		}
+		ctx, cancel := context.WithTimeout(m.baseCtx, time.Minute)
+		defer cancel()
+		if _, err := m.buildContactsNow(ctx, cli); err != nil {
+			m.log.Warnf("refresh contacts: %v", err)
+		}
+	}()
 }
 
 type nameParts struct{ full, push, biz string }
@@ -128,18 +174,27 @@ func (m *Manager) contactName(ctx context.Context, cli *whatsmeow.Client, phone 
 	return c.byPhone[phone]
 }
 
-// groupList returns joined groups, cached for groupsTTL (force bypasses the TTL).
+// groupList returns joined groups. A cached list is served at once (when it
+// is older than groupsTTL, one refresh runs in the background); force, or no
+// list yet, waits for WhatsApp (at most groupsTimeout).
 func (m *Manager) groupList(ctx context.Context, cli *whatsmeow.Client, force bool) ([]model.ChatItem, error) {
 	m.groupsMu.RLock()
 	cached, at := m.groups, m.groupsAt
 	m.groupsMu.RUnlock()
-	if !force && cached != nil && time.Since(at) < groupsTTL {
+	if !force && cached != nil {
+		if time.Since(at) >= groupsTTL {
+			m.refreshGroupsLater(cli)
+		}
 		return cached, nil
 	}
+	return m.fetchGroups(ctx, cli)
+}
+
+func (m *Manager) fetchGroups(ctx context.Context, cli *whatsmeow.Client) ([]model.ChatItem, error) {
 	m.groupsFetchMu.Lock()
 	defer m.groupsFetchMu.Unlock()
 	m.groupsMu.RLock()
-	cached, at = m.groups, m.groupsAt
+	cached, at := m.groups, m.groupsAt
 	m.groupsMu.RUnlock()
 	if cached != nil && time.Since(at) < time.Second*5 {
 		return cached, nil // refreshed by a concurrent caller
@@ -150,6 +205,8 @@ func (m *Manager) groupList(ctx context.Context, cli *whatsmeow.Client, force bo
 		}
 		return nil, ErrNotConnected
 	}
+	ctx, cancel := context.WithTimeout(ctx, groupsTimeout)
+	defer cancel()
 	gs, err := cli.GetJoinedGroups(ctx)
 	if err != nil {
 		if cached != nil {
@@ -163,10 +220,23 @@ func (m *Manager) groupList(ctx context.Context, cli *whatsmeow.Client, force bo
 		items = append(items, groupItem(g))
 	}
 	sortByName(items)
-	m.groupsMu.Lock()
-	m.groups, m.groupsAt = items, time.Now()
-	m.groupsMu.Unlock()
+	if m.isCurrent(cli) {
+		m.setGroups(items) // membership.go: reports groups you joined or left meanwhile
+	}
 	return items, nil
+}
+
+// refreshGroupsLater refreshes the group list once in the background.
+func (m *Manager) refreshGroupsLater(cli *whatsmeow.Client) {
+	if !m.groupsRefreshing.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer m.groupsRefreshing.Store(false)
+		if _, err := m.fetchGroups(m.baseCtx, cli); err != nil {
+			m.log.Warnf("refresh groups: %v", err)
+		}
+	}()
 }
 
 func groupItem(g *types.GroupInfo) model.ChatItem {
@@ -273,10 +343,16 @@ func (m *Manager) recentItems(ctx context.Context, cli *whatsmeow.Client, self s
 	return items
 }
 
-// RefreshChats re-fetches joined groups and drops the contacts cache.
+// RefreshChats re-fetches joined groups and drops the contacts cache (the
+// web app calls it on every page load). It also corrects a "connected" state
+// whose connection is gone.
 func (m *Manager) RefreshChats(ctx context.Context) error {
+	cli := m.currentClient()
+	if m.Status().State == model.WAConnected && !cli.IsConnected() {
+		m.setState(model.WADisconnected, "")
+	}
 	m.invalidateContacts()
-	_, err := m.groupList(ctx, m.currentClient(), true)
+	_, err := m.groupList(ctx, cli, true)
 	return err
 }
 

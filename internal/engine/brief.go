@@ -45,6 +45,7 @@ func (e *Engine) isCrossSource(c model.ChatAssignment) bool {
 // briefTick counts a new message (theirs or the persona's) and (re)arms the
 // brief job once enough have arrived.
 func (e *Engine) briefTick(c model.ChatAssignment) {
+	e.compactTick(c) // every message also counts towards auto-compaction (context.go)
 	if !e.isCrossSource(c) {
 		return
 	}
@@ -91,9 +92,39 @@ func (e *Engine) refreshBrief(ctx context.Context, c model.ChatAssignment) (mode
 	if !ok {
 		return model.Brief{}, fmt.Errorf("persona %q not found", c.PersonaID)
 	}
-	all, err := e.store.History(c.Key, 0)
+	msgs, err := e.briefBatch(c)
 	if err != nil {
 		return model.Brief{}, err
+	}
+	var bc *prompt.BriefContent
+	if len(msgs) > 0 {
+		prov, mdl, err := e.llm.Resolve(p.LLM)
+		if err != nil {
+			return model.Brief{}, err
+		}
+		req := prompt.Brief(prompt.BriefInput{PersonaName: p.Name, ChatName: c.Name, IsGroup: isGroupChat(c), Messages: msgs, Zone: time.Local, Now: e.clock.Now()})
+		req.Model, req.MaxTokens = mdl, briefMaxTokens
+		cctx, cancel := context.WithTimeout(ctx, briefTimeout)
+		resp, err := prov.Chat(cctx, req)
+		cancel()
+		if err != nil {
+			return model.Brief{}, err
+		}
+		parsed, err := prompt.ParseBrief(resp.Text, isGroupChat(c))
+		if err != nil {
+			return model.Brief{}, err
+		}
+		bc = &parsed
+	}
+	return e.saveBrief(c, msgs, bc)
+}
+
+// briefBatch is what the next brief reads: the messages since the last one
+// plus a little context, capped.
+func (e *Engine) briefBatch(c model.ChatAssignment) ([]model.Message, error) {
+	all, err := e.store.History(c.Key, 0)
+	if err != nil {
+		return nil, err
 	}
 	all = slices.DeleteFunc(slices.Clone(all), func(m model.Message) bool {
 		return m.Kind == model.MsgKindFix || m.Kind == model.MsgKindReveal
@@ -111,28 +142,18 @@ func (e *Engine) refreshBrief(ctx context.Context, c model.ChatAssignment) (mode
 	if len(msgs) > prompt.MaxBriefMessages {
 		msgs = msgs[len(msgs)-prompt.MaxBriefMessages:]
 	}
+	return msgs, nil
+}
+
+// saveBrief checks and stores a brief written from msgs (bc nil = nothing
+// to write from) and moves the brief cursor (also the digest's part).
+func (e *Engine) saveBrief(c model.ChatAssignment, msgs []model.Message, bc *prompt.BriefContent) (model.Brief, error) {
 	now := e.clock.Now()
 	isGroup := isGroupChat(c)
 	b := model.Brief{ChatKey: c.Key, PersonaID: c.PersonaID, Kind: c.Kind, GeneratedAt: now, MessageCount: len(msgs),
 		Topics: []string{}, Commitments: []string{}, People: []model.BriefPerson{}, Sensitive: []string{}}
-	if len(msgs) > 0 {
+	if len(msgs) > 0 && bc != nil {
 		b.From, b.To = msgs[0].TS, msgs[len(msgs)-1].TS
-		prov, mdl, err := e.llm.Resolve(p.LLM)
-		if err != nil {
-			return b, err
-		}
-		req := prompt.Brief(prompt.BriefInput{PersonaName: p.Name, ChatName: c.Name, IsGroup: isGroup, Messages: msgs, Zone: time.Local, Now: now})
-		req.Model, req.MaxTokens = mdl, briefMaxTokens
-		cctx, cancel := context.WithTimeout(ctx, briefTimeout)
-		resp, err := prov.Chat(cctx, req)
-		cancel()
-		if err != nil {
-			return b, err
-		}
-		bc, err := prompt.ParseBrief(resp.Text, isGroup)
-		if err != nil {
-			return b, err
-		}
 		b.Topics, b.Commitments, b.Tone = nonNilStrings(bc.Topics), nonNilStrings(bc.Commitments), bc.Tone
 		if bc.People != nil {
 			b.People = bc.People

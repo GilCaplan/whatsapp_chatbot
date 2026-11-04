@@ -56,9 +56,12 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 			r.handoffNoted = now
 		}
 		r.mu.Unlock()
+		const why = "Paused — waiting for you to take over (kept as context)"
 		if due {
-			e.act(model.ActDecisionSkip, c, p.Name, "Paused — waiting for you to take over (kept as context)",
-				map[string]any{"reason": "handoff", "category": cur.Handoff.Category})
+			e.act(model.ActDecisionSkip, c, p.Name, why,
+				withMsg(map[string]any{"reason": "handoff", "category": cur.Handoff.Category}, in.MessageID))
+		} else {
+			e.logDecided(c.Key, []string{in.MessageID}, model.DecisionPaused, "handoff", why, now)
 		}
 		return true
 	}
@@ -73,6 +76,18 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 	}
 	who := senderName(in, c, isGroup)
 	how := model.HandoffHowKeyword
+	if cur := r.config(); cur.AutoContinue {
+		if hit.Strength == handoff.Strong { // weak hits aren't worth an AI check just to flag them
+			if who == "" {
+				who = c.Name
+			}
+			e.forgetBrief(c.Key) // as with a pause: nothing of a sensitive message crosses (brief.go)
+			e.act(model.ActHandoff, c, p.Name, handoff.Reason(hit.Category, who)+" — flagged, kept going (auto-continue is on)",
+				withMsg(map[string]any{"category": hit.Category, "how": how, "sender": who, "autoContinued": true,
+					"excerpt": guard.Truncate(strings.Join(strings.Fields(text), " "), 160)}, in.MessageID))
+		}
+		return false
+	}
 	if hit.Strength == handoff.Weak {
 		if !hs.AICheck {
 			return false
@@ -140,7 +155,7 @@ func (e *Engine) triggerHandoff(r *Runner, c model.ChatAssignment, p model.Perso
 	r.keepAsContext(in, text, mentions, bp, now)
 	e.holdApprovals(c.Key)
 	e.forgetBrief(c.Key) // its window held the sensitive message: nothing of it crosses (brief.go)
-	meta := map[string]any{"category": hit.Category, "excerpt": hs.Excerpt, "how": how, "sender": who}
+	meta := withMsg(map[string]any{"category": hit.Category, "excerpt": hs.Excerpt, "how": how, "sender": who}, in.MessageID)
 	if hit.Match != "" {
 		meta["match"] = hit.Match
 	}

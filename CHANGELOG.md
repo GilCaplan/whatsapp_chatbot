@@ -7,6 +7,80 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
 Everything below is new unless noted.
 
+### Context systems
+- New Context page: three built-in context systems decide when a persona asks the AI and what it
+  reads — Classic (as before: AI join-in check on every group message, goal plan before every
+  reply, ~4 calls before a group reply), Lean (rules first, AI only when unsure, a reply check in
+  code, a merged goal plan every 5 replies, one digest call for background work, a short persona
+  card with size budgets, summary as structured facts; ~1.7 calls) and Fast (one call per reply).
+- Choose per chat, per persona or for the whole app; copy a built-in to tune its settings.
+- Flowcharts: every system has one; yours are interactive (drag, wire, label, note, add blocks
+  from the palette, delete, tidy up), "Match settings to chart" reads the settings off the
+  drawing, and "Describe one" lets the AI draw a system from your words.
+- Reply check: copied instructions, a private plan sent as the message, talk about being an AI,
+  repeats of its last replies and the wrong language are caught in code (optionally an AI judge);
+  a failing reply is written again with the reason, then it stays quiet (Log tab says why).
+- Sandbox: replays a chat's last messages with up to three systems side by side (replies, AI calls
+  per step, prompt size, time); nothing is sent.
+- Persona cards: a short version of each persona, written once by the AI and editable.
+
+### Names, tags, languages and context
+- Nicknames: give anyone a name (People tab) that is used instead of their WhatsApp name in every
+  chat — in the app, in what the persona reads and when it tags them.
+- Fewer @tags: a tag now has to help — not again soon after one, the person being answered only
+  in a busy conversation, others only to pull them in. Tags the model adds anyway become names.
+- Languages (Settings › Behaviour and per chat): the languages it speaks (English and Hebrew by
+  default), stay quiet or answer other languages, reply in the language of the message or a fixed
+  one, and per person in the People tab. A light built-in detector decides; "ok" and emoji never
+  count as another language.
+- More natural typos: seven kinds of slip (swapped, dropped, doubled or neighbouring letters, two
+  words run together, a mixed-up word like "your"/"you're", a word typed twice), corrected in
+  rotating ways ("*work", "work*", "**work") or left alone. In one chat a kind of slip comes back
+  at most twice among the last ten and never twice in a row.
+- Memory tab › What it reads shows the prompt part by part (character, safety rules, chat
+  context, goal, instructions, language, guidance, conversation) with each part's share; the
+  character, safety rules, "how to read the conversation" and "stay yourself" parts can be
+  edited for one chat without changing the persona.
+- One "Build a persona" button (Personas page, Dashboard): like you, a personal secretary, from a
+  description or from scratch.
+- Personal secretary: says it's your assistant, takes messages ("Messages for you" on the
+  Dashboard), notifies you at once about urgent ones and VIPs, answers your FAQs and offers
+  meeting times from your read-only calendars (never confirming). Settings › Calendars: any
+  calendar link (Google, Outlook, iCloud) or the MACalendar app; secretaries only see busy times.
+- Long-term memory on by default: each chat reads everything since its last summary (at least 30
+  messages) and folds the older ones into the summary every 70 messages (200 in a busy chat);
+  Settings › Memory and per chat in Memory › What it reads.
+- Connection ratings (People tab, groups): once a day with at least 20 messages the persona
+  privately scores, 0 to 100, how connected it felt to each person who wrote, with a line why
+  and the change since last time; "Rate now" on demand. Only you see it.
+- Timing curve (Behaviour › Advanced): delays drawn evenly, on a bell curve, mostly quick with
+  a long tail, or always the middle of their range.
+- Ignore stickers (Behaviour › Advanced, off by default): a sticker gets no reply but is still
+  read as part of the conversation.
+- Keep going when a message is flagged (per chat, off by default): hand-off topics are flagged
+  in the feed and the Log instead of pausing the chat.
+- Memory tab › What it reads: the full prompt and messages of the next reply, your instructions
+  for the chat, an editable summary of older messages (summarise now, or automatically when the
+  history is full) and "Start fresh".
+
+### Decision log
+- Each chat panel has a **Log** tab: every message with what the persona did about it and why
+  (answered, stayed quiet, reacted, left for you, blocked, waiting for approval), the time from
+  their message to the reply, and the steps on the way (seen, waited, thought, typed). On top, for
+  today, 7 days or everything: messages, answer rate, typical and longest reply time, why it didn't
+  answer, how fast it answers and, in groups, who it answers.
+
+### Scheduled messages and WhatsApp sync
+- Start conversations › On a schedule: an opener when replies are turned on or you join a group,
+  one at each set time, and repeats with a fixed gap, an even spread, a bell curve or at random
+  (Poisson), with a daily cap. A moment that can't be sent right then (WhatsApp disconnected, not
+  in the group, Away, outside active hours) is skipped and never sent late, so nothing piles up.
+- Every page load re-checks WhatsApp: the connection state and the groups you are in. Groups you
+  left or were removed from are marked "Not in group"; being added back picks up again.
+- Faster chat lists right after linking (contacts and groups are served from cache while they
+  refresh) and "connected" is no longer shown while WhatsApp stops answering; sends fail fast
+  with "WhatsApp is not connected" instead of hanging.
+
 ### Windows and Linux
 - Runs on Windows 10/11 and 64-bit Linux as well as macOS (amd64 and arm64 everywhere).
 - Downloads built by `make dist` (and by the release workflow on a `v*` tag): a universal macOS

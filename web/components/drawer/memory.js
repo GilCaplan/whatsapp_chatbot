@@ -18,11 +18,13 @@ import { helpTip } from '../help-tip.js';
 import { createMemoryStore, memoryList } from '../memory-list.js';
 import { createCrossStore, crossBlock } from '../cross-block.js';
 import { patchChat } from './shared.js';
+import { createContextStore, contextBlock } from '../context-block.js';
 
 export function createMemoryTab(ctx) {
   const mem = createMemoryStore(ctx.key, ctx.update);
   ctx.memories = mem;
   const cross = createCrossStore(ctx.key, ctx.update);
+  const context = createContextStore(ctx.key, ctx.update);
   const ui = { filter: '', editing: '', editText: '', newText: '', newPerson: '', adding: false, extracting: false };
 
   async function setMemory(c, on) {
@@ -54,6 +56,7 @@ export function createMemoryTab(ctx) {
     const own = c.memory != null;
     const pending = mem.data ? mem.data.pending || 0 : 0;
     return html`
+      ${contextBlock({ ctx: context, chat: c, persona: p, onUpdate: ctx.update })}
       <section class="drawer-section" data-key="memory">
         <h4>${icon('brain', 'ic-sm')}What ${name} remembers<span class="grow"></span>
           ${enabled ? html`<button class=${'btn btn-ghost btn-sm ' + (ui.extracting ? 'loading' : '')} ?disabled=${ui.extracting}
@@ -79,14 +82,16 @@ export function createMemoryTab(ctx) {
   return {
     id: 'memory',
     view,
-    load: () => { mem.load(); cross.load(); },
+    load: () => { mem.load(); cross.load(); context.load(); },
     onBus(type, data) {
       if (type === 'memories.changed' && (!data || !data.chatKey || data.chatKey === ctx.key)) mem.reloadSoon();
       if (type === 'memories.changed') cross.reloadSoon(); // other chats' notes change what this one draws on
-      if (type === 'chats.changed' || type === 'settings.changed') { mem.reloadSoon(); cross.reloadSoon(); }
+      if (type === 'chats.changed' || type === 'settings.changed') { mem.reloadSoon(); cross.reloadSoon(); context.reloadSoon(); }
+      if (type === 'memories.changed' && (!data || !data.chatKey || data.chatKey === ctx.key)) context.reloadSoon();
+      if (type === 'activity' && data && data.chatKey === ctx.key && (data.type === 'incoming' || data.type === 'sent')) context.reloadSoon();
     },
     /** People tab → "3 things remembered" opens this tab filtered by person. */
     memoryFilter(person) { ui.filter = person || ''; ctx.update(); },
-    destroy() { mem.destroy(); cross.destroy(); },
+    destroy() { mem.destroy(); cross.destroy(); context.destroy(); },
   };
 }

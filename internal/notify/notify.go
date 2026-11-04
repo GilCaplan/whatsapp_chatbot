@@ -248,8 +248,19 @@ func (n *Notifier) noteFor(a model.ActivityEvent, s config.NotificationSettings)
 		}
 		return Note{Subtitle: "Mission accomplished · " + chat, Message: a.Text, Group: "doppel:goal:" + a.ChatKey,
 			Open: chatURL, Sound: s.Sound}, a.Type, true
-	case model.ActHandoff:
+	case model.ActSecretaryNote:
 		if !s.Handoff {
+			return Note{}, "", false
+		}
+		urgent := a.Meta["urgent"] == true
+		sub := "Message for you · " + chat
+		if urgent {
+			sub = "Urgent · " + chat
+		}
+		return Note{Subtitle: sub, Message: a.Text, Group: "doppel:note:" + a.ChatKey, Open: chatURL,
+			Sound: urgent || s.Sound, Urgent: urgent}, a.Type, true
+	case model.ActHandoff:
+		if !s.Handoff || a.Meta["autoContinued"] == true {
 			return Note{}, "", false
 		}
 		msg := strings.TrimSuffix(a.Text, " — paused so you can take over")

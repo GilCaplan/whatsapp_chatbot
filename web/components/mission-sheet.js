@@ -75,7 +75,7 @@ export function openMissionSheet({ chatKey = '', onStarted } = {}) {
     if (!c || c.kind !== 'group') return;
     try {
       const r = await api.chats.people(c.key, { quiet: true });
-      st.members = ((r && r.members) || []).filter((m) => !m.isSelf && !m.left && m.name).map((m) => m.name).slice(0, 10);
+      st.members = ((r && r.members) || []).filter((m) => !m.isSelf && !m.left && (m.nickname || m.name)).map((m) => m.nickname || m.name).slice(0, 10);
     } catch { st.members = []; }
     update();
   }

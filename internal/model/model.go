@@ -54,9 +54,17 @@ type Persona struct {
 	LLM              *LLMChoice `json:"llm"`
 	// World is where the persona lives: city, country, time zone and daily
 	// routine (world.go). The zero value means "same as this Mac, no routine".
-	World     World     `json:"world"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	World World `json:"world"`
+	// Secretary makes it the owner's personal secretary (secretary.go); nil = an ordinary persona.
+	Secretary *SecretaryConfig `json:"secretary,omitempty"`
+	// ContextSystem is this persona's context system ("" = the app's; see
+	// ctxsys); Card is its short persona card for card-style prompts ("" =
+	// not made yet), CardAt when it was made or edited.
+	ContextSystem string     `json:"contextSystem"`
+	Card          string     `json:"card"`
+	CardAt        *time.Time `json:"cardAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
 // ─── Chats ───────────────────────────────────────────────────
@@ -104,6 +112,27 @@ type ChatAssignment struct {
 	// Cross is how this chat uses (and shares) context from the same
 	// persona's other chats; zero value = the app defaults.
 	Cross CrossContext `json:"cross"`
+	// Language: the languages it speaks here and the reply language
+	// (nil = settings.behavior.languages for the chat's kind; see internal/lang).
+	Language *LanguagePrefs `json:"language,omitempty"`
+	// AutoContinue: a message that would pause the chat (hand-off) is only
+	// flagged — the persona keeps replying, nothing to resume.
+	AutoContinue bool `json:"autoContinue"`
+	// What the persona reads (context.go): your instructions for this chat
+	// (added to its prompt), where its history starts (nil = everything
+	// kept; older messages are left to the summary) and whether old messages
+	// are summarised automatically as the history fills up.
+	Instructions string     `json:"instructions"`
+	ContextFrom  *time.Time `json:"contextFrom"`
+	// CompactEvery: long-term memory for this chat — 0 = automatic (settings
+	// memory.compact), -1 = off, N = fold into the summary every N messages.
+	CompactEvery int `json:"compactEvery,omitempty"`
+	// PromptEdits replace parts of the system prompt in this chat only
+	// (key → text, keys in EditablePromptSections); the persona is unchanged.
+	PromptEdits map[string]string `json:"promptEdits,omitempty"`
+	// ContextSystem is this chat's context system ("" = the persona's, else
+	// the app's; see ctxsys).
+	ContextSystem string `json:"contextSystem"`
 	// RevealedAt is when you told this chat it was talking to a persona.
 	RevealedAt     *time.Time `json:"revealedAt"`
 	LastActivityAt *time.Time `json:"lastActivityAt"`
@@ -255,6 +284,50 @@ type ActivityEvent struct {
 	Meta        map[string]any `json:"meta,omitempty"`
 }
 
+// ─── Decision log ────────────────────────────────────────────
+
+// Decision outcomes: what the persona did about a message.
+const (
+	DecisionPending  = "pending"  // still on it (noticing, waiting, thinking…)
+	DecisionReplied  = "replied"  // answered (alone or together with other messages)
+	DecisionSkipped  = "skipped"  // stayed quiet
+	DecisionReacted  = "reacted"  // reacted with an emoji instead
+	DecisionPaused   = "paused"   // hand-off: left for you
+	DecisionBlocked  = "blocked"  // likely prompt injection
+	DecisionApproval = "approval" // a reply waits for your approval
+	DecisionFailed   = "failed"   // the reply couldn't be written or sent
+)
+
+// LogEntry is one entry of a chat's decision log: a message someone sent
+// (or an opener the persona wrote first, Kind "opener") and what the persona
+// did about it, why, and how long it took.
+type LogEntry struct {
+	ID        string     `json:"id"` // the WhatsApp message id
+	ChatKey   string     `json:"chatKey"`
+	Kind      string     `json:"kind,omitempty"` // "" = a message to them, "opener"
+	At        time.Time  `json:"at"`             // when it was sent on WhatsApp
+	Sender    string     `json:"sender,omitempty"`
+	Text      string     `json:"text,omitempty"`
+	Outcome   string     `json:"outcome"`
+	Reason    string     `json:"reason,omitempty"` // code (activity meta.reason)
+	Why       string     `json:"why,omitempty"`    // plain English
+	DecidedAt *time.Time `json:"decidedAt,omitempty"`
+	// RepliedAt is when the first reply message went out; DelaySeconds is
+	// At → RepliedAt.
+	RepliedAt    *time.Time `json:"repliedAt,omitempty"`
+	DelaySeconds float64    `json:"delaySeconds,omitempty"`
+	Reply        string     `json:"reply,omitempty"`
+	Steps        []LogStep  `json:"steps,omitempty"`
+}
+
+// LogStep is one thing the persona did on the way (seen, waiting,
+// thinking, typing…), as written in the activity feed.
+type LogStep struct {
+	At   time.Time `json:"at"`
+	Type string    `json:"type"` // activity type
+	Text string    `json:"text"`
+}
+
 // ─── WhatsApp ────────────────────────────────────────────────
 
 // WhatsApp connection states.
@@ -305,6 +378,14 @@ type ChatItem struct {
 	Assigned         bool       `json:"assigned"`
 }
 
+// GroupChange reports that you joined or left (were removed from) a group.
+type GroupChange struct {
+	Key    string `json:"key"`
+	JID    string `json:"jid"`
+	Name   string `json:"name"`
+	Joined bool   `json:"joined"`
+}
+
 type ChatQuery struct {
 	Q      string // case-insensitive substring of name/phone
 	Kind   string // all|dm|group
@@ -315,13 +396,18 @@ type ChatQuery struct {
 
 // Incoming is a normalized WhatsApp message handed from the wa layer to the engine.
 type Incoming struct {
-	ChatKey       string // canonical key (see ChatAssignment.Key)
-	ChatJID       string // the address the message actually arrived on (send replies here first)
-	AltJID        string // the other address for the same chat (phone↔lid), may be ""
-	IsGroup       bool
-	IsFromMe      bool
-	SenderJID     string
-	PushName      string
+	ChatKey   string // canonical key (see ChatAssignment.Key)
+	ChatJID   string // the address the message actually arrived on (send replies here first)
+	AltJID    string // the other address for the same chat (phone↔lid), may be ""
+	IsGroup   bool
+	IsFromMe  bool
+	SenderJID string
+	PushName  string
+	// WAName is their own PushName when a nickname replaced it (engine.
+	// HandleIncoming, Nicknamed set; may be ""); history keeps this one,
+	// nicknames apply on read.
+	WAName        string
+	Nicknamed     bool
 	Text          string
 	MentionedJIDs []string
 	Timestamp     time.Time

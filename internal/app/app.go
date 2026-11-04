@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"whatsappdoppel/internal/calendar"
 	"whatsappdoppel/internal/config"
 	"whatsappdoppel/internal/contract"
 	"whatsappdoppel/internal/engine"
@@ -126,8 +127,9 @@ func Run(opts Options) error {
 		llmReg.UseFake(llm.NewFake())
 	}
 
-	eng := engine.New(engine.Deps{Config: cfg, Store: st, Hub: hub, WA: waSvc, LLM: llmReg})
+	eng := engine.New(engine.Deps{Config: cfg, Store: st, Hub: hub, WA: waSvc, LLM: llmReg, Calendar: calendar.New(nil)})
 	waSvc.SetMessageHandler(eng.HandleIncoming)
+	waSvc.SetGroupHandler(eng.HandleGroupChange)
 
 	ln, err := listen(opts.Port, cfg.Get().Port)
 	if err != nil {

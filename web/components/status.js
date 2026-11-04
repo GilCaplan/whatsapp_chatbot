@@ -71,6 +71,7 @@ export const ACT = {
   'reveal':             { label: 'Revealed', color: 'var(--violet)', group: 'sent', icon: 'eye' },
   'memory':             { label: 'Remembered', color: 'var(--indigo)', group: 'system', icon: 'brain' },
   'recap':              { label: 'Daily recap', color: 'var(--cyan)', group: 'system', icon: 'text' },
+  'rating':             { label: 'Connection', color: 'var(--pink)', group: 'system', icon: 'heart' },
 };
 
 export function actMeta(type) {

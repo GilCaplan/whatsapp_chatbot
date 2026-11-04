@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -55,13 +56,25 @@ type fakeWA struct {
 	fail      map[string]bool
 	failEdit  bool                           // EditMessage returns an error
 	rosters   map[string][]model.Participant // group JID → members
+	state     string                         // "" = connected
+	left      map[string]bool                // group JID → no longer a member
 }
 
 func (w *fakeWA) Start(context.Context) error { return nil }
-func (w *fakeWA) Status() model.WAStatus      { return model.WAStatus{State: model.WAConnected} }
-func (w *fakeWA) Pair() error                 { return nil }
-func (w *fakeWA) Reconnect() error            { return nil }
-func (w *fakeWA) Disconnect()                 {}
+func (w *fakeWA) Status() model.WAStatus {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return model.WAStatus{State: cmp.Or(w.state, model.WAConnected)}
+}
+func (w *fakeWA) InGroup(jid string) (bool, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return !w.left[jid], true
+}
+func (w *fakeWA) SetGroupHandler(func(model.GroupChange)) {}
+func (w *fakeWA) Pair() error                             { return nil }
+func (w *fakeWA) Reconnect() error                        { return nil }
+func (w *fakeWA) Disconnect()                             {}
 func (w *fakeWA) Logout(context.Context) error {
 	return nil
 }
@@ -192,6 +205,7 @@ func (w *swapSampler) Hit(p int) bool                              { return w.ge
 func (w *swapSampler) Between(a, b int) time.Duration              { return w.get().Between(a, b) }
 func (w *swapSampler) Jitter(d time.Duration, p int) time.Duration { return w.get().Jitter(d, p) }
 func (w *swapSampler) Index(n int) int                             { return w.get().Index(n) }
+func (w *swapSampler) Float() float64                              { return w.get().Float() }
 
 type harness struct {
 	t   *testing.T
@@ -865,11 +879,16 @@ func TestPlaygroundAndBuilder(t *testing.T) {
 	}
 }
 
+// The fixed history limits apply when long-term memory is off (with it on,
+// the window is everything since the last summary: context_test.go).
 func TestHistoryBounds(t *testing.T) {
-	h := newHarness(t, both(func(p *model.BehaviorProfile) {
-		p.HistoryMessages = 3
-		p.HistoryChars = 500
-	}), dmChat())
+	h := newHarness(t, func(s *config.Settings) {
+		s.Memory.Compact.Off = true
+		both(func(p *model.BehaviorProfile) {
+			p.HistoryMessages = 3
+			p.HistoryChars = 500
+		})(s)
+	}, dmChat())
 	for _, txt := range []string{"aaaa", "bbbb", "cccc", "dddd"} {
 		h.simulate(dmKey, txt, true) // own messages: context only
 	}

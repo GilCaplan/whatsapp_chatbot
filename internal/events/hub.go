@@ -24,9 +24,13 @@ const (
 	TypeSystem          = "system" // data: {kind:"port_changed", url} | {kind:"quitting"}
 
 	// Wave 3.
-	TypeMemoriesChanged = "memories.changed" // data: {chatKey}
-	TypeRecapsChanged   = "recaps.changed"   // data: {}
-	TypeMissionsChanged = "missions.changed" // data: {}
+	TypeMemoriesChanged  = "memories.changed" // data: {chatKey}
+	TypeNicknamesChanged = "nicknames.changed"
+	TypeRatingsChanged   = "ratings.changed"  // data: {chatKey}
+	TypeNotesChanged     = "notes.changed"    // the secretary's messages for you
+	TypeRecapsChanged    = "recaps.changed"   // data: {}
+	TypeMissionsChanged  = "missions.changed" // data: {}
+	TypeContextChanged   = "context.changed"  // context systems or a replay changed; data: {replayId?}
 )
 
 type Event struct {

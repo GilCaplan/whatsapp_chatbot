@@ -4,7 +4,7 @@ import { html, render, mountView } from './dom.js';
 import { installIcons, icon } from './icons.js';
 import { defineElements } from './components/elements.js';
 import { setErrorToaster, setToken, hasToken } from './api.js';
-import { store, bus, loadHealth, refreshAll } from './store.js';
+import { store, bus, loadHealth, refreshAll, syncWhatsApp } from './store.js';
 import { startSSE } from './sse.js';
 import { initRouter, handle, navigate, currentPage, parseHash } from './router.js';
 import { toast, confirmSheet } from './ui.js';
@@ -26,6 +26,7 @@ import Activity from './pages/activity.js';
 import Approvals from './pages/approvals.js';
 import Settings from './pages/settings.js';
 import Missions from './pages/missions.js';
+import Context from './pages/context.js';
 import Guide from './pages/guide.js';
 
 const ROUTES = {
@@ -39,6 +40,7 @@ const ROUTES = {
   approvals: Approvals,
   settings: Settings,
   missions: Missions,
+  context: Context,
   guide: Guide,
 };
 
@@ -47,6 +49,7 @@ const NAV = [
   { name: 'chats', label: 'Chats', icon: 'chats' },
   { name: 'personas', label: 'Personas', icon: 'personas', also: ['persona'] },
   { name: 'missions', label: 'Missions', icon: 'target' },
+  { name: 'context', label: 'Context', icon: 'flow' },
   { name: 'playground', label: 'Playground', icon: 'playground' },
   { name: 'activity', label: 'Activity', icon: 'activity' },
   { name: 'approvals', label: 'Approvals', icon: 'approvals', badge: () => store.state.approvals.length },
@@ -168,6 +171,7 @@ async function boot() {
   if (!hasToken() && health.token) setToken(health.token);
 
   await refreshAll();
+  syncWhatsApp(); // in the background: connection and group list straight from WhatsApp
   applyAppearance(store.state.settings || {}, { animate: false });
   watchSystemMode(() => store.state.settings || {}, () => { const cur = currentPage(); if (cur) cur.view.update(); });
   store.set({ booted: true });
