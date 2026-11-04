@@ -162,6 +162,12 @@ func (e *Engine) runReplay(ctx context.Context, run *replayRun, c model.ChatAssi
 		run.mu.Unlock()
 		goal := e.goalStatus(c.Key, goals.Resolve(e.personaOr(c), c).Text) // a copy: progress stays local
 		goal.Plans = slices.Clone(goal.Plans)
+		// The replayed messages are older than now: plan from the first one
+		// and let all of them count as evidence.
+		goal.LastPlanAt = nil
+		if first := all[targets[0]].TS; !first.IsZero() && goal.Since.After(first) {
+			goal.Since = first
+		}
 		prompts, replies := 0, 0
 		for _, t := range targets {
 			if ctx.Err() != nil {
@@ -251,9 +257,13 @@ func (e *Engine) replayStep(ctx context.Context, c model.ChatAssignment, cp mode
 	}()
 	bp := e.effective(c).Profile
 	isGroup := isGroupChat(c)
+	at := msg.TS // the message's own time, not now: rules and planning compare with history
+	if at.IsZero() {
+		at = e.clock.Now()
+	}
 	if isGroup {
 		meter.Step("join")
-		d := e.decide(mctx, p, bp, cp, msg.Text, msg.Name, nil, hist)
+		d := e.decide(mctx, p, bp, cp, msg.Text, msg.Name, nil, hist, at)
 		out.Why = decisionText(d.Reason, p.Name)
 		if !d.Reply {
 			out.Decision = "skip"
@@ -264,11 +274,14 @@ func (e *Engine) replayStep(ctx context.Context, c model.ChatAssignment, cp mode
 	meter.Step("plan")
 	cfg := goals.Resolve(p, c)
 	if goal.Goal != cfg.Text {
-		*goal = freshGoalStatus(cfg.Text, e.clock.Now())
+		*goal = freshGoalStatus(cfg.Text, at)
 	}
 	gp := e.planAhead(mctx, p, cfg, cp, *goal, full, isGroup, false)
 	if gp.planned || gp.reachedNow {
 		*goal = gp.status
+		if gp.planned {
+			goal.LastPlanAt = &at
+		}
 	}
 	out.Plan = gp.turn.Plan
 	dir := e.directory(mctx, c, full)

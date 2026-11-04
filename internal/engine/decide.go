@@ -77,8 +77,8 @@ func decisionText(reason, name string) string {
 // The context system's joinIn (ctxsys) decides the rest: "ai" asks the AI,
 // "rules_first" settles the clear cases in code (joinRules) and asks the AI
 // only when unsure, "rules_only" rolls the chance when unsure. recent is the
-// history before the message, sender its sender's name.
-func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorProfile, cp model.ContextParams, text, sender string, mentions []string, recent []model.Message) decision {
+// history before the message, sender its sender's name and now its arrival time.
+func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorProfile, cp model.ContextParams, text, sender string, mentions []string, recent []model.Message, now time.Time) decision {
 	if bp.ReplyWhenNameMentioned && guard.ContainsName(text, p.Name) {
 		return decision{true, ReasonNameMentioned, map[string]any{"reason": ReasonNameMentioned}}
 	}
@@ -113,10 +113,12 @@ func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorP
 		return decision{true, ReasonAlwaysReply, map[string]any{"reason": ReasonAlwaysReply, "percent": pct}}
 	}
 	if cp.JoinIn == model.JoinRulesFirst || cp.JoinIn == model.JoinRulesOnly {
-		switch v, why := joinRules(text, sender, recent, e.clock.Now()); v {
-		case clearYes:
+		switch v, why := joinRules(text, sender, recent, now); {
+		case v == clearYes && (pct > 0 || bp.AIJudgement):
+			// Rules never make it chattier than the behaviour allows: with
+			// no chime-in chance and no AI check it only answers when addressed.
 			return decision{true, why, map[string]any{"reason": why, "rules": true}}
-		case clearNo:
+		case v == clearNo:
 			return decision{false, why, map[string]any{"reason": why, "rules": true}}
 		}
 	}

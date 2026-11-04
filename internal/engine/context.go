@@ -143,6 +143,18 @@ func (e *Engine) Compact(ctx context.Context, chatKey string, keep int) (model.C
 	return sm, err
 }
 
+// proseSummaryMax is the size a folded paragraph summary is kept to: what it
+// was before context systems, so Classic stays exactly as it was (the 4000
+// of model.MaxSummaryText is for facts and for your own edits).
+const proseSummaryMax = 1500
+
+func summaryLimit(facts bool) int {
+	if facts {
+		return model.MaxSummaryText
+	}
+	return proseSummaryMax
+}
+
 // compactChat writes the new summary and moves the chat's ContextFrom to the
 // first message kept.
 func (e *Engine) compactChat(ctx context.Context, c model.ChatAssignment, keep int) (model.ChatSummary, error) {
@@ -199,8 +211,8 @@ func (e *Engine) compactChat(ctx context.Context, c model.ChatAssignment, keep i
 		if text == "" {
 			return model.ChatSummary{}, errors.New("the model wrote an empty summary")
 		}
-		if utf8.RuneCountInString(text) > model.MaxSummaryText {
-			text = clipText(text, model.MaxSummaryText)
+		if limit := summaryLimit(facts); utf8.RuneCountInString(text) > limit {
+			text = clipText(text, limit)
 		}
 	}
 	// The model call takes a while: never overwrite what you changed meanwhile.

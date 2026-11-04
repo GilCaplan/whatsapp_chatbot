@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -382,7 +383,7 @@ func (s *Server) handlePutCard(w http.ResponseWriter, r *http.Request) {
 func characterChanged(a, b model.Persona) bool {
 	return a.Name != b.Name || a.Tagline != b.Tagline || a.Bio != b.Bio || a.Personality != b.Personality || a.Style != b.Style ||
 		a.Vocabulary != b.Vocabulary || a.Language != b.Language || a.Rules != b.Rules || a.MessageLength != b.MessageLength ||
-		a.AdvancedPrompt != b.AdvancedPrompt || a.Emoji.Usage != b.Emoji.Usage
+		a.AdvancedPrompt != b.AdvancedPrompt || a.Emoji.Usage != b.Emoji.Usage || !slices.Equal(a.Emoji.Favorites, b.Emoji.Favorites)
 }
 
 // ─── Sandbox ─────────────────────────────────────────────────

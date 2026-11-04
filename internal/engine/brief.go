@@ -46,8 +46,8 @@ func (e *Engine) isCrossSource(c model.ChatAssignment) bool {
 // brief job once enough have arrived.
 func (e *Engine) briefTick(c model.ChatAssignment) {
 	e.compactTick(c) // every message also counts towards auto-compaction (context.go)
-	if !e.isCrossSource(c) {
-		return
+	if !e.isCrossSource(c) || e.paramsOf(c).Background == model.BackgroundDigest {
+		return // with a digest the brief is one of its parts (digest.go)
 	}
 	pending := 0
 	e.updateState(c.Key, func(st *store.RunnerState) {
@@ -92,7 +92,7 @@ func (e *Engine) refreshBrief(ctx context.Context, c model.ChatAssignment) (mode
 	if !ok {
 		return model.Brief{}, fmt.Errorf("persona %q not found", c.PersonaID)
 	}
-	msgs, err := e.briefBatch(c)
+	msgs, err := e.briefBatch(c, prompt.MaxBriefMessages)
 	if err != nil {
 		return model.Brief{}, err
 	}
@@ -121,7 +121,7 @@ func (e *Engine) refreshBrief(ctx context.Context, c model.ChatAssignment) (mode
 
 // briefBatch is what the next brief reads: the messages since the last one
 // plus a little context, capped.
-func (e *Engine) briefBatch(c model.ChatAssignment) ([]model.Message, error) {
+func (e *Engine) briefBatch(c model.ChatAssignment, limit int) ([]model.Message, error) {
 	all, err := e.store.History(c.Key, 0)
 	if err != nil {
 		return nil, err
@@ -139,8 +139,8 @@ func (e *Engine) briefBatch(c model.ChatAssignment) ([]model.Message, error) {
 	}
 	start = min(start, max(0, len(all)-briefContext))
 	msgs := all[start:]
-	if len(msgs) > prompt.MaxBriefMessages {
-		msgs = msgs[len(msgs)-prompt.MaxBriefMessages:]
+	if len(msgs) > limit {
+		msgs = msgs[len(msgs)-limit:]
 	}
 	return msgs, nil
 }

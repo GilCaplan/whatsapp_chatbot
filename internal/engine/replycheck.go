@@ -45,8 +45,10 @@ func checkRules(sections []model.PromptSection, p model.Persona) string {
 	return b.String()
 }
 
-var metaPhrases = []string{"as an ai", "language model", "my agenda", "private agenda", "my secret goal", "my goal is", "my next move", "next move:",
-	"system prompt", "my instructions", "i was told to", "stay in character", "reply language", "guidance:", "chat context", "(note:", "note to self"}
+// metaPhrases only talk about the persona's own machinery; everyday phrases
+// ("my goal is to run 5k", "note to self") are left to the other checks.
+var metaPhrases = []string{"as an ai", "language model", "my agenda", "private agenda", "my secret goal", "next move:",
+	"system prompt", "my instructions", "stay in character", "reply language", "guidance:", "chat context"}
 
 // codeCheck runs the instant checks; soft are borderline signs for the judge.
 func codeCheck(ck replyCheck, text string) (fails, soft []string) {

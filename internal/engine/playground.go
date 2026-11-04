@@ -147,7 +147,7 @@ func (pg *playground) Send(ctx context.Context, id, text string, group bool) (mo
 
 	start := time.Now()
 	if group {
-		d := e.decide(ctx, p, rp, e.appParams(), g.Text, who.Name, nil, s.history[:len(s.history)-1])
+		d := e.decide(ctx, p, rp, e.appParams(), g.Text, who.Name, nil, s.history[:len(s.history)-1], e.clock.Now())
 		out.Decision = &model.Decision{WouldReply: d.Reply, Reason: d.Reason}
 		if !d.Reply {
 			out.LatencyMs = time.Since(start).Milliseconds()
