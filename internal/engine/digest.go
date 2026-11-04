@@ -63,7 +63,7 @@ func (e *Engine) digest(ctx context.Context, c model.ChatAssignment) error {
 
 	var memMsgs, briefMsgs []model.Message
 	if e.memoryOn(c) {
-		msgs, known, err := e.memoryBatch(c)
+		msgs, known, err := e.memoryBatch(c, prompt.MaxDigestMessages)
 		if err != nil {
 			return err
 		}
@@ -74,7 +74,7 @@ func (e *Engine) digest(ctx context.Context, c model.ChatAssignment) error {
 		}
 	}
 	if e.isCrossSource(c) {
-		msgs, err := e.briefBatch(c)
+		msgs, err := e.briefBatch(c, prompt.MaxDigestMessages)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (e *Engine) digest(ctx context.Context, c model.ChatAssignment) error {
 		if try == 1 || ctx.Err() != nil {
 			return errors.New("the model didn't answer in the digest format")
 		}
-		req.System += "\n\nIMPORTANT: answer with one JSON object only, exactly in the format asked."
+		req.System += prompt.DigestRetryNote
 	}
 	var errs []error
 	if in.Memories && mem != "" {

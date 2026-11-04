@@ -66,7 +66,8 @@ func (e *Engine) memoryLines(c model.ChatAssignment, hist []model.Message, now t
 // once enough have arrived.
 func (e *Engine) memoryTick(c model.ChatAssignment) {
 	if e.paramsOf(c).Background == model.BackgroundDigest {
-		e.digestTick(c) // one call for memories, the brief and notes (digest.go)
+		e.compactTick(c) // their messages still count towards auto-compaction (context.go)
+		e.digestTick(c)  // one call for memories, the brief and notes (digest.go)
 		return
 	}
 	e.briefTick(c) // the brief for other chats counts every message (brief.go)
@@ -117,7 +118,7 @@ func (e *Engine) extractMemories(ctx context.Context, c model.ChatAssignment) (m
 	if !ok {
 		return res, fmt.Errorf("persona %q not found", c.PersonaID)
 	}
-	msgs, known, err := e.memoryBatch(c)
+	msgs, known, err := e.memoryBatch(c, prompt.MaxExtractMessages)
 	if err != nil {
 		return res, err
 	}
@@ -147,7 +148,7 @@ func (e *Engine) extractMemories(ctx context.Context, c model.ChatAssignment) (m
 
 // memoryBatch is what the next extraction reads: the messages since the
 // last one (capped) and the memories already noted ("Dana: …").
-func (e *Engine) memoryBatch(c model.ChatAssignment) ([]model.Message, []string, error) {
+func (e *Engine) memoryBatch(c model.ChatAssignment, limit int) ([]model.Message, []string, error) {
 	st := e.store.RunnerState(c.Key)
 	all, err := e.store.History(c.Key, 0)
 	if err != nil {
@@ -159,8 +160,8 @@ func (e *Engine) memoryBatch(c model.ChatAssignment) ([]model.Message, []string,
 			msgs = append(msgs, m)
 		}
 	}
-	if len(msgs) > prompt.MaxExtractMessages {
-		msgs = msgs[len(msgs)-prompt.MaxExtractMessages:]
+	if len(msgs) > limit {
+		msgs = msgs[len(msgs)-limit:]
 	}
 	existing, err := e.store.Memories(c.Key)
 	if err != nil {

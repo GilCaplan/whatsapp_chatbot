@@ -73,7 +73,7 @@ func clipText(s string, n int) string {
 	r := []rune(s)[:n]
 	cut := string(r)
 	for _, sep := range []string{"\n", ". "} {
-		if i := strings.LastIndex(cut, sep); i > n/2 {
+		if i := strings.LastIndex(cut, sep); i >= 0 && utf8.RuneCountInString(cut[:i]) > n/2 { // runes, not bytes
 			return strings.TrimSpace(cut[:i+len(sep)])
 		}
 	}

@@ -3,11 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**']
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# A newer push to the same branch or PR cancels the run still going.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -45,8 +52,11 @@ jobs:
           CGO_ENABLED: "0"
         run: go build -o build/ .
 
-      - name: Unit tests (race detector)
-        run: go test -race ./...
+      # The race detector runs on Linux (fast there); macOS and Windows run the
+      # same tests without it, which is most of their CI time saved.
+      - name: Unit tests (race detector on Linux)
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then go test -race ./...; else go test ./...; fi
 
       - name: Check web UI JavaScript syntax
         run: find web -name '*.js' -print0 | xargs -0 -n1 node --check
@@ -57,14 +67,13 @@ jobs:
         run: scripts/smoke.sh
 
   cross-compile:
-    name: cross-compile (${{ matrix.goos }}/${{ matrix.goarch }})
+    name: cross-compile (${{ matrix.goos }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         goos: [darwin, linux, windows]
-        goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v7
 
@@ -72,18 +81,16 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build
+      # Both architectures build; vet once per OS (build tags differ by OS, not by arch).
+      - name: Build amd64 + arm64, vet
         env:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: go build -trimpath -ldflags "-s -w" -o /dev/null .
-
-      - name: Vet
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: go vet ./...
+        run: |
+          set -euo pipefail
+          GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /dev/null .
+          GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o /dev/null .
+          GOARCH=amd64 go vet ./...
 
   # Release archives for Linux + Windows, and the Linux installer end to end.
   install-linux:

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -43,7 +44,7 @@ func CleanCard(s string, chars int) string {
 	}
 	if utf8.RuneCountInString(s) > chars {
 		cut := string([]rune(s)[:chars])
-		if i := strings.LastIndexAny(cut, ".\n"); i > chars/2 {
+		if i := strings.LastIndexAny(cut, ".\n"); i >= 0 && utf8.RuneCountInString(cut[:i]) > chars/2 { // runes, not bytes
 			cut = cut[:i+1]
 		}
 		s = strings.TrimSpace(cut)
@@ -259,8 +260,22 @@ func ApplyFacts(previous string, prose bool, raw string) (string, error) {
 			kept = append(kept, [2]string{factKind(a.Kind), t})
 		}
 	}
-	if len(kept) > MaxFacts { // the oldest lines go first
-		kept = kept[len(kept)-MaxFacts:]
+	// Over the cap: the oldest line of the biggest kind goes first (lines are
+	// grouped by kind, oldest first within a kind, so the overall age is lost
+	// and cutting from the front would always drop People).
+	for len(kept) > MaxFacts {
+		count := map[string]int{}
+		for _, l := range kept {
+			count[l[0]]++
+		}
+		big := kept[0][0]
+		for _, k := range FactKinds {
+			if count[k] > count[big] {
+				big = k
+			}
+		}
+		i := slices.IndexFunc(kept, func(l [2]string) bool { return l[0] == big })
+		kept = slices.Delete(kept, i, i+1)
 	}
 	return JoinFacts(kept), nil
 }
@@ -291,8 +306,10 @@ func writeTranscript(u *strings.Builder, msgs []model.Message, persona, chat str
 
 // ─── Digest: background jobs in one call ─────────────────────
 
-// MaxDigestMessages caps the messages one digest reads.
-const MaxDigestMessages = 60
+// MaxDigestMessages caps the messages one digest reads: enough for the
+// largest digestEvery (60 of theirs) plus the persona's replies, so no job's
+// cursor moves past messages it never saw.
+const MaxDigestMessages = 160
 
 // DigestInput: which jobs the digest does, and their inputs.
 type DigestInput struct {
@@ -397,6 +414,10 @@ func Digest(in DigestInput) llm.Request {
 	return llm.Request{System: head + sys.String(), Messages: []llm.Message{{Role: llm.RoleUser, Content: u.String()}},
 		Temperature: 0.1, MaxTokens: 900, JSON: true, Schema: schema}
 }
+
+// DigestRetryNote is added to the digest's system prompt when its answer
+// wasn't in the format asked.
+const DigestRetryNote = "\n\nIMPORTANT: answer with one JSON object only, exactly in the format asked."
 
 // DigestParts splits a digest answer into each job's JSON (re-wrapped the
 // way the job's own parser reads it); a missing job is "".

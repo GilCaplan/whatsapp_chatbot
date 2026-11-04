@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"whatsappdoppel/internal/model"
@@ -82,14 +83,27 @@ func Builtins() []model.ContextSystem {
 	return out
 }
 
-// Builtin returns one built-in system (Classic for an unknown id).
+// builtins are drawn once: chats look their system up on every message, and
+// the charts (with their layout) never change at run time.
+var builtins = sync.OnceValue(func() map[string]model.ContextSystem {
+	out := make(map[string]model.ContextSystem, len(Bases))
+	for _, base := range Bases {
+		t := builtinText[base]
+		out[base] = model.ContextSystem{ID: base, Name: t[0], Description: t[1], Base: base, BuiltIn: true,
+			Params: ParamsFor(base), Chart: Chart(base)}
+	}
+	return out
+})
+
+// Builtin returns one built-in system (Classic for an unknown id); the chart
+// is a copy the caller may change.
 func Builtin(base string) model.ContextSystem {
 	if !IsBase(base) {
 		base = model.CtxClassic
 	}
-	t := builtinText[base]
-	return model.ContextSystem{ID: base, Name: t[0], Description: t[1], Base: base, BuiltIn: true,
-		Params: ParamsFor(base), Chart: Chart(base)}
+	s := builtins()[base]
+	s.Chart.Nodes, s.Chart.Edges = slices.Clone(s.Chart.Nodes), slices.Clone(s.Chart.Edges)
+	return s
 }
 
 // ─── Choosing a chat's system ────────────────────────────────
@@ -170,7 +184,7 @@ func Specs() []ParamSpec {
 		{Key: "background", Label: "Background work", Group: "background", Type: "enum",
 			Help:    "Learning memories, the brief for its other chats and a secretary's notes.",
 			Options: []Option{{model.BackgroundSeparate, "Separate jobs"}, {model.BackgroundDigest, "One digest call"}}},
-		{Key: "digestEvery", Label: "Digest every", Group: "background", Type: "int", Min: 5, Max: 200, Unit: "messages",
+		{Key: "digestEvery", Label: "Digest every", Group: "background", Type: "int", Min: 5, Max: 60, Unit: "messages",
 			ShowIf: map[string][]string{"background": {model.BackgroundDigest}}},
 		{Key: "summary", Label: "Summary of older messages", Group: "background", Type: "enum",
 			Help:    "Facts are one editable line each (people, plans, promises, open questions, jokes); only changed lines are rewritten, so it doesn't drift.",

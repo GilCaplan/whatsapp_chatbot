@@ -343,7 +343,7 @@ func (r *Runner) process(in model.Incoming) {
 		r.mu.Lock()
 		recent := r.historyCopyLocked()
 		r.mu.Unlock()
-		d := e.decide(r.ctx, p, bp, e.paramsOf(c), raw, in.PushName, in.MentionedJIDs, recent)
+		d := e.decide(r.ctx, p, bp, e.paramsOf(c), raw, in.PushName, in.MentionedJIDs, recent, now)
 		if !d.Reply {
 			e.act(model.ActDecisionSkip, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
 			if open, _ := eff.Available(now); open && e.rng.Hit(bp.ReactPercent) {
