@@ -63,8 +63,12 @@ func (s *Store) AppendRecap(r model.Recap, keepDays int) error {
 	})
 	list = append(list, r)
 	if keepDays > 0 {
-		cutoff := time.Now().Add(-time.Duration(keepDays) * 24 * time.Hour)
-		list = slices.DeleteFunc(list, func(x model.Recap) bool { return x.GeneratedAt.Before(cutoff) })
+		now := r.GeneratedAt // the engine's clock, not the wall clock
+		if now.IsZero() {
+			now = time.Now()
+		}
+		cutoff := now.Add(-time.Duration(keepDays) * 24 * time.Hour)
+		list = slices.DeleteFunc(list, func(x model.Recap) bool { return !x.GeneratedAt.After(cutoff) })
 	}
 	return config.WriteJSONAtomic(s.paths.RecapsFile(), list, 0o600)
 }

@@ -48,7 +48,12 @@ func (rr *replayRun) view() model.Replay {
 	v := rr.r
 	v.Results = make([]model.ReplayResult, len(rr.r.Results))
 	for i, res := range rr.r.Results {
-		res.Steps = append([]model.ReplayStep(nil), res.Steps...)
+		res.Steps = append([]model.ReplayStep{}, res.Steps...) // [] not null while it starts
+		by := make(map[string]int, len(res.CallsByStep))
+		for k, n := range res.CallsByStep {
+			by[k] = n
+		}
+		res.CallsByStep = by
 		v.Results[i] = res
 	}
 	return v

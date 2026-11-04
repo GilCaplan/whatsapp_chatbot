@@ -57,6 +57,7 @@ export function createSandbox(update) {
   }
 
   function stepBar(r) {
+    r = { ...r, callsByStep: r.callsByStep || {} };
     const total = Math.max(1, r.calls);
     return html`<div class="cs-bar" role="img" aria-label=${`${r.calls} AI calls`}>
       ${STEPS.filter((s) => r.callsByStep && r.callsByStep[s.id]).map((s) => html`<span style=${`flex:${r.callsByStep[s.id] / total};background:${s.c}`}
@@ -82,17 +83,18 @@ export function createSandbox(update) {
 
   function compare(run) {
     const res = run.results || [];
-    if (!res.length || !res[0].steps.length) return '';
-    const rows = res[0].steps.map((_, i) => i);
+    const n = Math.max(0, ...res.map((r) => (r.steps || []).length));
+    if (!n) return '';
+    const rows = [...Array(n).keys()];
     return html`<div class="cs-compare" style=${`--cols:${res.length}`}>
       <div class="cs-crow cs-chead"><div>Their message</div>${res.map((r) => html`<div>${r.systemName}</div>`)}</div>
       ${rows.map((i) => {
-        const first = res[0].steps[i];
+        const first = res.map((r) => (r.steps || [])[i]).find(Boolean);
         return html`<div class="cs-crow" data-key=${'r' + i}>
           <div class="cs-them"><span class="faint small">${first.from}</span><div>${first.text}</div>
             ${first.real ? html`<div class="cs-real"><span class="faint small">It really said</span> ${first.real}</div>` : ''}</div>
           ${res.map((r) => {
-            const s = r.steps[i];
+            const s = (r.steps || [])[i];
             if (!s) return html`<div class="cs-cell cs-pending">${spinner('spinner-sm')}</div>`;
             return html`<div class=${'cs-cell ' + (s.decision === 'reply' ? 'cs-yes' : 'cs-no')}>
               ${s.decision === 'reply' ? html`<div class="cs-bubble">${s.reply}</div>` : html`<div class="muted small">${icon('minus', 'ic-xs')} Stayed quiet</div>`}
@@ -111,7 +113,8 @@ export function createSandbox(update) {
     if (!st.chatKey && chats.length) st.chatKey = (chats.find((c) => c.kind === 'group') || chats[0]).key;
     const run = st.run;
     const running = run && run.status === 'running';
-    const maxCalls = run ? Math.max(1, ...run.results.map((r) => r.calls)) : 1;
+    const results = (run && run.results) || [];
+    const maxCalls = Math.max(1, ...results.map((r) => r.calls || 0));
     return html`<section class="card cs-sandbox">
       <div class="cs-sec-head"><h3>${icon('playground', 'ic-sm')}Sandbox ${helpTip('cs-sandbox')}</h3>
         <span class="faint small">Answers a chat's last messages again with each system. Nothing is sent.</span></div>
@@ -132,10 +135,10 @@ export function createSandbox(update) {
         </div>
       </div>`}
       ${run ? html`<div class="cs-sb-status small">
-          ${running ? html`${spinner('spinner-sm')} Replaying ${run.done} of ${run.total}…` : run.status === 'done' ? html`${icon('check', 'ic-xs')} Done: ${run.chatName}` : html`${icon('warning', 'ic-xs')} ${run.status === 'cancelled' ? 'Stopped' : 'Stopped: it took too long'}`}
+          ${running ? html`${spinner('spinner-sm')} Replaying ${run.done} of ${run.total}…` : run.status === 'done' ? html`${icon('check', 'ic-xs')} Done: ${run.chatName}` : html`${icon('warning', 'ic-xs')} ${run.status === 'cancelled' ? 'Stopped' : run.error ? `Stopped: ${run.error}` : 'Stopped: it took too long'}`}
           <progress max=${run.total} value=${run.done}></progress>
         </div>
-        <div class="cs-results">${run.results.map((r) => resultCard(r, maxCalls))}</div>
+        <div class="cs-results">${results.map((r) => resultCard(r, maxCalls))}</div>
         ${compare(run)}` : ''}
     </section>`;
   }
