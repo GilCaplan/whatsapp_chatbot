@@ -212,6 +212,19 @@ api POST "/api/missions/$EKEY/abandon"
 [[ "$CODE" == 200 && "$(json missionId <<<"$RESP")" == "" ]] || fail "POST /api/missions/{key}/abandon ($CODE): $RESP"
 pass "mission started and abandoned"
 
+api GET /api/tasks
+[[ "$CODE" == 200 && "$(json templates.0.id <<<"$RESP")" == find-time && "$(json vocabulary.conditions.0 <<<"$RESP")" == started ]] || fail "GET /api/tasks ($CODE): $RESP"
+api POST "/api/chats/$EKEY/task" '{"spec":{"meeting":{"from":"18:00","to":"09:00"}}}'
+[[ "$CODE" == 400 ]] || fail "invalid task accepted ($CODE)"
+api POST "/api/chats/$EKEY/task" '{"template":"find-time","open":false}'
+[[ "$CODE" == 201 && "$(json status <<<"$RESP")" == active ]] || fail "POST /api/chats/{key}/task ($CODE): $RESP"
+RUN="$(json id <<<"$RESP")"
+api POST "/api/chats/$EKEY/task" '{"template":"find-time"}'
+[[ "$CODE" == 409 ]] || fail "a second task in the same chat was accepted ($CODE)"
+api POST "/api/tasks/runs/$RUN/stop"
+[[ "$CODE" == 200 && "$(json status <<<"$RESP")" == stopped ]] || fail "POST /api/tasks/runs/{id}/stop ($CODE): $RESP"
+pass "task started, refused twice, stopped"
+
 # Memory of people + Clone yourself (wave 3, realism).
 api POST "/api/chats/$EKEY/memories" '{"text":"is training for the Tel Aviv marathon","person":"Smoke"}'
 MEMID="$(json id <<<"$RESP")"

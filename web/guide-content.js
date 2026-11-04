@@ -89,6 +89,31 @@ export const GUIDE_SECTIONS = [
     ],
   },
   {
+    id: 'tasks', title: 'Tasks: finding a meeting time', short: 'Errands with a result', icon: 'calendar', art: 'missions',
+    lead: 'A task is an errand with a clear result, like agreeing on a meeting time with Dana next week. The persona does the talking; code decides which times to offer and checks every message before it goes.',
+    blocks: [
+      { steps: [
+        '**Start one** on the Tasks page: pick a private chat, say what the meeting is, how long, which days and hours, and how far ahead.',
+        '**It offers times.** Round times only, never right next to something busy, picked by code. The AI only ever sees the times it may say.',
+        '**They answer.** Each reply is read into plain facts (they agree, they suggest Tuesday at 10, they ask why not…), then the first rule that fits decides the next message.',
+        '**You confirm.** When they say yes, it checks your calendar once more and asks you on the Tasks page (with a notification). Then it confirms in the chat and books it, if you chose a calendar.',
+      ] },
+      { points: [
+        '**Your calendar stays private.** No titles, places or free/busy list ever reach the AI. A time they ask about gets "works" or "doesn\'t work", never a reason, and the same answer every time.',
+        '**Strategies:** **They go first** (asks for their times and offers one match: shows the least), **A few times**, or **Parts of days**.',
+        '**Probing:** after a few "doesn\'t work" answers it stops answering time by time and sends options, asks for their times, or hands the chat to you with a summary.',
+        '**"Why not then?"** It brushes it off, or uses one of your own lines. Settings › Tasks can draft lines from a short description.',
+        '**Every draft is checked** for times it may not mention, words from your calendar and reasons for being busy. A draft that fails twice is replaced by a safe message written by code.',
+        '**Never money.** Anything about payment is brushed off and handed to you.',
+        '**Limits:** a message limit, a number of days and nudges when they go quiet. Then it hands the chat to you, paused, with what happened so far.',
+        '**Try it first:** an AI plays the other person (easy-going, vague, busy or nosy). Nothing is sent or booked.',
+        '**Secretaries** start a Find a time task by themselves when someone asks for a meeting, with the secretary\'s meeting days and hours.',
+        '**Advanced:** edit the rule list: when something happens, what to do next. Conditions and actions come from a fixed list, so every rule can be checked.',
+      ] },
+      { note: 'Tasks run in private chats for now. While a task runs it is the chat\'s goal: check-ins and scheduled messages wait until it ends.' },
+    ],
+  },
+  {
     id: 'safety', title: 'Approvals, co-pilot, hand-off and reveal', short: 'Staying in control', icon: 'shield', art: 'modes',
     lead: 'You decide how much the persona does on its own. Every chat has a mode:',
     blocks: [
@@ -165,7 +190,7 @@ export const GUIDE_SECTIONS = [
 /** Which guide section the topbar "?" opens on each page. */
 export const PAGE_SECTION = {
   welcome: 'welcome', dashboard: 'welcome', chats: 'chats', personas: 'personas', persona: 'personas',
-  missions: 'goals', context: 'context', playground: 'personas', activity: 'how-it-works', approvals: 'safety', settings: 'behaviour',
+  missions: 'goals', tasks: 'tasks', context: 'context', playground: 'personas', activity: 'how-it-works', approvals: 'safety', settings: 'behaviour',
 };
 
 /** "?" help tips next to complex controls. section: where "Learn more" leads. */
@@ -216,6 +241,20 @@ export const TIPS = {
     text: 'Before each reply the AI privately thinks about the next step towards the goal. Smarter steering, slightly slower replies.' },
   'who-answers': { title: 'Who it answers', section: 'chats',
     text: 'In small groups it answers everyone. In bigger ones it answers the people you pick, plus anyone who says its name or tags it.' },
+  tasks: { title: 'Tasks', section: 'tasks',
+    text: 'An errand with a result, like agreeing on a meeting time. Code picks the times and checks every message; the AI only reads their answers and writes yours. Nothing is confirmed without you, unless you say so.' },
+  'task-strategy': { title: 'How it shows your time', section: 'tasks',
+    text: '**They go first** asks when suits them and offers one match. **A few times** offers one to three it picked. **Parts of days** offers "Tuesday morning" first. None of them ever shows your whole week.' },
+  'task-cover': { title: '"Why not then?"', section: 'tasks',
+    text: 'It never gives the real reason. **Brush it off** says something else is on; **Use my lines** sends one of the lines you wrote, nothing more.' },
+  'task-confirm': { title: 'Confirming', section: 'tasks',
+    text: '**Ask me first** waits for your OK on the Tasks page. **By itself if free** confirms when the time is still free, and tells you. Either way it checks the calendar once more first.' },
+  'task-rules': { title: 'The rules', section: 'tasks',
+    text: 'From the top down, the first rule that fits what just happened decides the next message. Pick conditions and actions from the lists; reorder with the arrows.' },
+  'task-try': { title: 'Try it first', section: 'tasks',
+    text: 'An AI plays the other person for a few messages so you can see how the task would go. Nothing is sent, saved or booked.' },
+  'task-calendar': { title: 'Use my calendars', section: 'tasks',
+    text: 'Takes the busy times of the calendars in Settings › Calendars out of the times it offers. Entries without an end time (reminders) never count as busy.' },
   missions: { title: 'Missions', section: 'goals',
     text: 'Ready-made goals with blanks to fill in. The persona works on it quietly; when it happens, the mission is complete and badges unlock.' },
   looks: { title: 'Looks', section: 'faq',

@@ -25,9 +25,11 @@ const (
 	HandoffDistress = "distress"
 	HandoffBot      = "bot"
 	HandoffLegal    = "legal"
+	HandoffTask     = "task" // a task handed over to you (internal/logic/task)
 
 	HandoffHowKeyword = "keyword"
 	HandoffHowAI      = "ai"
+	HandoffHowTask    = "task"
 )
 
 // HandoffCategories lists the categories in display order.

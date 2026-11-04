@@ -10,7 +10,7 @@ import (
 
 func TestSeeds(t *testing.T) {
 	s := Seeds()
-	want := []string{"leo", "kyle", "luna", "brad", "chad"}
+	want := []string{"leo", "kyle", "luna", "brad", "chad", "assistant"}
 	if len(s) != len(want) {
 		t.Fatalf("got %d seeds", len(s))
 	}

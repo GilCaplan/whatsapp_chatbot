@@ -16,6 +16,8 @@ import { MODES, modeOf } from '../chat/handoff-meta.js';
 import { openRevealSheet } from '../chat/reveal-sheet.js';
 import { generateRecap } from '../home/recap-card.js';
 import { bubbles } from './shared.js';
+import { openTaskSheet } from '../tasks/task-sheet.js';
+import { STEP_LABEL, STATUS, when } from '../tasks/task-labels.js';
 
 export function createOverviewTab(ctx) {
   const { key } = ctx;
@@ -24,6 +26,7 @@ export function createOverviewTab(ctx) {
     sim: '', simFromMe: false, simBusy: false, simFrom: '',
     send: '', sendBusy: false,
     showAll: false, // the whole conversation instead of the latest messages
+    task: undefined, // the chat's running task (null = none)
   };
   const LATEST = 3;
 
@@ -87,6 +90,29 @@ export function createOverviewTab(ctx) {
     if (items && items.length) ctx.setTab('memory');
   }
 
+  async function loadTask() {
+    try { st.task = (((await api.tasks.runs({ chatKey: key, active: true }, { quiet: true })) || {}).items || [])[0] || null; } catch { st.task = null; }
+    ctx.update();
+  }
+  const reloadTaskSoon = debounce(loadTask, 300);
+
+  // A private chat's task (tasks/task-sheet.js): what is running, or start one.
+  function taskSection(c) {
+    if (c.kind === 'group') return '';
+    if (st.task === undefined) loadTask();
+    const t = st.task;
+    return html`<section class="drawer-section">
+      <h4>${icon('calendar', 'ic-sm')}Task ${helpTip('tasks')}</h4>
+      ${t ? html`<div class="row gap-8 row-wrap">
+          <span class="grow"><b>${t.spec.title}</b> · ${t.status === 'approval' ? html`they agreed to ${when(t.proposed)}` : STEP_LABEL[t.step] || 'Running'}</span>
+          <span class=${'chip chip-sm ' + (STATUS[t.status] || STATUS.active).chip}>${(STATUS[t.status] || STATUS.active).label}</span>
+          <a class="btn btn-glass btn-sm" href="#/tasks">${icon('external')}Open Tasks</a></div>`
+        : html`<div class="row gap-8"><span class="grow small muted">Let the persona agree on a meeting time here. It offers times that suit you and asks you before confirming.</span>
+          <button class="btn btn-glass btn-sm" ?disabled=${!c.enabled} title=${c.enabled ? '' : 'Turn replies on in this chat first'}
+            @click=${() => openTaskSheet({ chatKey: key, onDone: () => loadTask() })}>${icon('plus')}Find a time</button></div>`}
+    </section>`;
+  }
+
   function quickActions(c, p) {
     const away = isAway(c);
     return html`<section class="drawer-section">
@@ -113,6 +139,7 @@ export function createOverviewTab(ctx) {
 
       ${modeSection(c)}
       ${quickActions(c, p)}
+      ${taskSection(c)}
 
       <section class="drawer-section">
         <h4>${icon('chats', 'ic-sm')}${st.showAll ? 'Conversation' : 'Latest'} <span class="grow"></span>
@@ -176,7 +203,8 @@ export function createOverviewTab(ctx) {
     historyChanged: reloadHistorySoon,
     onBus(type, ev) {
       if (type === 'activity' && ev && ev.chatKey === key && (ev.type === 'incoming' || ev.type === 'sent' || ev.type === 'approval.sent')) reloadHistorySoon();
+      if (type === 'activity' && ev && ev.chatKey === key && (ev.type === 'task' || ev.type === 'handoff')) reloadTaskSoon();
     },
-    destroy() { reloadHistorySoon.cancel(); },
+    destroy() { reloadHistorySoon.cancel(); reloadTaskSoon.cancel(); },
   };
 }

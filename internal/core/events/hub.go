@@ -31,6 +31,7 @@ const (
 	TypeRecapsChanged    = "recaps.changed"   // data: {}
 	TypeMissionsChanged  = "missions.changed" // data: {}
 	TypeContextChanged   = "context.changed"  // context systems or a replay changed; data: {replayId?}
+	TypeTasksChanged     = "tasks.changed"    // saved tasks or a run changed; data: {chatKey?}
 )
 
 type Event struct {

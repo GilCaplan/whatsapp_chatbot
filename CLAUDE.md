@@ -41,18 +41,18 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 
 - Packages are grouped under `internal/`: `core/` (model, contract, config, store, events), `logic/` (pure leaf packages), `runtime/` (engine, prompt, llm, wa, notify), `host/` (app, server, launcher, platform); web components under `web/components/<feature>/`. The README's Code map lists every file.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — the package-by-package layout table and the data directory (files, legacy DB import).
-- **[docs/FEATURES.md](docs/FEATURES.md)** — how each feature is wired: dials, missions, looks, behaviour layers, goals, scheduled messages, WhatsApp sync, cross-chat context, decision log, nicknames, @tags, languages, prompt parts, ratings, context systems, secretary, long-term memory, typos. Read the entry for the feature you touch.
+- **[docs/FEATURES.md](docs/FEATURES.md)** — how each feature is wired: dials, missions, looks, behaviour layers, goals, scheduled messages, WhatsApp sync, cross-chat context, decision log, nicknames, @tags, languages, prompt parts, ratings, context systems, secretary, tasks, long-term memory, typos. Read the entry for the feature you touch.
 - **[docs/PLATFORMS.md](docs/PLATFORMS.md)** — the .app bundle and Windows exe/resources/line-ending details.
 - **[docs/API.md](docs/API.md)** — the HTTP/SSE contract (authoritative).
 
 ## Contracts and conventions
 
-- The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx`, `lang`, `ctxsys` only —
+- The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx`, `lang`, `ctxsys`, `task` only —
   never on `engine`/`wa`/`llm` directly. `internal/host/app` is the only place that imports everything.
 - Import rules: `model` has no deps; `behavior`, `ctxsys`, `mention`, `mission`, `world`, `memory`, `handoff`, `lang`, `calendar` import only `model`
-  (+ stdlib); `crossctx` imports `model`+`memory`+`handoff`; `goals` imports `model`+`persona`; `platform` imports only stdlib + `x/sys`; `config` imports
+  (+ stdlib); `task` imports `model`+`calendar`; `crossctx` imports `model`+`memory`+`handoff`; `goals` imports `model`+`persona`; `platform` imports only stdlib + `x/sys`; `config` imports
   `behavior`+`crossctx`+`model`+`platform`; `store` imports `config`+`behavior`+`ctxsys`+`model`(+`world`); `notify` imports
-  `config`+`model`+`platform`. OS-specific code goes only in `platform` (build-tagged files), never
+  `config`+`model`+`platform`. Tasks keep the calendar in code: no model ever sees events or free/busy lists, only the times `task.Decide` allows (checked by `task.Leak`). OS-specific code goes only in `platform` (build-tagged files), never
   `runtime.GOOS` switches elsewhere except for pure decisions (notify backends, tests). Prompt text for every feature lives in
   `internal/runtime/prompt/<feature>.go` so the goldens stay in one package.
 - System prompt order (`prompt.SystemPrompt`): identity → security rules → `CHAT CONTEXT (reference only)` block

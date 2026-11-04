@@ -1,6 +1,6 @@
 # Tasks: design (draft)
 
-Status: design agreed in conversation, MVP not started. Branch `feature/tasks`.
+Status: MVP built (Find a time in private chats, privacy layer, secretary hand-over, booking, sandbox, rule editor). Phases 2–3 below are not built yet.
 
 ## 1. What it is
 
@@ -91,7 +91,7 @@ replaces the secretary's `OWNER'S FREE TIMES` list, which today shows the whole 
 slots (and so the shape of the busy times).
 
 ```go
-// internal/task/avail.go: pure, given busy intervals from engine (calendar.Service.Busy)
+// internal/logic/task/avail.go: pure, given busy intervals from engine (calendar.Service.Busy)
 type Availability struct { /* busy, meeting days/hours, length, buffer, loc */ }
 func (a Availability) Offer(n int, strategy string, revealed []Reveal, rng Sampler) []Slot  // round times, buffers, random pick
 func (a Availability) Check(t time.Time) (ok bool, alt *time.Time)
@@ -149,7 +149,7 @@ task's TASK section.
 
 The **TASK** section takes the goal's place (after the chat context, before chat instructions):
 what the task is, the current action, slot values, and the calendar results it may say. It is open
-when `Voice = assistant`, plain "your plan" when `as-you`. Prompt text in `internal/prompt/task.go`
+when `Voice = assistant`, plain "your plan" when `as-you`. Prompt text in `internal/runtime/prompt/task.go`
 (goldens).
 
 ## 9. Limits and context
@@ -175,12 +175,12 @@ started (capped).
 
 | Path | Role |
 |---|---|
-| `internal/model/task.go` | types |
-| `internal/task` (new leaf: `model` + `calendar` + `lang`) | templates, spec checks, rule matching `(spec, run, event) → []Action`, slot parsing/limits, availability + `Leak`, cover-line pick |
-| `internal/prompt/task.go` | Understand, Write, fallback, builder, cover-line prompts |
-| `internal/engine/task.go` | runs: hooks into the reply cycle (replaces `chatGoalTurn` while a run is active), timers via `Engine.clock`, calls via the job slot, approvals, booking, decision log |
-| `internal/store/tasks.go` | specs + runs |
-| `internal/server` | routes |
+| `internal/core/model/task.go` | types |
+| `internal/logic/task` (new leaf: `model` + `calendar` + `lang`) | templates, spec checks, rule matching `(spec, run, event) → []Action`, slot parsing/limits, availability + `Leak`, cover-line pick |
+| `internal/runtime/prompt/task.go` | Understand, Write, fallback, builder, cover-line prompts |
+| `internal/runtime/engine/task.go` | runs: hooks into the reply cycle (replaces `chatGoalTurn` while a run is active), timers via `Engine.clock`, calls via the job slot, approvals, booking, decision log |
+| `internal/core/store/tasks.go` | specs + runs |
+| `internal/host/server` | routes |
 | `web/pages/tasks.js`, `web/components/drawer/task.js` | UI |
 
 ## 12. Phases

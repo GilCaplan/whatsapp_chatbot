@@ -634,24 +634,72 @@ the newer half. Activity `memory` with `meta.compacted`. Changes publish `memori
 A persona with `secretary` (`SecretaryConfig {ownerName, tone: friendly|formal, takeMessages, flagUrgent, answerFaqs,
 meetings, meetDays:[mon..sun], meetFrom, meetTo ("HH:MM"), meetingMinutes, useCalendars, shareable, never, awayMessage,
 faqs:[{q, a}], vips:[name or number]}`) works as the owner's assistant: its job goes into the prompt after the character
-(it always says it is the owner's assistant), meetings get `OWNER'S FREE TIMES` (next 7 days, meeting hours minus the
-calendars' busy times; never titles), and a background job writes down what people want from the owner (activity
+(it always says it is the owner's assistant), a meeting request starts a Find a time task with the secretary's
+meeting days, hours and length (see Tasks; the prompt never lists free times), and a background job writes down what people want from the owner (activity
 `secretary.note`, meta `urgent`; urgent ones and VIPs run within seconds and notify with sound). SSE `notes.changed`.
 
 | Method & path | Body | Response |
 |---|---|---|
-| `GET /api/calendars` | – | `{items:[{id, name, kind: ics\|macalendar, where (masked link), hasKey, enabled}]}` |
+| `GET /api/calendars` | – | `{items:[{id, name, kind: ics\|macalendar, where (masked link), hasKey, enabled, skipWords}]}` |
 | `POST /api/calendars` | `{kind, name?, url, apiKey?}` | 201 `{items}`; 400 `invalid_calendar` (link must be http(s):// or webcal://; MACalendar defaults to `http://127.0.0.1:8080`) |
-| `PATCH /api/calendars/{id}` | `{name?, url?, apiKey?, enabled?}` | `{items}` |
+| `PATCH /api/calendars/{id}` | `{name?, url?, apiKey?, enabled?, skipWords?}` | `{items}`; skipWords: ≤ 20 words of ≤ 40 characters; entries whose title contains one don't count as busy |
 | `DELETE /api/calendars/{id}` | – | `{items}` |
 | `POST /api/calendars/{id}/check` | – | `CalendarCheck {ok, error?, events (next 3 weeks), upcoming:[{start, end, allDay, title}]}` — titles are for the owner only |
 | `GET /api/secretary/notes` | – | `{items:[SecretaryNote {id, chatKey, chatName, from, fromJid?, text, urgent, callback?, meeting?, at, done}]}` newest first |
 | `PATCH /api/secretary/notes/{id}` | `{done}` | `{ok:true}` |
 | `DELETE /api/secretary/notes/{id}` | – | `{ok:true}`; id `done` clears every done note |
 
-Calendars are read-only: `.ics` feeds (repeating events, moved/cancelled occurrences, all-day, TZID incl. common Windows
-names) and the MACalendar app (`GET {url}/events?week_start=YYYY-MM-DD`, header `X-API-Key`); cached 10 minutes.
-`calendars.json` and `notes.json` are 0600.
+Calendars are read (`.ics` feeds: repeating events, moved/cancelled occurrences, all-day, TZID incl. common Windows
+names; the MACalendar app: `GET {url}/events?week_start=YYYY-MM-DD`, header `X-API-Key`), cached 10 minutes. Entries
+with no end time (reminders) and "free" entries never count as busy. The only write is a task's booking (MACalendar
+`POST {url}/events`, below). `calendars.json` and `notes.json` are 0600.
+
+## Tasks
+
+A task (`TaskSpec`) is an errand in a private chat with a clear result: the Find a time template agrees on a meeting
+time. While it runs it is the chat's goal (no goal section, planner, check-ins or scheduled messages). Each reply
+cycle: a JSON call reads their new messages (`TaskReading {intent, times:[{date, time, part}], values:[{key, value,
+quote}], quote}`; their words must be found in the message), code picks the first matching rule and works out the
+times, the reply prompt gets only `YOUR TASK RIGHT NOW` (what to say and the times it may say), and every draft passes
+a leak check (times/days/dates outside the allowed set, words from calendar titles, reasons for being busy): one
+rewrite, then a safe message written by code. The calendar never reaches a model. Money intent is brushed off and
+handed to you.
+
+`TaskSpec {id, title, template: find-time, about, place, voice: as-you|assistant, meeting {minutes 15–480, days
+[mon..sun], from, to (HH:MM), horizonDays 1–30, prefer: ""|morning|afternoon|evening, calendars}, slots:[{key, label,
+kind: when|text|place|choice|yesno, required, choices?}] (exactly one when), rules:[TaskRule {when, step?, do:[1–4
+actions, one that writes], maxTimes?}] ([] = the template's), privacy?, limits?, commit?}`; null blocks =
+`settings.tasks`. `TaskPrivacy {strategy: they-first|offers|windows, offers 1–3, probeLimit 1–10, onProbeLimit:
+offer|ask|handoff, cover: deflect|lines, coverLines (≤ 10, ≤ 200 chars), bufferMin 0–60}`, `TaskLimits {maxMessages
+4–100, maxDays 1–30, maxNudges 0–5, nudgeAfterHours 1–168}`, `TaskCommit {mode: approve|auto-if-free, book:
+off|ics|macalendar, calendarId}`. Settings also hold `tasks.tone {formality, directness, warmth, dateStyle: dmy|mdy,
+clock: 24h|12h}` and `tasks.owner {name, about}`.
+
+`TaskRun {id, chatKey, chatName, spec (resolved), owner, tone, status: active|approval|done|failed|handed-off|stopped,
+step: open|negotiate|confirming|committing|ended, values, offered, lastOffer, answers:[{time, works}], probes, fired,
+log:[{at, kind, text, rule?, msgId?}], sent, nudges, readTo, lastOursAt, lastTheirAt, proposed?, result? {ok, when,
+end, values, booked: ""|ics|macalendar, eventId?}, summary?, startedAt, updatedAt, endedAt?}` (`taskruns.json`, 0600,
+the newest 300 kept; saved specs in `tasks.json`).
+
+| Method & path | Body | Response |
+|---|---|---|
+| `GET /api/tasks` | – | `{items: [TaskSpec] (saved), templates:[{id, title, blurb, spec}], vocabulary {conditions, actions, steps, intents, partnerStyles}, defaultRules, assistant: Persona\|null}` (assistant: the neutral seed persona, offered when none is there) |
+| `POST /api/tasks` | `TaskSpec` | 201 saved spec; 400 `invalid_task` |
+| `PUT /api/tasks/{id}` | `TaskSpec` | saved spec; 404 / 400 `invalid_task` |
+| `DELETE /api/tasks/{id}` | – | `{ok:true}` |
+| `POST /api/chats/{key}/task` | `{spec? \| taskId? \| template?, open}` | 201 `TaskRun`; 400 `invalid_task` (also: groups), 409 `task_running` / `chat_disabled`. open = write first now |
+| `GET /api/tasks/runs` | `?chatKey=&active=1&limit=` | `{items:[TaskRun]}` newest first |
+| `GET /api/tasks/runs/{id}` | – | `TaskRun` |
+| `POST /api/tasks/runs/{id}/stop` | – | `TaskRun` |
+| `POST /api/tasks/runs/{id}/approve` | `{yes}` | `TaskRun`; yes: re-checks the calendar, books, then confirms in the chat; no: ends the task and hands the chat over to you (paused, `handoff.category = task`). 409 `task_state` when nothing waits |
+| `GET /api/tasks/runs/{id}/event.ics` | – | `text/calendar` attachment of the agreed meeting |
+| `POST /api/tasks/try` | `{personaId, spec, style: cooperative\|vague\|difficult\|prober, turns 1–10}` | `TaskTry {turns:[{speaker, text, action?, note?}], status, result?, log}`; nothing is sent, saved or booked |
+| `POST /api/tasks/cover-lines` | `{description ≤ 400}` | `{lines:[…]}` drafted with the default AI |
+
+Activity `task` (meta `taskId`, `kind`: started|turn|leak|fallback|approval|approved|done|failed|stopped|note,
+`say`, `rule`; `notify: true` on approval/done/failed); a hand-over is activity `handoff` with category `task`. SSE
+`tasks.changed` `{chatKey?}`. Booking in MACalendar uses its existing `POST {url}/events {title, date, start_time,
+end_time, client_token: runId}` (one event per token).
 
 ## Connection ratings
 
@@ -761,3 +809,4 @@ On connect the server immediately sends one `wa.status` event with the current s
 | `memories.changed` (wave 3) | `{chatKey}` — also after a chat's brief (cross-chat context) was rewritten |
 | `recaps.changed` (wave 3) | `{}` |
 | `missions.changed` | `{}` |
+| `tasks.changed` | `{chatKey?}`: saved tasks or a run changed |

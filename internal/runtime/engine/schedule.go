@@ -243,6 +243,8 @@ func (r *Runner) scheduleBlockedLocked(now time.Time) (string, string) {
 		return "away", "the chat is set to Away"
 	case r.phase != phaseIdle:
 		return "busy", "the persona was in the middle of a reply"
+	case e.taskRunning(r.key):
+		return "task", "a task is running in this chat"
 	}
 	if open, _ := eff.Available(now); !open {
 		return "closed", "it was outside active hours"

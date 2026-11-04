@@ -13,18 +13,16 @@ import (
 	"whatsappdoppel/internal/core/store"
 	"whatsappdoppel/internal/logic/behavior"
 	"whatsappdoppel/internal/logic/calendar"
-	"whatsappdoppel/internal/logic/persona"
 	"whatsappdoppel/internal/runtime/prompt"
 )
 
 // Personal secretary (model.SecretaryConfig on the persona): its job goes
-// into the prompt (prompt.SecretarySection), meetings get the owner's free
-// times from the read-only calendars (busy times only, never titles), and a
+// into the prompt (prompt.SecretarySection), a meeting request starts a Find
+// a time task (task.go: it only ever sees the times it may offer), and a
 // background job writes down what people want from the owner (notes.json,
 // "Messages for you"); urgent ones and VIPs notify the owner at once.
 
 const (
-	freeDays        = 7
 	calendarWait    = 20 * time.Second
 	noteDelay       = 45 * time.Second // after the last message: one call per burst
 	noteDelayUrgent = 5 * time.Second
@@ -36,41 +34,6 @@ const (
 var urgentWords = []string{"urgent", "asap", "emergency", "right now", "immediately", "as soon as possible", "דחוף", "מיד", "חירום", "בהקדם"}
 
 func noteJob(key string) string { return "secnote:" + key }
-
-// freeTimes lists the owner's free meeting times for the next week, one
-// line per day ("Wed 4 Nov: 09:00–10:00, 12:00–18:00"); known=false when
-// every calendar failed.
-func (e *Engine) freeTimes(s *model.SecretaryConfig) ([]string, bool) {
-	now := e.clock.Now()
-	from := now.Truncate(15 * time.Minute).Add(15 * time.Minute)
-	to := from.AddDate(0, 0, freeDays)
-	var busy []calendar.Interval
-	if s.UseCalendars && e.cal != nil {
-		srcs := e.store.Calendars()
-		ctx, cancel := context.WithTimeout(e.ctx, calendarWait)
-		b, sts := e.cal.Busy(ctx, srcs, from, to, true)
-		cancel()
-		if len(sts) > 0 && !anyOK(sts) {
-			return nil, false
-		}
-		busy = b
-	}
-	slots := calendar.FreeSlots(busy, from, to, persona.Weekdays(s.MeetDays), s.MeetFrom, s.MeetTo,
-		time.Duration(s.MeetingMinutes)*time.Minute, time.Local)
-	var lines []string
-	var day string
-	for _, sl := range slots {
-		d := sl.Start.In(time.Local).Format("Mon 2 Jan")
-		span := sl.Start.In(time.Local).Format("15:04") + "–" + sl.End.In(time.Local).Format("15:04")
-		if d != day {
-			lines = append(lines, d+": "+span)
-			day = d
-		} else {
-			lines[len(lines)-1] += ", " + span
-		}
-	}
-	return lines, true
-}
 
 func anyOK(sts []calendar.Status) bool {
 	for _, s := range sts {

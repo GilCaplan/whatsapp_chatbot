@@ -10,7 +10,7 @@ import {
   reloadChatsSoon, reloadPersonasSoon, refreshAll,
 } from './store.js';
 
-const TYPES = ['wa.status', 'wa.qr', 'activity', 'approval', 'chats.changed', 'personas.changed', 'settings.changed', 'ollama.pull', 'system',
+const TYPES = ['wa.status', 'wa.qr', 'activity', 'approval', 'chats.changed', 'personas.changed', 'settings.changed', 'ollama.pull', 'system', 'tasks.changed',
   // Wave 3: listeners subscribe through the bus (bus.on('memories.changed', …)).
   'memories.changed', 'recaps.changed', 'missions.changed', 'nicknames.changed', 'ratings.changed', 'notes.changed', 'context.changed'];
 

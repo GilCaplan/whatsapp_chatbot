@@ -278,15 +278,23 @@ func (e *Engine) Regenerate(ctx context.Context, id string) (model.PendingReply,
 	if p.Opener {
 		opts.Opener = e.openerFor(prompt.Opener{Manual: true}, hist) // regenerate an opener as an opener
 	}
+	tk := e.lastTaskUse(c.Key) // the same task turn, written again (task.go)
+	if tk != nil {
+		opts.Task = tk.prompt
+	}
 	gcfg, gturn := e.chatGoalTurn(ctx, c, per, hist, c.Kind == "group", p.Opener)
-	copilot := c.Mode == model.ChatModeCopilot && !p.Opener // "More ideas" in co-pilot mode
-	res, err := e.replyFor(ctx, copilot, per, bp, ph, false, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+	copilot := c.Mode == model.ChatModeCopilot && !p.Opener && tk == nil // "More ideas" in co-pilot mode
+	build := func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
 		opts.Goal, opts.CrossTurn = t, x
 		if p.Opener {
 			return prompt.Initiate(per, c, ph, c.Kind == "group", opts)
 		}
 		return prompt.Compose(per, c, ph, c.Kind == "group", opts)
-	})
+	}
+	res, err := e.replyFor(ctx, copilot, per, bp, ph, false, gcfg, gturn, cross, build)
+	if err == nil && tk != nil {
+		res = e.taskGuard(c, tk, res, e.noteRetry(ctx, per, bp, ph, false, gcfg, gturn, cross, build))
+	}
 	if err != nil {
 		return model.PendingReply{}, err
 	}

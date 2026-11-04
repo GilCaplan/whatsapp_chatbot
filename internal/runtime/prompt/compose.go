@@ -136,10 +136,8 @@ type Options struct {
 	// Edits replace editable parts of the prompt for this chat (key → text).
 	Edits map[string]string
 
-	// Personal secretary (secretary.go): the owner's free times for meeting
-	// suggestions, one line per day; FreeKnown = the calendars could be read.
-	FreeTimes []string
-	FreeKnown bool
+	// Task is a running task's turn (task.go): it takes the goal's place.
+	Task TaskTurn
 
 	// ReplyLanguage is the language to write in (English name, e.g. "Hebrew";
 	// "" = no rule); see language.go.
@@ -189,7 +187,6 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 	ctx := []model.PromptSection{
 		{Key: "people", Label: "People and your notes", Text: PeopleSection(o, isGroup)},
 		{Key: "summary", Label: "Summary of older messages", Text: SummarySection(o.Summary, o.SummaryFacts)},
-		{Key: "free", Label: "Free times for meetings", Text: freeTimes(p, o)},
 		{Key: "memories", Label: "Memories", Text: MemorySection(o.Memories, isGroup)},
 		{Key: "cross", Label: "From its other chats", Text: CrossSection(o.Cross, o.CrossTurn)},
 		{Key: "world", Label: "Right now (time and place)", Text: WorldSection(p.World, o.Now, o.MacZone)},
@@ -207,7 +204,11 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 		note += GroupNote
 	}
 	add("history", "How to read the conversation", "", note)
-	add("goal", "Goal", "", GoalSection(goals.Resolve(p, chat), o.Goal))
+	if o.Task.Active() {
+		add("task", "Task", "", TaskSection(o.Task)) // a running task is the chat's goal
+	} else {
+		add("goal", "Goal", "", GoalSection(goals.Resolve(p, chat), o.Goal))
+	}
 	add("instructions", "Your instructions for this chat", "", InstructionsSection(o.Instructions))
 	add("stay", "Stay yourself", "", StayYourself(p.Name))
 	add("language", "Reply language", "", LanguageSection(o.ReplyLanguage))
@@ -374,12 +375,4 @@ Would %s naturally respond to this? Reply with only YES or NO.`, p.Name, p.Name,
 func ParseDecision(answer string) bool {
 	a := strings.ToUpper(strings.TrimLeft(strings.TrimSpace(answer), "\"'`*.:- "))
 	return strings.HasPrefix(a, "YES")
-}
-
-// freeTimes is the free-times part for a secretary that helps with meetings.
-func freeTimes(p model.Persona, o Options) string {
-	if p.Secretary == nil || !p.Secretary.Meetings {
-		return ""
-	}
-	return FreeTimesSection(o.FreeTimes, o.FreeKnown)
 }

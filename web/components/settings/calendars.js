@@ -1,13 +1,15 @@
 // settings/calendars.js — Settings › Calendars: the owner's calendars that
 // personal secretaries read, read-only — a calendar link (.ics: Google,
-// Outlook, iCloud…) or the MACalendar app on this Mac. Secretaries only ever
-// see when you are busy, never what. Links are secret addresses: the server
-// returns them masked. h = { sectionHead(id, title, sub, color) }.
+// Outlook, iCloud…) or the MACalendar app on this Mac. Tasks and secretaries
+// never show the calendar to the AI: code picks the times it may offer.
+// Links are secret addresses: the server returns them masked.
+// h = { sectionHead(id, title, sub, color) }.
 
 import { html } from '../../dom.js';
 import { icon } from '../../icons.js';
 import { api } from '../../api.js';
 import { seg, toggle, toast, confirmSheet } from '../../ui.js';
+import { wordChips } from '../common/word-chips.js';
 
 const KINDS = [{ value: 'ics', label: 'Calendar link' }, { value: 'macalendar', label: 'MACalendar app' }];
 const HELP = {
@@ -54,7 +56,7 @@ export function calendarsSection(h) {
     return x.allDay ? `${day} · all day` : `${day} · ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
   };
   return html`<section class="card section" id="sec-calendars" data-section="calendars">
-    ${h.sectionHead('calendars', 'Calendars', 'Read-only calendars for personal secretaries, to offer times you are free. They only see when you are busy, never what.', 'linear-gradient(135deg,var(--indigo),var(--blue))')}
+    ${h.sectionHead('calendars', 'Calendars', 'Calendars that tasks and secretaries use to offer times you are free. The AI never sees them: code picks the times it may offer.', 'linear-gradient(135deg,var(--indigo),var(--blue))')}
     ${st.error ? html`<div class="banner danger small">${icon('warning')}<div>${st.error}</div></div>` : ''}
     ${(st.items || []).map((c) => {
       const ck = st.checks[c.id];
@@ -70,9 +72,13 @@ export function calendarsSection(h) {
         ${ck ? html`<div class=${'cal-check small ' + (ck.ok ? '' : 'bad')}>
           ${ck.ok ? html`${icon('check', 'ic-sm')}Read fine: ${ck.events} event${ck.events === 1 ? '' : 's'} in the next three weeks.
             ${ck.upcoming && ck.upcoming.length ? html`<ul class="cal-up">${ck.upcoming.map((x) => html`<li><span class="faint">${fmt(x)}</span> ${x.title}</li>`)}</ul>
-              <div class="tiny faint">Only you see the titles; secretaries get busy times only.</div>` : ''}`
+              <div class="tiny faint">Only you see the titles. The AI never sees this calendar.</div>` : ''}`
             : html`${icon('warning', 'ic-sm')}${ck.error || "Couldn't read it."}`}
         </div>` : ''}
+        <div class="cal-skip">
+          <div class="tiny faint">Entries with these words don't count as busy (reminders, birthdays). Entries without an end time never do.</div>
+          ${wordChips({ words: c.skipWords || [], onChange: (w) => patchCal(c, { skipWords: w }), label: 'Words that don\'t count as busy', placeholder: 'e.g. reminder', max: 20, maxLen: 40 })}
+        </div>
       </div>`;
     })}
     ${st.adding ? html`<div class="cal-add">

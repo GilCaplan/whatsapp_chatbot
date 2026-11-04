@@ -230,6 +230,9 @@ func evidenceLine(name, text string) string {
 // chatGoalTurn runs the goal step for a real chat: plan ahead, persist the
 // move/achievement and publish activity. It returns the turn for the prompt.
 func (e *Engine) chatGoalTurn(ctx context.Context, c model.ChatAssignment, p model.Persona, hist []model.Message, isGroup, opening bool) (goals.Config, prompt.GoalTurn) {
+	if e.taskRunning(c.Key) {
+		return goals.Config{}, prompt.GoalTurn{} // the task is the goal (task.go)
+	}
 	cfg := goals.Resolve(p, c)
 	st := e.goalStatus(c.Key, cfg.Text)
 	gp := e.planAhead(ctx, p, cfg, e.paramsOf(c), st, hist, isGroup, opening)
@@ -263,6 +266,9 @@ func (e *Engine) chatGoalTurn(ctx context.Context, c model.ChatAssignment, p mod
 // goalIncoming checks a message from them against a say-the-word goal
 // ("get Josh to say apple"): the exact word from the right person reaches it.
 func (e *Engine) goalIncoming(c model.ChatAssignment, p model.Persona, isGroup bool, name, text, media string) {
+	if e.taskRunning(c.Key) {
+		return
+	}
 	cfg := goals.Resolve(p, c)
 	if e.goalMedia(c, p, cfg, name, text, media) {
 		return

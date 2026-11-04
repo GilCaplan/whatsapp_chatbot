@@ -336,6 +336,7 @@ whatsapp_doppel_go/
 │   │   ├── mention/         @tags in groups
 │   │   ├── mission/         mission templates and achievements
 │   │   ├── persona/         built-in personas, validation, generated avatars
+│   │   ├── task/            tasks: templates, rules, which times to offer, the calendar leak check
 │   │   └── world/           where a persona lives: time zone, weekend, daily routine
 │   ├── runtime/             the moving parts
 │   │   ├── engine/          per-chat runners and the reply cycle (and every feature that hooks into it)
@@ -382,6 +383,7 @@ internal/core/model/
   recap.go                      daily recaps
   safety.go                     hand-off and reveal state
   secretary.go                  personal secretary, calendar sources, taken notes
+  task.go                       tasks: specs, slots, rules, runs, results
   world.go                      where a persona lives, daily routine
 internal/core/contract/
   contract.go                   interfaces WhatsApp, Engine, LLM, Playground, Builder, Notifier
@@ -402,6 +404,7 @@ internal/core/store/
   secretary.go                  calendars and messages taken for you
   selfsamples.go                samples of your own messages (Clone, only with consent)
   summaries.go                  compacted older messages
+  tasks.go                      saved tasks (tasks.json) and task runs (taskruns.json)
   wave3.go                      helpers shared by the per-feature files
 internal/core/events/
   hub.go                        publish/subscribe for SSE, replay ring (Last-Event-ID), activity buffer, file sink
@@ -429,6 +432,7 @@ behavior/
 calendar/
   ics.go                        .ics parser (repeats, exceptions, all-day, time zones)
   service.go                    fetch + cache sources, MACalendar client, busy times, free slots
+  book.go                       booking a task's meeting: MACalendar POST /events, .ics file
 crossctx/
   crossctx.go                   modes, sensitive topics, what carries, selection, reply leak check
 ctxsys/
@@ -455,6 +459,14 @@ persona/
   persona.go                    persona validation and defaults
   secretary.go                  secretary limits
   avatar.go                     generated avatar gradients
+task/                           tasks (Find a time); the calendar stays here, never in a prompt
+  spec.go                       templates, spec checks, defaults
+  rules.go                      the fixed conditions and actions, the Find a time rules, Pick
+  turn.go                       Decide: their reading + the rules → what the next message does
+  avail.go                      when a meeting can happen: offers, checks, alternatives, windows
+  leak.go                       the check on every draft: allowed times only, no calendar words, no reasons
+  format.go, fallback.go        writing times (EN + HE), safe messages written by code
+  request.go                    meeting requests (secretaries start Find a time)
 world/
   world.go                      time zone, weekend, part of day, daily routine
 ```
@@ -496,7 +508,8 @@ engine/                         one package; files are named by feature
   replay.go                     context-system sandbox (nothing is sent)
   decisionlog.go                decision log entries per message
   ratings.go                    daily connection ratings in groups
-  secretary.go                  personal secretary: notes, urgent flags
+  secretary.go                  personal secretary: notes, urgent flags, meeting requests start a task
+  task.go                       tasks: read their messages, decide, confirm, book, nudge, hand over, sandbox
   clone.go                      Clone yourself builder
   playground.go                 practice chats without WhatsApp
 prompt/                         every prompt text; golden files in testdata/
@@ -509,6 +522,7 @@ prompt/                         every prompt text; golden files in testdata/
   opener.go, drafts.go          openers, co-pilot drafts
   handoff.go, recap.go          hand-off check, daily recap
   rating.go, secretary.go       connection ratings, secretary job and note taking
+  task.go                       the task's prompt part, reading their messages, cover lines, sandbox partner
   ctxsys.go, clone.go           context-system prompts, Clone yourself
   builder.go                    AI persona builder
 llm/
@@ -580,7 +594,7 @@ guide-content.js                every word of the Guide, help tips and tour
 embed.go                        embeds the UI into the binary
 pages/                          one module per route
   dashboard.js, chats.js, personas.js, persona-editor.js, approvals.js, activity.js,
-  playground.js, missions.js, context.js, settings.js, guide.js, onboarding.js
+  playground.js, missions.js, tasks.js, context.js, settings.js, guide.js, onboarding.js
 components/
   common/                       building blocks: elements, controls, help-tip, word-chips, avatar,
                                 mentions, status, feed, tour
@@ -597,6 +611,7 @@ components/
   context/                      context systems: context-params, context-sandbox,
                                 context-draft-sheet, flowchart
   goals/                        goal-controls, mission-sheet
+  tasks/                        task-sheet (set up, try, start), rule-editor, task-labels
   whatsapp/                     qr-card, wa-sheet
   home/                         dashboard cards: notes-card, recap-card
   settings/                     Settings sections in their own modules
@@ -623,6 +638,7 @@ docs/
   FEATURES.md                   the rules of each feature
   PLATFORMS.md                  macOS, Windows, Linux notes
   RESPONSIBLE_USE.md            using Doppel responsibly
+  TASKS_DESIGN.md               the design of tasks
 Makefile                        build, run, test, vet, smoke, app, install, dist
 CLAUDE.md, INSTALL_FOR_AGENTS.md   guidance for AI coding agents
 CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, LICENSE

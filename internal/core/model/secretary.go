@@ -46,6 +46,9 @@ type CalendarSource struct {
 	URL     string `json:"url"`              // the .ics link, or the MACalendar API base (http://127.0.0.1:8080)
 	APIKey  string `json:"apiKey,omitempty"` // MACalendar's X-API-Key, if it has one
 	Enabled bool   `json:"enabled"`
+	// SkipWords: entries whose title contains one of these never count as
+	// busy ("reminder", "birthday").
+	SkipWords []string `json:"skipWords,omitempty"`
 }
 
 // Calendar source kinds.

@@ -7,6 +7,32 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
 Everything below is new unless noted.
 
+### Tasks
+- New Tasks page: a persona does an errand in a private chat. The first template, Find a time,
+  agrees on a meeting time: what it is about, how long, which days and hours, how far ahead.
+- Your calendar stays private: the AI never sees events, titles or free/busy lists, only the
+  times code picked. Round times, a buffer around busy times, the same answer when a time is
+  asked twice, and a limit on "doesn't work" answers, after which it sends options, asks for
+  their times or hands the chat to you with a summary.
+- Strategies: they go first (one match), a few times, or parts of days. "Why not then?" is
+  brushed off or answered with your own lines; Settings › Tasks drafts lines from a description.
+- Every draft is checked for times, days and dates it may not mention, words from your calendar
+  and reasons for being busy; a draft that fails twice is replaced by a safe message.
+- Confirming asks you first (Tasks page, notification), or confirms by itself when the time is
+  still free. Booking: MACalendar through its own API, or a calendar file.
+- Rules: when something happens, what to do next, from a fixed list (Advanced). Try it first:
+  an AI plays the other person, nothing is sent or booked.
+- Personal secretaries start Find a time by themselves when someone asks for a meeting; the
+  secretary prompt no longer lists your free times.
+- A neutral Assistant persona for errands; tone settings (formality, directness, warmth, date
+  style, clock) and "About you".
+- Calendars: entries without an end time (reminders) no longer block an hour; words that make
+  an entry not count as busy.
+
+### Reorganized code
+- Go packages are grouped under `internal/{core,logic,runtime,host}/`, web components under
+  `web/components/<feature>/`; the README has a code map of every file.
+
 ### Context systems
 - New Context page: three built-in context systems decide when a persona asks the AI and what it
   reads — Classic (as before: AI join-in check on every group message, goal plan before every

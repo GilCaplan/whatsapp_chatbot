@@ -14,7 +14,8 @@ import (
 //
 // A persona with a Secretary block works as the owner's assistant: open
 // about it, taking messages, flagging urgent ones, answering FAQs and
-// offering meeting times from the owner's free times (never confirming).
+// helping find meeting times (a Find a time task, engine/task.go: it only
+// ever sees the times it may offer, never the calendar).
 
 // SecretarySection is the secretary's job, right after the character.
 func SecretarySection(s *model.SecretaryConfig) string {
@@ -52,25 +53,13 @@ func SecretarySection(s *model.SecretaryConfig) string {
 		fmt.Fprintf(&b, "\n- %s's away message, if it fits: %s", owner, oneLine(aw, 500))
 	}
 	if s.Meetings {
-		fmt.Fprintf(&b, "\n- You can help find a time to meet %s: offer two or three options, only from OWNER'S FREE TIMES in the chat context; a meeting is about %d minutes. You can't book or confirm anything: say %s will confirm. If there are no free times listed, take the request and say %s will get back with a time.", owner, s.MeetingMinutes, owner, owner)
+		fmt.Fprintf(&b, "\n- You can help find a time to meet %s (a meeting is about %d minutes). Suggest times only when YOUR TASK RIGHT NOW below gives them; otherwise take the request and say you'll find a time. Never confirm a meeting unless that task says it is set.", owner, s.MeetingMinutes)
 	}
 	fmt.Fprintf(&b, "\n- Never share %s's private details, whereabouts, plans or what is in the calendar, beyond what is allowed above.", owner)
 	if nv := strings.TrimSpace(s.Never); nv != "" {
 		fmt.Fprintf(&b, "\n- Never: %s", oneLine(nv, 1000))
 	}
 	return b.String()
-}
-
-// FreeTimesSection lists the owner's free times for meeting suggestions
-// (inside the chat context; ok=false: the calendars couldn't be read).
-func FreeTimesSection(lines []string, known bool) string {
-	switch {
-	case !known:
-		return "\nOWNER'S FREE TIMES: the calendar can't be read right now; don't suggest times."
-	case len(lines) == 0:
-		return "\nOWNER'S FREE TIMES: no free time in the next 7 days."
-	}
-	return "\nOWNER'S FREE TIMES (next 7 days, for meeting suggestions only; everything else is taken):\n" + strings.Join(lines, "\n")
 }
 
 // ─── Taking messages ─────────────────────────────────────────
