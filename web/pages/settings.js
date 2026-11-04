@@ -20,6 +20,7 @@ import { notificationsSection } from '../components/settings/notifications.js';
 import { safetySection } from '../components/settings/safety.js';
 import { languageControls } from '../components/persona/language-controls.js';
 import { calendarsSection } from '../components/settings/calendars.js';
+import { tasksSection } from '../components/settings/tasks.js';
 import { memorySection } from '../components/settings/memory.js';
 import { cloneRows } from '../components/settings/clone-rows.js';
 import { SKINS, skinById, resolveMode, systemDark } from '../skins.js';
@@ -31,6 +32,7 @@ const SECTIONS = [
   { id: 'notifications', label: 'Notifications', icon: 'megaphone' },
   { id: 'safety', label: 'Safety', icon: 'shield' },
   { id: 'calendars', label: 'Calendars', icon: 'calendar' },
+  { id: 'tasks', label: 'Tasks', icon: 'check-double' },
   { id: 'memory', label: 'Memory & recap', icon: 'pin' },
   { id: 'appearance', label: 'Appearance', icon: 'sun' },
   { id: 'whatsapp', label: 'WhatsApp', icon: 'phone' },
@@ -640,6 +642,7 @@ export default function Settings(ctx) {
         ${notificationsSection(sectionCtx)}
         ${safetySection(sectionCtx)}
         ${calendarsSection(sectionCtx)}
+        ${tasksSection(sectionCtx)}
         ${memorySection(sectionCtx)}
         ${appearanceSection()}
         ${whatsappSection()}

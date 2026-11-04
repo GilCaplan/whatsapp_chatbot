@@ -34,10 +34,13 @@ func TestSecretary(t *testing.T) {
 		t.Errorf("acts = %+v", a)
 	}
 	sys := lastSystem(h)
-	for _, want := range []string{"YOUR JOB: you are Gil's personal assistant", "Rothschild 1", "OWNER'S FREE TIMES (next 7 days", "Gil will confirm"} {
+	for _, want := range []string{"YOUR JOB: you are Gil's personal assistant", "Rothschild 1", "Suggest times only when YOUR TASK RIGHT NOW"} {
 		if !strings.Contains(sys, want) {
 			t.Errorf("prompt lacks %q", want)
 		}
+	}
+	if strings.Contains(sys, "FREE TIMES") {
+		t.Error("the prompt never lists the free times (a Find a time task offers them)")
 	}
 	// A second message from her replaces her open note instead of adding a duplicate.
 	h.msg(dmKey, "m2", "also, the deadline moved to Friday")

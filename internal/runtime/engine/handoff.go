@@ -70,6 +70,9 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 		return false
 	}
 	cats := handoffCategories(hs)
+	if e.taskRunning(c.Key) {
+		cats[model.HandoffMeeting] = false // arranging the meeting is the task's job (task.go)
+	}
 	hit, ok := handoff.Detect(text, cats)
 	if !ok {
 		return false

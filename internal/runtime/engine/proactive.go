@@ -69,6 +69,9 @@ func (r *Runner) proactiveCheck(now time.Time) {
 	if r.stopped || !r.cfg.Enabled || r.phase != phaseIdle || r.cfg.Handoff != nil { // paused for you (handoff.go): no check-ins
 		return
 	}
+	if e.taskRunning(r.key) { // a running task nudges on its own (task.go)
+		return
+	}
 	eff := r.effLocked()
 	bp := eff.Profile
 	pr := bp.Proactive

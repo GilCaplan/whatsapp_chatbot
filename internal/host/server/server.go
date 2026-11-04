@@ -34,6 +34,8 @@ type Deps struct {
 	LLM        contract.LLM
 	Playground contract.Playground
 	Builder    contract.Builder
+	// Tasks runs tasks (nil = the task routes answer 503).
+	Tasks contract.Tasks
 	// Notifier shows desktop notifications (wave 3); nil = POST
 	// /api/system/notify-test answers 501.
 	Notifier contract.Notifier

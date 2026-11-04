@@ -183,3 +183,19 @@ type Notifier interface {
 	// Test shows "Notifications are working".
 	Test(ctx context.Context) error
 }
+
+// Tasks runs tasks in chats (internal/logic/task, engine/task.go).
+type Tasks interface {
+	// StartTask starts spec in a private chat; open = write first now.
+	StartTask(ctx context.Context, chatKey string, spec model.TaskSpec, open bool) (model.TaskRun, error)
+	// StopTask ends a running task.
+	StopTask(runID string) (model.TaskRun, error)
+	// ApproveTask answers a confirmation waiting for you (yes books and confirms).
+	ApproveTask(ctx context.Context, runID string, yes bool) (model.TaskRun, error)
+	// TaskICS is the calendar file of a booked run.
+	TaskICS(runID string) ([]byte, error)
+	// TaskTry runs spec in the sandbox against an AI playing the other side.
+	TaskTry(ctx context.Context, personaID string, spec model.TaskSpec, style string, turns int) (model.TaskTry, error)
+	// CoverLines drafts lines for "why not then?" from a description.
+	CoverLines(ctx context.Context, description string) ([]string, error)
+}

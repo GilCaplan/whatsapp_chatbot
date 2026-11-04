@@ -41,7 +41,10 @@ var (
 	ErrNotImplemented = contract.ErrNotImplemented
 )
 
-var _ contract.Engine = (*Engine)(nil)
+var (
+	_ contract.Engine = (*Engine)(nil)
+	_ contract.Tasks  = (*Engine)(nil)
+)
 
 // defaultProactiveEvery is how often idle chats are checked for check-ins.
 const defaultProactiveEvery = 5 * time.Minute
@@ -71,8 +74,11 @@ type Engine struct {
 	wa    contract.WhatsApp
 	llm   *llm.Registry
 	cal   *calendar.Service // secretary.go
-	clock Clock
-	rng   behavior.Sampler
+	// lastTask is each chat's latest task turn (chat key → *taskUse), so a
+	// regenerated reply writes the same turn again (task.go).
+	lastTask sync.Map
+	clock    Clock
+	rng      behavior.Sampler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -200,6 +206,9 @@ func (e *Engine) Reload() {
 	}
 	for _, r := range kept {
 		r.syncSchedule()
+	}
+	if first {
+		e.armTasks() // task.go
 	}
 	for _, r := range started {
 		if first {

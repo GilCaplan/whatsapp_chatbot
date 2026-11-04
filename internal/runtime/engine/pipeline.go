@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -74,6 +75,8 @@ type cycle struct {
 	hist        []model.Message
 	dir         *mention.Directory // group members for encoding tags (nil in DMs)
 	mentions    []string           // display names the draft tags
+	task        *taskUse           // a running task's turn: saved once sent, dropped otherwise (task.go)
+	sent        atomic.Int32       // bubbles delivered so far (send goroutine)
 }
 
 func (r *Runner) startCycleLocked(pending []pendingMsg, immediate, proactive bool) *cycle {
@@ -88,6 +91,7 @@ func (r *Runner) startCycleLocked(pending []pendingMsg, immediate, proactive boo
 func (r *Runner) endCycleLocked(fx *effects) {
 	r.stopTimerLocked()
 	if r.cyc != nil {
+		r.taskFxLocked(fx, r.cyc, r.cyc.sent.Load() > 0) // cut short: it counts if a bubble went out
 		r.cyc.cancel()
 		r.cyc = nil
 	}
@@ -660,6 +664,7 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 	var res genResult
 	var dir *mention.Directory
 	var tagged []mention.Entry
+	var tk *taskUse
 	p, ok := e.store.Persona(c.PersonaID)
 	var err error
 	if !ok {
@@ -679,6 +684,11 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 		} else {
 			opts.Late = e.lateNote(p, hist, e.clock.Now()) // "sorry, was at the gym" (routine.go)
 		}
+		tk = e.taskTurn(ctx, c, p, hist, cyc.proactive, e.replyLanguage(c, hist)) // a running task is the goal (task.go)
+		copilot := cyc.copilot && tk == nil                                       // a task writes one exact message
+		if tk != nil {
+			opts.Task = tk.prompt
+		}
 		gcfg, gturn := e.chatGoalTurn(ctx, c, p, hist, isGroup, cyc.proactive)
 		build := func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
 			opts.Goal, opts.CrossTurn = t, x
@@ -687,19 +697,16 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 			}
 			return prompt.Compose(p, c, ph, isGroup, opts)
 		}
-		res, err = e.replyFor(ctx, cyc.copilot, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build)
-		if err == nil && !cyc.copilot && cp.ReplyCheck != model.CheckOff { // replycheck.go
+		res, err = e.replyFor(ctx, copilot, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build)
+		if err == nil && !copilot && cp.ReplyCheck != model.CheckOff { // replycheck.go
 			o := opts
 			o.Goal = gturn
 			ck := replyCheck{cp: cp, persona: p, plan: gturn.Plan, lang: opts.ReplyLanguage, hist: hist,
 				rules: checkRules(prompt.ComposeSections(p, c, ph, isGroup, o), p)}
-			res = e.checkedReply(ctx, ck, res, func(note string) (genResult, error) {
-				return e.replyFor(ctx, false, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
-					r := build(t, x)
-					r.System += note
-					return r
-				})
-			})
+			res = e.checkedReply(ctx, ck, res, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build))
+		}
+		if err == nil && tk != nil { // the task's leak check (task.go)
+			res = e.taskGuard(c, tk, res, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build))
 		}
 		cancel()
 		res.Opener = cyc.proactive
@@ -711,9 +718,10 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 	r.mu.Lock()
 	if r.stopped || r.cyc != cyc {
 		r.mu.Unlock()
+		e.taskDropped(tk) // the cycle is gone: its task turn never goes out
 		return
 	}
-	cyc.genDone, cyc.persona, cyc.hist = true, p, hist
+	cyc.genDone, cyc.persona, cyc.hist, cyc.task = true, p, hist, tk
 	cyc.dir, cyc.mentions = dir, mention.Names(tagged)
 	if err != nil {
 		cyc.genErr = err
@@ -723,6 +731,22 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 	r.maybeDeliverLocked(&fx)
 	r.mu.Unlock()
 	fx.run()
+}
+
+// taskFxLocked hands a cycle's task turn on (task.go): delivered = sent or
+// waiting in Approvals (its effects apply), else it is undone.
+func (r *Runner) taskFxLocked(fx *effects, cyc *cycle, delivered bool) {
+	u := cyc.task
+	if u == nil {
+		return
+	}
+	cyc.task = nil
+	e, c := r.e, r.cfg
+	if delivered {
+		fx.add(func() { e.taskDelivered(c, u) })
+	} else {
+		fx.add(func() { e.taskDropped(u) })
+	}
 }
 
 // maybeDeliverLocked acts once both the think time and the generation are done.
@@ -736,6 +760,7 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 	bp := eff.Profile
 	if cyc.dirty {
 		// New messages arrived while thinking: drop the draft and think again.
+		r.taskFxLocked(fx, cyc, false)
 		cyc.typingShown = false
 		fx.add(r.typingFxLocked(false))
 		r.phase = phaseWaiting
@@ -771,6 +796,7 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 	}
 	res, p, hist := *cyc.draft, cyc.persona, cyc.hist
 	if cyc.approval {
+		r.taskFxLocked(fx, cyc, true) // it waits in Approvals: the task moves on
 		e := r.e
 		mentions, ids, now := cyc.mentions, cyc.msgIDs(), r.e.clock.Now()
 		fx.add(func() {
@@ -856,6 +882,7 @@ func (r *Runner) send(cyc *cycle, c model.ChatAssignment, p model.Persona, res g
 		}
 		e.act(model.ActSent, c, p.Name, text, withMsg(m, cyc.msgIDs()...))
 		sent++
+		cyc.sent.Add(1)
 		if i == typoAt && !r.fixTypo(cyc, c, p, slip, jid, sres.ID, msgID, b.Text, dir, typingOn) {
 			r.sendAborted(cyc, nil, sent)
 			return
@@ -892,6 +919,7 @@ func (r *Runner) sendAborted(cyc *cycle, err error, sent int) {
 	var fx effects
 	r.mu.Lock()
 	if r.cyc == cyc && !r.stopped {
+		r.taskFxLocked(&fx, cyc, sent > 0) // part of it went out: the task moves on
 		if err != nil && cyc.ctx.Err() == nil {
 			r.actFx(&fx, model.ActError, "Send failed: "+err.Error(), withMsg(nil, cyc.msgIDs()...))
 		}
@@ -912,6 +940,7 @@ func (r *Runner) finishSend(cyc *cycle, sent int) {
 	var fx effects
 	r.mu.Lock()
 	if r.cyc == cyc && !r.stopped {
+		r.taskFxLocked(&fx, cyc, sent > 0)
 		later, imm := cyc.later, cyc.laterImmediate
 		r.endCycleLocked(&fx)
 		if len(later) > 0 {

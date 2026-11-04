@@ -227,6 +227,10 @@ type Settings struct {
 	// too). Zero = Classic.
 	Context ContextSettings `json:"context"`
 
+	// Tasks are the defaults of every task (internal/logic/task; per task too).
+	// Zero values = the defaults.
+	Tasks TaskSettings `json:"tasks"`
+
 	// Deprecated v1 blocks; nil after migration.
 	Replies   *LegacyReplySettings    `json:"replies,omitempty"`
 	Approvals *LegacyApprovalSettings `json:"approvals,omitempty"`
@@ -238,6 +242,7 @@ func (s Settings) Clone() Settings {
 	s.Behavior.Group = behavior.Clone(s.Behavior.Group)
 	s.Behavior.Languages.Private.Languages = slices.Clone(s.Behavior.Languages.Private.Languages)
 	s.Behavior.Languages.Group.Languages = slices.Clone(s.Behavior.Languages.Group.Languages)
+	s.Tasks.Privacy.CoverLines = slices.Clone(s.Tasks.Privacy.CoverLines)
 	if s.Replies != nil {
 		r := *s.Replies
 		s.Replies = &r
@@ -298,7 +303,73 @@ func Defaults() Settings {
 		}, Compact: CompactSettings{Keep: 30, Every: 70, FastEvery: 200, FastMessages: 150, FastHours: 3}},
 		Recap:     RecapSettings{Enabled: false, Time: "21:00", KeepDays: 30},
 		SelfClone: CloneSettings{CollectSamples: false, MaxSamples: 500},
+		Tasks:     DefaultTasks(),
 	}
+}
+
+// TaskSettings are the defaults every task starts from.
+type TaskSettings struct {
+	Privacy model.TaskPrivacy `json:"privacy"`
+	Limits  model.TaskLimits  `json:"limits"`
+	Commit  model.TaskCommit  `json:"commit"`
+	Tone    model.TaskTone    `json:"tone"`
+	Owner   model.TaskOwner   `json:"owner"`
+}
+
+// DefaultTasks are the task defaults of a new install.
+func DefaultTasks() TaskSettings {
+	return TaskSettings{
+		Privacy: model.TaskPrivacy{Strategy: model.StrategyOffers, Offers: 2, ProbeLimit: 3, OnProbeLimit: model.ProbeHandoff,
+			Cover: model.CoverDeflect, CoverLines: []string{}, BufferMin: 15},
+		Limits: model.TaskLimits{MaxMessages: 20, MaxDays: 7, MaxNudges: 2, NudgeAfterHours: 24},
+		Commit: model.TaskCommit{Mode: model.CommitApprove, Book: model.BookOff},
+		Tone:   model.TaskTone{Formality: "neutral", Directness: "balanced", Warmth: "friendly", DateStyle: "dmy", Clock: "24h"},
+	}
+}
+
+// oneOf returns v when it is one of the allowed values, else def.
+func oneOf(v, def string, allowed ...string) string {
+	if slices.Contains(allowed, v) {
+		return v
+	}
+	return def
+}
+
+// clampOr returns v within [lo, hi]; 0 (unset) becomes def.
+func clampOr(v, def, lo, hi int) int {
+	if v == 0 {
+		return def
+	}
+	return min(max(v, lo), hi)
+}
+
+// normalizeTasks fills unset task defaults and fixes unknown values.
+func normalizeTasks(t *TaskSettings) {
+	d := DefaultTasks()
+	p, dp := &t.Privacy, d.Privacy
+	p.Strategy = oneOf(p.Strategy, dp.Strategy, model.StrategyTheyFirst, model.StrategyOffers, model.StrategyWindows)
+	p.Offers = clampOr(p.Offers, dp.Offers, 1, 3)
+	p.ProbeLimit = clampOr(p.ProbeLimit, dp.ProbeLimit, 1, 10)
+	p.OnProbeLimit = oneOf(p.OnProbeLimit, dp.OnProbeLimit, model.ProbeOffer, model.ProbeAsk, model.ProbeHandoff)
+	p.Cover = oneOf(p.Cover, dp.Cover, model.CoverDeflect, model.CoverLines)
+	if p.CoverLines == nil {
+		p.CoverLines = []string{}
+	}
+	p.BufferMin = min(max(p.BufferMin, 0), 60)
+	l, dl := &t.Limits, d.Limits
+	l.MaxMessages = clampOr(l.MaxMessages, dl.MaxMessages, 4, 100)
+	l.MaxDays = clampOr(l.MaxDays, dl.MaxDays, 1, 30)
+	l.MaxNudges = min(max(l.MaxNudges, 0), 5)
+	l.NudgeAfterHours = clampOr(l.NudgeAfterHours, dl.NudgeAfterHours, 1, 168)
+	c, dc := &t.Commit, d.Commit
+	c.Mode = oneOf(c.Mode, dc.Mode, model.CommitApprove, model.CommitAutoFree)
+	c.Book = oneOf(c.Book, dc.Book, model.BookOff, model.BookICS, model.BookMACalendar)
+	n, dn := &t.Tone, d.Tone
+	n.Formality = oneOf(n.Formality, dn.Formality, "casual", "neutral", "formal")
+	n.Directness = oneOf(n.Directness, dn.Directness, "soft", "balanced", "direct")
+	n.Warmth = oneOf(n.Warmth, dn.Warmth, "reserved", "friendly", "warm")
+	n.DateStyle = oneOf(n.DateStyle, dn.DateStyle, "dmy", "mdy")
+	n.Clock = oneOf(n.Clock, dn.Clock, "24h", "12h")
 }
 
 // ModelFor returns the configured model for a provider.
@@ -425,6 +496,7 @@ func (m *Manager) normalize() {
 	}
 	normalizeV4(s, d)
 	normalizeV5(s, d)
+	normalizeTasks(&s.Tasks)
 	behavior.Normalize(&s.Behavior.Private, behavior.KindDM)
 	behavior.Normalize(&s.Behavior.Group, behavior.KindGroup)
 	// Keep DefaultModel in sync with the per-provider model.

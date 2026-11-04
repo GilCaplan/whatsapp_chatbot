@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 
 	"whatsappdoppel/internal/core/config"
@@ -91,5 +92,37 @@ func TestHistoryCompaction(t *testing.T) {
 	}
 	if n := s.HistoryCount("group:123"); n != 0 {
 		t.Fatalf("after clear = %d", n)
+	}
+}
+
+func TestTaskRunSwapAndIndex(t *testing.T) {
+	paths, err := config.NewPaths(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(paths, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := model.TaskRun{ID: "r1", ChatKey: "dm:1", Status: model.TaskActive}
+	if err := s.UpdateTaskRuns(func(all []model.TaskRun) ([]model.TaskRun, error) { return append(all, run), nil }); err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := s.ActiveTaskID("dm:1"); !ok || id != "r1" {
+		t.Fatalf("index = %q %v", id, ok)
+	}
+	stale, _ := s.TaskRun("r1")
+	if _, _, err := s.UpdateTaskRun("r1", func(r *model.TaskRun) { r.Status = model.TaskStopped }); err != nil {
+		t.Fatal(err)
+	}
+	stale.Sent = 3
+	if _, err := s.SwapTaskRun(stale, stale.Rev); !errors.Is(err, ErrTaskConflict) {
+		t.Fatalf("a stale write is refused, err = %v", err)
+	}
+	if r, _ := s.TaskRun("r1"); r.Status != model.TaskStopped || r.Sent != 0 {
+		t.Fatalf("the stop stays, run = %+v", r)
+	}
+	if _, ok := s.ActiveTaskID("dm:1"); ok {
+		t.Fatal("a stopped run leaves the index")
 	}
 }

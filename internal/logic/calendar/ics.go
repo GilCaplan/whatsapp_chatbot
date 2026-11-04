@@ -104,9 +104,9 @@ func ParseICS(r io.Reader, from, to time.Time, loc *time.Location) ([]Event, err
 			length = v.end.Sub(v.start)
 		case length == 0 && v.allDay:
 			length = 24 * time.Hour
-		case length == 0:
-			length = time.Hour
 		}
+		// A timed entry with no end (how reminders are often stored) takes
+		// no time (RFC 5545), so it never blocks: length stays 0.
 		emit := func(s time.Time) {
 			s = s.In(loc)
 			e := s.Add(length)

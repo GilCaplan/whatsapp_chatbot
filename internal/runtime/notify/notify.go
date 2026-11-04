@@ -269,6 +269,28 @@ func (n *Notifier) noteFor(a model.ActivityEvent, s config.NotificationSettings)
 		}
 		return Note{Subtitle: "Needs you · " + chat, Message: msg + ". " + persona + " is paused there.",
 			Group: "doppel:handoff:" + a.ChatKey, Open: chatURL, Sound: true, Urgent: true}, a.Type, true
+	case model.ActTask:
+		if a.Meta["notify"] != true {
+			return Note{}, "", false
+		}
+		switch a.Meta["kind"] {
+		case "approval":
+			if !s.Approvals {
+				return Note{}, "", false
+			}
+			return Note{Subtitle: "Needs your OK · " + chat, Message: a.Text + ".", Group: "doppel:task:" + a.ChatKey,
+				Open: base + "#/tasks", Sound: true, Urgent: true}, a.Type, true
+		case "done", "failed":
+			if !s.Goals {
+				return Note{}, "", false
+			}
+			return Note{Subtitle: "Task · " + chat, Message: a.Text + ".", Group: "doppel:task:" + a.ChatKey,
+				Open: base + "#/tasks", Sound: s.Sound}, a.Type, true
+		}
+		if !s.Handoff {
+			return Note{}, "", false
+		}
+		return Note{Subtitle: "Task · " + chat, Message: a.Text, Group: "doppel:task:" + a.ChatKey, Open: base + "#/tasks", Sound: s.Sound}, a.Type, true
 	case model.ActRecap:
 		if !s.Recap || a.Meta["onDemand"] == true {
 			return Note{}, "", false

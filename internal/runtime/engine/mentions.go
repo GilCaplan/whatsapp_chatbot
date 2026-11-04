@@ -127,9 +127,6 @@ func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile,
 	if sm, ok := e.store.Summary(c.Key); ok {
 		o.Summary, o.SummaryFacts = sm.Text, sm.Format == model.SummaryFacts // older messages (context.go)
 	}
-	if _, s := e.secretaryOf(c); s != nil && s.Meetings {
-		o.FreeTimes, o.FreeKnown = e.freeTimes(s) // secretary.go
-	}
 	// Realism (wave 3): the time where the persona lives, and what it
 	// remembers about the people here (routine.go, memory.go).
 	o.Now, o.MacZone = e.clock.Now(), time.Local

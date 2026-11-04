@@ -86,10 +86,26 @@ How each feature is wired (read the one you are changing). Shared rules stay in 
   `shapePrompt` (card via `Persona.Card`/`queueCard`, budgets). Charts are pictures: only `params` run. The sandbox
   (`replay.go`) counts calls with `llm.Meter` (context-carried; `Registry.Resolve` wraps providers) and never writes state.
 - Personal secretary (`model.SecretaryConfig` on the persona; `engine/secretary.go`, `prompt/secretary.go`): its job is a
-  prompt part right after the character; meeting help gets `OWNER'S FREE TIMES` (meeting hours minus calendar busy times,
-  never titles) inside the chat context; `secretaryTick` → job `secnote:<key>` (45 s, 5 s for urgent words/VIPs) writes
+  prompt part right after the character; a meeting request (`handoff` meeting words or `task.MeetingRequest`) starts a
+  Find a time task with the secretary's days, hours and length (`engine.secretaryMeeting`, voice assistant); `secretaryTick` → job `secnote:<key>` (45 s, 5 s for urgent words/VIPs) writes
   notes (`NoteCursor`), activity `secretary.note` notifies. Built with `web/components/persona/secretary-builder.js` from the
   Personas page's single "Build a persona" chooser (`build-chooser.js`).
+- Tasks (`internal/logic/task`, `engine/task.go`, `prompt/task.go`, `store/tasks.go`; design in `docs/TASKS_DESIGN.md`):
+  a running task is the chat's goal (`chatGoalTurn` returns nothing, `goalIncoming`, check-ins and scheduled messages stop,
+  the hand-off gate ignores meeting words). `generate` → `taskTurn`: their messages after `ReadMsg`/`ReadTo` go through
+  `prompt.TaskRead` (JSON; their words must be `task.Found` in the message), `task.Decide` picks the first matching rule
+  (fixed vocabulary in `task/rules.go`; `ValidateRules`) and fills a `task.Turn`; `taskCommit` re-checks the calendar and
+  waits for you (`TaskApproval`, activity `task` kind approval, notify) or books (`auto-if-free`); `prompt.TaskSection`
+  replaces the goal part; `taskGuard` runs `task.Leak` (allowed times = `task.Allowed`, titles from `calendar.Titles`,
+  never shown to a model) → one rewrite with `TaskRetryNote` → `task.Fallback`; `taskAfter` applies effects (done,
+  failed, hand-off via `taskPause` = a chat pause with category `task` and the run's `Summary`). The calendar stays in
+  code: `task.For` + `Availability` (`Offer`, `Works`, `Alternative`, `Windows`; round times, buffer, random pick through
+  `Engine.rng`); a time we said doesn't work stays declined (`Answers`). One timer per chat (`taskJob`, `armTask`):
+  nudges after `nudgeAfterHours` while waiting for them, hand-over after `maxDays` or the last nudge; re-armed at start
+  (`armTasks`). Regenerate rewrites the same turn (`Engine.lastTask`). Booking: MACalendar `POST /events` with
+  `client_token` = run id (`calendar.BookMACalendar`), or an .ics file (`calendar.EventICS`). The sandbox (`TaskTry`)
+  runs `Decide` + the reply prompt against `prompt.TaskPartner` in memory. Calendar entries without an end time are
+  zero length; `CalendarSource.skipWords` drop entries from busy times.
 - Long-term memory (`engine/context.go`): `compactPlan` (settings `memory.compact` → chat `compactEvery`; fast chats use
   `fastEvery`); the persona reads everything since `contextFrom`, `historyCap` sizes the window (and the store's keep) to
   hold it; at keep+every messages all but keep fold into the summary.

@@ -26,6 +26,7 @@ import Activity from './pages/activity.js';
 import Approvals from './pages/approvals.js';
 import Settings from './pages/settings.js';
 import Missions from './pages/missions.js';
+import Tasks from './pages/tasks.js';
 import Context from './pages/context.js';
 import Guide from './pages/guide.js';
 
@@ -40,6 +41,7 @@ const ROUTES = {
   approvals: Approvals,
   settings: Settings,
   missions: Missions,
+  tasks: Tasks,
   context: Context,
   guide: Guide,
 };
@@ -49,6 +51,7 @@ const NAV = [
   { name: 'chats', label: 'Chats', icon: 'chats' },
   { name: 'personas', label: 'Personas', icon: 'personas', also: ['persona'] },
   { name: 'missions', label: 'Missions', icon: 'target' },
+  { name: 'tasks', label: 'Tasks', icon: 'calendar' },
   { name: 'context', label: 'Context', icon: 'flow' },
   { name: 'playground', label: 'Playground', icon: 'playground' },
   { name: 'activity', label: 'Activity', icon: 'activity' },

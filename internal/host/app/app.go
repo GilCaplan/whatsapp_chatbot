@@ -162,6 +162,7 @@ func Run(opts Options) error {
 		LLM:        llmReg,
 		Playground: eng.Playground(),
 		Builder:    eng.Builder(),
+		Tasks:      eng,
 		Notifier:   notifier,
 		OpenFolder: platform.OpenFolder,
 		Seed:       persona.Seed,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,6 +26,8 @@ type calendarView struct {
 	Where   string `json:"where"` // the link's host (and path start), masked
 	HasKey  bool   `json:"hasKey"`
 	Enabled bool   `json:"enabled"`
+	// SkipWords: entries whose title contains one of these don't count as busy.
+	SkipWords []string `json:"skipWords"`
 }
 
 func maskURL(raw string) string {
@@ -41,7 +44,8 @@ func maskURL(raw string) string {
 func calendarViews(list []model.CalendarSource) []calendarView {
 	out := make([]calendarView, 0, len(list))
 	for _, c := range list {
-		out = append(out, calendarView{ID: c.ID, Name: c.Name, Kind: c.Kind, Where: maskURL(c.URL), HasKey: c.APIKey != "", Enabled: c.Enabled})
+		out = append(out, calendarView{ID: c.ID, Name: c.Name, Kind: c.Kind, Where: maskURL(c.URL), HasKey: c.APIKey != "", Enabled: c.Enabled,
+			SkipWords: append([]string{}, c.SkipWords...)})
 	}
 	return out
 }
@@ -55,11 +59,12 @@ func (s *Server) handleCalendars(w http.ResponseWriter, r *http.Request) {
 }
 
 type calendarBody struct {
-	Name    *string `json:"name"`
-	Kind    *string `json:"kind"`
-	URL     *string `json:"url"`
-	APIKey  *string `json:"apiKey"`
-	Enabled *bool   `json:"enabled"`
+	Name      *string   `json:"name"`
+	Kind      *string   `json:"kind"`
+	URL       *string   `json:"url"`
+	APIKey    *string   `json:"apiKey"`
+	Enabled   *bool     `json:"enabled"`
+	SkipWords *[]string `json:"skipWords"`
 }
 
 // apply validates and merges a body into src (new = POST: kind and url required).
@@ -93,6 +98,23 @@ func (b calendarBody) apply(src *model.CalendarSource, isNew bool) string {
 		src.Enabled = *b.Enabled
 	} else if isNew {
 		src.Enabled = true
+	}
+	if b.SkipWords != nil {
+		var words []string
+		for _, w := range *b.SkipWords {
+			if w = strings.TrimSpace(w); w != "" && !slices.Contains(words, w) {
+				words = append(words, w)
+			}
+		}
+		if len(words) > 20 {
+			return "at most 20 words to skip"
+		}
+		for _, w := range words {
+			if utf8.RuneCountInString(w) > 40 {
+				return "a word to skip has at most 40 characters"
+			}
+		}
+		src.SkipWords = words
 	}
 	if src.Name == "" {
 		src.Name = map[string]string{model.CalendarICS: "Calendar", model.CalendarMACalendar: "MACalendar"}[src.Kind]

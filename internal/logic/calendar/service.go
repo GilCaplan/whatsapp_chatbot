@@ -179,7 +179,7 @@ func (s *Service) fetchMACalendar(ctx context.Context, src model.CalendarSource,
 			case !okS:
 				e.Start, e.End, e.AllDay = day, day.AddDate(0, 0, 1), true
 			case !okE || !en.After(st):
-				e.Start, e.End = st, st.Add(time.Hour)
+				e.Start, e.End = st, st // no end: a reminder, takes no time
 			default:
 				e.Start, e.End = st, en
 			}
@@ -207,7 +207,9 @@ type Interval struct {
 }
 
 // Busy merges the busy times of the enabled sources within [from, to).
-// All-day events count as busy only when ignoreAllDay is false.
+// All-day events count as busy only when ignoreAllDay is false. Entries that
+// take no time (reminders) and entries whose title contains one of the
+// source's SkipWords never count.
 func (s *Service) Busy(ctx context.Context, srcs []model.CalendarSource, from, to time.Time, ignoreAllDay bool) ([]Interval, []Status) {
 	var spans []Interval
 	var sts []Status
@@ -218,7 +220,7 @@ func (s *Service) Busy(ctx context.Context, srcs []model.CalendarSource, from, t
 		evs, st := s.Events(ctx, src, false)
 		sts = append(sts, st)
 		for _, e := range evs {
-			if e.AllDay && ignoreAllDay {
+			if (e.AllDay && ignoreAllDay) || !e.End.After(e.Start) || Skipped(e.Title, src.SkipWords) {
 				continue
 			}
 			if e.End.After(from) && e.Start.Before(to) {
@@ -227,6 +229,17 @@ func (s *Service) Busy(ctx context.Context, srcs []model.CalendarSource, from, t
 		}
 	}
 	return merge(spans), sts
+}
+
+// Skipped reports whether title contains one of words (any case).
+func Skipped(title string, words []string) bool {
+	low := strings.ToLower(title)
+	for _, w := range words {
+		if w = strings.ToLower(strings.TrimSpace(w)); w != "" && strings.Contains(low, w) {
+			return true
+		}
+	}
+	return false
 }
 
 func merge(spans []Interval) []Interval {

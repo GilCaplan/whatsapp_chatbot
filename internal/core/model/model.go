@@ -267,6 +267,7 @@ const (
 	// Wave 3. Typos are not a type of their own: they are "sent" events with
 	// meta typo:true / fix:true / edited:true.
 	ActHandoff        = "handoff"         // paused: a message needs you (meta category, excerpt, how)
+	ActTask           = "task"            // a task moved on (meta taskId, kind; notify=true tells you)
 	ActHandoffResumed = "handoff.resumed" // you let the persona continue
 	ActReveal         = "reveal"          // you revealed the persona and paused the chat
 	ActMemory         = "memory"          // learned things about people (meta added, updated)

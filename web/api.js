@@ -255,6 +255,24 @@ export const api = {
     generate: (chatKey, o) => post('/api/recaps/generate', chatKey ? { chatKey } : {}, { timeout: 300000, ...o }),
   },
 
+  /** Tasks: errands like finding a meeting time (internal/logic/task). */
+  tasks: {
+    /** {items (saved), templates, vocabulary, defaultRules} */
+    list: (o) => get('/api/tasks', o),
+    save: (spec, o) => (spec.id ? put(`/api/tasks/${enc(spec.id)}`, spec, o) : post('/api/tasks', spec, o)),
+    remove: (id, o) => del(`/api/tasks/${enc(id)}`, o),
+    /** {items}: newest first; q = {chatKey?, active?} */
+    runs: (q = {}, o) => get('/api/tasks/runs' + (q.chatKey || q.active ? '?' + new URLSearchParams({ ...(q.chatKey ? { chatKey: q.chatKey } : {}), ...(q.active ? { active: '1' } : {}) }) : ''), o),
+    run: (id, o) => get(`/api/tasks/runs/${enc(id)}`, o),
+    /** body: {spec | taskId | template, open} */
+    start: (chatKey, body, o) => post(`/api/chats/${enc(chatKey)}/task`, body, { timeout: 60000, ...o }),
+    stop: (id, o) => post(`/api/tasks/runs/${enc(id)}/stop`, {}, o),
+    approve: (id, yes, o) => post(`/api/tasks/runs/${enc(id)}/approve`, { yes }, { timeout: 60000, ...o }),
+    icsURL: (id) => `/api/tasks/runs/${enc(id)}/event.ics`,
+    try: (body, o) => post('/api/tasks/try', body, { timeout: 600000, ...o }),
+    coverLines: (description, o) => post('/api/tasks/cover-lines', { description }, { timeout: 120000, ...o }),
+  },
+
   /** Wave 3: missions and achievements. */
   missions: {
     /** → { templates, active, history, achievements } */

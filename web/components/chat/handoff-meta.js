@@ -20,6 +20,7 @@ const GLYPHS = {
   secret: '<rect x="5" y="10.5" width="14" height="10" rx="2.6"/><path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/><path d="M12 14.4v2.4"/>',
   brief: '<path d="M4.5 12h9"/><path d="m15.2 7.4 4.3 4.6-4.3 4.6"/>',
   warm: '<path d="M12 19.2s-7-4-7-9.2A3.9 3.9 0 0 1 12 7.8a3.9 3.9 0 0 1 7 2.2c0 5.2-7 9.2-7 9.2Z"/>',
+  task: '<rect x="4.6" y="4" width="14.8" height="16.6" rx="3.2"/><path d="m8 9.4 1.6 1.6L12.8 8M8 15h8"/>',
   playful: '<circle cx="12" cy="12" r="8.4"/><path d="M8.6 14.2c.8 1.4 2 2.1 3.4 2.1s2.6-.7 3.4-2.1"/><path d="M8.4 10.2c.4-.6 1.2-.6 1.6 0M14 10.2c.4-.6 1.2-.6 1.6 0"/>',
 };
 
@@ -49,7 +50,7 @@ export const SENSITIVE_CATS = [
   { id: 'secret', label: 'Secrets', line: 'Anything they asked to keep quiet.' },
 ];
 
-export const catLabel = (id) => (HANDOFF_CATS.find((c) => c.id === id) || { label: 'Something sensitive' }).label;
+export const catLabel = (id) => (id === 'task' ? 'Task' : (HANDOFF_CATS.find((c) => c.id === id) || { label: 'Something sensitive' }).label);
 
 /** What they did, without the name: "asked if they're talking to a bot". */
 export function catPhrase(cat) {
@@ -60,6 +61,7 @@ export function catPhrase(cat) {
     case 'distress': return 'may be going through something hard';
     case 'bot': return "asked if they're talking to a bot";
     case 'legal': return 'mentioned something legal';
+    case 'task': return 'needs you to take over a task';
     default: return 'wrote something sensitive';
   }
 }

@@ -127,7 +127,9 @@ func (r *Runner) stop() {
 		t.Stop()
 		delete(r.aux, id)
 	}
+	var fx effects
 	if r.cyc != nil {
+		r.taskFxLocked(&fx, r.cyc, r.cyc.sent.Load() > 0) // a task turn goes on or is dropped (task.go)
 		r.cyc.cancel()
 		r.cyc = nil
 	}
@@ -136,6 +138,7 @@ func (r *Runner) stop() {
 	r.mu.Unlock()
 	r.cancel()
 	off()
+	fx.run()
 }
 
 func (r *Runner) setConfig(c model.ChatAssignment) {
@@ -300,6 +303,7 @@ func (r *Runner) process(in model.Incoming) {
 	e.act(model.ActIncoming, c, p.Name, text, meta)
 	if speaker == "them" {
 		e.secretaryTick(c, in, text)                                              // messages for you (secretary.go)
+		e.secretaryMeeting(c, in, text)                                           // a meeting request starts Find a time (task.go)
 		e.goalIncoming(c, p, isGroup, senderName(in, c, isGroup), text, in.Media) // "say the word" goals (goal.go)
 		// Hand-off (handoff.go): a paused chat keeps messages as context; a
 		// sensitive message pauses it — even when the persona would stay quiet.
