@@ -13,7 +13,7 @@ import { helpTip } from './help-tip.js';
 import { patchChat } from './drawer/shared.js';
 
 const MAX_INSTRUCTIONS = 1000;
-const MAX_SUMMARY = 1500;
+const MAX_SUMMARY = 4000;
 
 /** ~4 characters per token: rough, but enough to compare. */
 const tokens = (chars) => Math.round(chars / 4);
@@ -28,7 +28,9 @@ export function createContextStore(key, update) {
   };
   async function load() {
     try {
-      st.data = await api.chats.context(key, { quiet: true });
+      const [data, sys] = await Promise.all([api.chats.context(key, { quiet: true }), api.context.systems({ quiet: true }).catch(() => null)]);
+      st.data = data;
+      if (sys) st.systems = sys.items;
       st.error = '';
     } catch (e) {
       if (!st.data) st.error = (e && e.message) || "Couldn't load what it reads";
@@ -76,6 +78,12 @@ export function createContextStore(key, update) {
     load();
   }
 
+  /** This chat's context system ("" = the persona's, else the app default). */
+  async function setSystem(id) {
+    try { await patchChat(key, { contextSystem: id }); toast('Context system changed for this chat', { type: 'success' }); } catch { /* toasted */ }
+    load();
+  }
+
   /** Replace one part of the prompt in this chat only (text null = back to the original). */
   async function saveEdit(part, text) {
     try {
@@ -87,7 +95,7 @@ export function createContextStore(key, update) {
   }
 
   return {
-    st, load, reloadSoon, compact, forgetSummary, setFrom, setCompact, saveEdit,
+    st, load, reloadSoon, compact, forgetSummary, setFrom, setCompact, setSystem, saveEdit,
     typeInstructions(v) { st.instr = v; update(); saveInstructions(); },
     typeSummary(v) { st.summary = v; update(); saveSummary(); },
     destroy() {
@@ -201,6 +209,21 @@ function compactRow(cs, d) {
   </div>`;
 }
 
+/** Which context system the chat runs (Context page); "" = inherit. */
+function systemRow(cs, d, chat) {
+  const ch = d.contextSystem || {};
+  const own = chat && chat.contextSystem;
+  const from = ch.source === 'persona' ? "the persona's" : 'the app default';
+  return html`<div class="field-row">
+    <div class="grow"><div class="field-label row gap-4">Context system ${helpTip('context')}</div>
+      <div class="field-help">${own ? `${d.contextSystemName}, chosen for this chat.` : `${d.contextSystemName || 'Classic'}, ${from}.`} <a href="#/context">See how it works</a></div></div>
+    <select class="select select-sm" aria-label="Context system" @change=${(e) => cs.setSystem(e.target.value)}>
+      <option value="" ?selected=${!own}>Default</option>
+      ${(cs.st.systems || []).map((x) => html`<option value=${x.id} ?selected=${own === x.id}>${x.name}</option>`)}
+    </select>
+  </div>`;
+}
+
 function roleLabel(m, name) {
   return m.role === 'assistant' ? name : 'Chat';
 }
@@ -265,6 +288,7 @@ export function contextBlock({ ctx: cs, chat: c, persona: p, onUpdate }) {
       </div>
     </div>
 
+    ${systemRow(cs, d, c)}
     ${compactRow(cs, d)}
 
     <div class="row gap-8 row-wrap mt-8">

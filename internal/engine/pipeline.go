@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -667,7 +668,9 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 		ctx, cancel := context.WithTimeout(cyc.ctx, generateLimit)
 		isGroup := c.Kind == "group"
 		dir = e.directory(ctx, c, hist)
+		cp := e.paramsOf(c) // the chat's context system (ctxsys.go)
 		opts, cross := e.promptOptions(c, eff.Profile, dir, hist)
+		ph := e.shapePrompt(&opts, cp, p, hist)
 		if cross.active() {
 			e.act(model.ActThinking, c, p.Name, crossActivityText(cross), map[string]any{"stage": "cross", "crossContext": cross.meta()})
 		}
@@ -677,13 +680,27 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 			opts.Late = e.lateNote(p, hist, e.clock.Now()) // "sorry, was at the gym" (routine.go)
 		}
 		gcfg, gturn := e.chatGoalTurn(ctx, c, p, hist, isGroup, cyc.proactive)
-		res, err = e.replyFor(ctx, cyc.copilot, p, eff.Profile, hist, cyc.proactive, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+		build := func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
 			opts.Goal, opts.CrossTurn = t, x
 			if cyc.proactive {
-				return prompt.Initiate(p, c, hist, isGroup, opts)
+				return prompt.Initiate(p, c, ph, isGroup, opts)
 			}
-			return prompt.Compose(p, c, hist, isGroup, opts)
-		})
+			return prompt.Compose(p, c, ph, isGroup, opts)
+		}
+		res, err = e.replyFor(ctx, cyc.copilot, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build)
+		if err == nil && !cyc.copilot && cp.ReplyCheck != model.CheckOff { // replycheck.go
+			o := opts
+			o.Goal = gturn
+			ck := replyCheck{cp: cp, persona: p, plan: gturn.Plan, lang: opts.ReplyLanguage, hist: hist,
+				rules: checkRules(prompt.ComposeSections(p, c, ph, isGroup, o), p)}
+			res = e.checkedReply(ctx, ck, res, func(note string) (genResult, error) {
+				return e.replyFor(ctx, false, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+					r := build(t, x)
+					r.System += note
+					return r
+				})
+			})
+		}
 		cancel()
 		res.Opener = cyc.proactive
 		if err == nil {
@@ -743,6 +760,12 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 		return
 	}
 	if !c.Enabled {
+		r.endCycleLocked(fx)
+		return
+	}
+	if d := cyc.draft; d.Quiet && !cyc.approval {
+		r.actFx(fx, model.ActDecisionSkip, "Staying quiet — the reply didn't pass the check: "+strings.Join(d.Checks, "; "),
+			withMsg(map[string]any{"reason": "reply_check", "checks": d.Checks}, cyc.msgIDs()...))
 		r.endCycleLocked(fx)
 		return
 	}

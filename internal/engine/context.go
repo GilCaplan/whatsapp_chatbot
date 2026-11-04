@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"whatsappdoppel/internal/ctxsys"
 	"whatsappdoppel/internal/events"
 	"whatsappdoppel/internal/model"
 	"whatsappdoppel/internal/prompt"
@@ -166,12 +167,20 @@ func (e *Engine) compactChat(ctx context.Context, c model.ChatAssignment, keep i
 		return model.ChatSummary{}, err
 	}
 	// One request reads at most prompt.MaxCompactMessages: fold longer runs in
-	// chunks, oldest first, each building on the summary so far.
+	// chunks, oldest first, each building on the summary so far. A context
+	// system with summary facts keeps one fact per line and asks only for
+	// the changes, so untouched lines never drift.
+	facts := e.paramsOf(c).Summary == model.SummaryFacts
+	prose := prev.Format != model.SummaryFacts && strings.TrimSpace(prev.Text) != ""
 	text := prev.Text
 	for start := 0; start < len(old); start += prompt.MaxCompactMessages {
 		chunk := old[start:min(start+prompt.MaxCompactMessages, len(old))]
-		req := prompt.Compact(prompt.CompactInput{PersonaName: p.Name, ChatName: c.Name, IsGroup: isGroupChat(c),
-			Previous: text, Messages: chunk, Zone: time.Local})
+		in := prompt.CompactInput{PersonaName: p.Name, ChatName: c.Name, IsGroup: isGroupChat(c),
+			Previous: text, PreviousProse: prose, Messages: chunk, Zone: time.Local}
+		req := prompt.Compact(in)
+		if facts {
+			req = prompt.CompactFacts(in)
+		}
 		req.Model = mdl
 		cctx, cancel := context.WithTimeout(ctx, compactTimeout)
 		resp, err := prov.Chat(cctx, req)
@@ -179,12 +188,19 @@ func (e *Engine) compactChat(ctx context.Context, c model.ChatAssignment, keep i
 		if err != nil {
 			return model.ChatSummary{}, err
 		}
-		text = strings.TrimSpace(resp.Text)
+		if facts {
+			if text, err = prompt.ApplyFacts(text, prose, resp.Text); err != nil {
+				return model.ChatSummary{}, errors.New("the model didn't write readable facts")
+			}
+			prose = false
+		} else {
+			text = strings.TrimSpace(resp.Text)
+		}
 		if text == "" {
 			return model.ChatSummary{}, errors.New("the model wrote an empty summary")
 		}
 		if utf8.RuneCountInString(text) > model.MaxSummaryText {
-			text = string([]rune(text)[:model.MaxSummaryText])
+			text = clipText(text, model.MaxSummaryText)
 		}
 	}
 	// The model call takes a while: never overwrite what you changed meanwhile.
@@ -197,6 +213,9 @@ func (e *Engine) compactChat(ctx context.Context, c model.ChatAssignment, keep i
 	}
 	now := e.clock.Now()
 	sm := model.ChatSummary{ChatKey: c.Key, Text: text, Through: old[len(old)-1].TS, Messages: prev.Messages + len(old), UpdatedAt: now}
+	if facts {
+		sm.Format = model.SummaryFacts
+	}
 	if err := e.store.SaveSummary(sm); err != nil {
 		return model.ChatSummary{}, err
 	}
@@ -230,9 +249,12 @@ func (e *Engine) ChatContext(chatKey string) (model.ChatContext, error) {
 	hist := e.chatHistory(e.runner(chatKey), c)
 	bp := e.effective(c).Profile
 	opts, _ := e.promptOptions(c, bp, e.directory(e.ctx, c, hist), hist)
+	sys, choice := e.systemOf(c)
+	hist = e.shapePrompt(&opts, ctxsys.Clamp(sys.Params, sys.Base), p, hist)
 	req := prompt.Compose(p, c, hist, isGroupChat(c), opts)
 	out := model.ChatContext{System: req.System, Sections: prompt.ComposeSections(p, c, hist, isGroupChat(c), opts), Messages: make([]model.ContextMessage, 0, len(req.Messages)), Chars: len(req.System),
-		HistoryKept: len(hist), Window: bp.HistoryMessages, Instructions: c.Instructions, ContextFrom: c.ContextFrom}
+		HistoryKept: len(hist), Window: bp.HistoryMessages, Instructions: c.Instructions, ContextFrom: c.ContextFrom,
+		ContextSystem: choice, SystemName: sys.Name}
 	for _, m := range req.Messages {
 		out.Messages = append(out.Messages, model.ContextMessage{Role: m.Role, Content: m.Content})
 		out.Chars += len(m.Content)

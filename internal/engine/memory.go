@@ -65,6 +65,10 @@ func (e *Engine) memoryLines(c model.ChatAssignment, hist []model.Message, now t
 // memoryTick counts a new message from them and (re)arms the extraction job
 // once enough have arrived.
 func (e *Engine) memoryTick(c model.ChatAssignment) {
+	if e.paramsOf(c).Background == model.BackgroundDigest {
+		e.digestTick(c) // one call for memories, the brief and notes (digest.go)
+		return
+	}
 	e.briefTick(c) // the brief for other chats counts every message (brief.go)
 	if !e.memoryOn(c) {
 		return
@@ -113,51 +117,16 @@ func (e *Engine) extractMemories(ctx context.Context, c model.ChatAssignment) (m
 	if !ok {
 		return res, fmt.Errorf("persona %q not found", c.PersonaID)
 	}
-	st := e.store.RunnerState(c.Key)
-	all, err := e.store.History(c.Key, 0)
+	msgs, known, err := e.memoryBatch(c)
 	if err != nil {
 		return res, err
-	}
-	var msgs []model.Message
-	for _, m := range all {
-		if m.TS.After(st.MemoryCursor) && m.Kind != model.MsgKindFix && m.Kind != model.MsgKindReveal {
-			msgs = append(msgs, m)
-		}
-	}
-	if len(msgs) > prompt.MaxExtractMessages {
-		msgs = msgs[len(msgs)-prompt.MaxExtractMessages:]
-	}
-	now := e.clock.Now()
-	done := func() {
-		var cursor time.Time
-		if n := len(msgs); n > 0 {
-			cursor = msgs[n-1].TS
-		}
-		e.updateState(c.Key, func(s *store.RunnerState) {
-			s.MemoryPending = 0
-			if cursor.After(s.MemoryCursor) {
-				s.MemoryCursor = cursor
-			}
-		})
 	}
 	if !slices.ContainsFunc(msgs, func(m model.Message) bool { return m.Speaker == "them" }) {
-		done()
+		e.memoryDone(c.Key, msgs)
 		return res, nil
 	}
-	existing, err := e.store.Memories(c.Key)
-	if err != nil {
-		return res, err
-	}
-	isGroup := c.Kind == "group"
-	known := make([]string, 0, len(existing))
-	for _, m := range existing {
-		line := m.Text
-		if m.Person != "" {
-			line = m.Person + ": " + line
-		}
-		known = append(known, line)
-	}
-	req := prompt.ExtractMemories(p.Name, isGroup, c.Name, known, msgs, now.In(time.Local))
+	now := e.clock.Now()
+	req := prompt.ExtractMemories(p.Name, c.Kind == "group", c.Name, known, msgs, now.In(time.Local))
 	prov, mdl, err := e.llm.Resolve(p.LLM)
 	if err != nil {
 		return res, err
@@ -173,10 +142,63 @@ func (e *Engine) extractMemories(ctx context.Context, c model.ChatAssignment) (m
 	if err != nil {
 		return res, err
 	}
+	return e.saveMemories(c, p, msgs, found, now)
+}
+
+// memoryBatch is what the next extraction reads: the messages since the
+// last one (capped) and the memories already noted ("Dana: …").
+func (e *Engine) memoryBatch(c model.ChatAssignment) ([]model.Message, []string, error) {
+	st := e.store.RunnerState(c.Key)
+	all, err := e.store.History(c.Key, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	var msgs []model.Message
+	for _, m := range all {
+		if m.TS.After(st.MemoryCursor) && m.Kind != model.MsgKindFix && m.Kind != model.MsgKindReveal {
+			msgs = append(msgs, m)
+		}
+	}
+	if len(msgs) > prompt.MaxExtractMessages {
+		msgs = msgs[len(msgs)-prompt.MaxExtractMessages:]
+	}
+	existing, err := e.store.Memories(c.Key)
+	if err != nil {
+		return nil, nil, err
+	}
+	known := make([]string, 0, len(existing))
+	for _, m := range existing {
+		line := m.Text
+		if m.Person != "" {
+			line = m.Person + ": " + line
+		}
+		known = append(known, line)
+	}
+	return msgs, known, nil
+}
+
+// memoryDone moves the memory cursor past msgs.
+func (e *Engine) memoryDone(key string, msgs []model.Message) {
+	var cursor time.Time
+	if n := len(msgs); n > 0 {
+		cursor = msgs[n-1].TS
+	}
+	e.updateState(key, func(s *store.RunnerState) {
+		s.MemoryPending = 0
+		if cursor.After(s.MemoryCursor) {
+			s.MemoryCursor = cursor
+		}
+	})
+}
+
+// saveMemories checks what the model found against the messages, merges it
+// and reports it (also the digest's memory part, digest.go).
+func (e *Engine) saveMemories(c model.ChatAssignment, p model.Persona, msgs []model.Message, found []prompt.FoundMemory, now time.Time) (model.MemoryExtractResult, error) {
+	var res model.MemoryExtractResult
 	cands := e.checkMemories(c, p, msgs, found)
 	var added, updated []model.Memory
 	if len(cands) > 0 {
-		_, err = e.store.UpdateMemories(c.Key, func(cur []model.Memory) ([]model.Memory, error) {
+		_, err := e.store.UpdateMemories(c.Key, func(cur []model.Memory) ([]model.Memory, error) {
 			var out []model.Memory
 			out, added, updated = memory.Merge(cur, cands, c.Key, now, memory.MaxPerChat)
 			return out, nil
@@ -185,7 +207,7 @@ func (e *Engine) extractMemories(ctx context.Context, c model.ChatAssignment) (m
 			return res, err
 		}
 	}
-	done()
+	e.memoryDone(c.Key, msgs)
 	res.Added, res.Updated = len(added), len(updated)
 	if res.Added+res.Updated > 0 {
 		e.act(model.ActMemory, c, p.Name, memoryActivityText(added, updated, c.Name),

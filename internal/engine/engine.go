@@ -102,6 +102,9 @@ type Engine struct {
 	ratings recapSched // daily connection ratings timer (ratings.go)
 
 	jobs jobRunner // background jobs: memory extraction (jobs.go)
+
+	cardTried sync.Map       // persona id → when making its card last failed (ctxsys.go)
+	replays   replayRegistry // context-system sandbox runs (replay.go)
 }
 
 // New builds the engine, starts runners for enabled chats and re-arms

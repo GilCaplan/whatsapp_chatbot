@@ -257,3 +257,21 @@ func (l *fakeLLM) OllamaStatus(ctx context.Context) model.OllamaStatus {
 }
 func (l *fakeLLM) OllamaPull(name string) (string, error) { return "job1", nil }
 func (l *fakeLLM) Rebuild()                               { l.rebuilds.Add(1) }
+
+func (e *fakeEngine) MakeCard(ctx context.Context, personaID string, chars int) (model.Persona, error) {
+	return model.Persona{ID: personaID, Card: "You are a test card."}, nil
+}
+
+func (e *fakeEngine) DraftSystem(ctx context.Context, text, base string) (model.ContextSystem, []string, error) {
+	return model.ContextSystem{Name: "Drafted", Base: base, Chart: model.ContextChart{Nodes: []model.ChartNode{{ID: "in", Block: "message_in", Label: "Message arrives"}}, Edges: []model.ChartEdge{}}}, []string{}, nil
+}
+
+func (e *fakeEngine) StartReplay(req model.ReplayRequest) (model.Replay, error) {
+	return model.Replay{ID: "rp-1", ChatKey: req.ChatKey, Status: "done", Results: []model.ReplayResult{}}, nil
+}
+
+func (e *fakeEngine) Replay(id string) (model.Replay, bool) {
+	return model.Replay{ID: id, Status: "done", Results: []model.ReplayResult{}}, id == "rp-1"
+}
+
+func (e *fakeEngine) CancelReplay(id string) bool { return id == "rp-1" }

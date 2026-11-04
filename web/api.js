@@ -154,6 +154,26 @@ export const api = {
     qrURL: () => `/api/wa/qr.png?t=${Date.now()}`,
   },
 
+  /** Context systems (ctxsys): built-in Classic/Lean/Fast + yours, charts, sandbox. */
+  context: {
+    catalog: (o) => get('/api/context/catalog', o),
+    systems: (o) => get('/api/context/systems', o),
+    create: (body, o) => post('/api/context/systems', body, o),
+    save: (id, body, o) => put(`/api/context/systems/${enc(id)}`, body, o),
+    remove: (id, o) => del(`/api/context/systems/${enc(id)}`, o),
+    infer: (body, o) => post('/api/context/infer', body, o),
+    layout: (chart, o) => post('/api/context/layout', { chart }, o),
+    /** {text, base} → {system, changes}: an unsaved system drafted by the AI */
+    draft: (body, o) => post('/api/context/draft', body, { timeout: 200000, ...o }),
+    instances: (o) => get('/api/context/instances', o),
+    replay: (body, o) => post('/api/context/replay', body, o),
+    replayGet: (id, o) => get(`/api/context/replay/${enc(id)}`, o),
+    replayStop: (id, o) => del(`/api/context/replay/${enc(id)}`, o),
+    setPersona: (id, systemId, o) => put(`/api/personas/${enc(id)}/context`, { systemId }, o),
+    makeCard: (id, chars, o) => post(`/api/personas/${enc(id)}/card`, chars ? { chars } : {}, { timeout: 200000, ...o }),
+    saveCard: (id, card, o) => put(`/api/personas/${enc(id)}/card`, { card }, o),
+  },
+
   /** The owner's calendars (read-only), for personal secretaries. */
   calendars: {
     /** → { items:[{ id, name, kind, where, hasKey, enabled }] } */

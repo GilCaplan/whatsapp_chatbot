@@ -7,6 +7,23 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
 Everything below is new unless noted.
 
+### Context systems
+- New Context page: three built-in context systems decide when a persona asks the AI and what it
+  reads — Classic (as before: AI join-in check on every group message, goal plan before every
+  reply, ~4 calls before a group reply), Lean (rules first, AI only when unsure, a reply check in
+  code, a merged goal plan every 5 replies, one digest call for background work, a short persona
+  card with size budgets, summary as structured facts; ~1.7 calls) and Fast (one call per reply).
+- Choose per chat, per persona or for the whole app; copy a built-in to tune its settings.
+- Flowcharts: every system has one; yours are interactive (drag, wire, label, note, add blocks
+  from the palette, delete, tidy up), "Match settings to chart" reads the settings off the
+  drawing, and "Describe one" lets the AI draw a system from your words.
+- Reply check: copied instructions, a private plan sent as the message, talk about being an AI,
+  repeats of its last replies and the wrong language are caught in code (optionally an AI judge);
+  a failing reply is written again with the reason, then it stays quiet (Log tab says why).
+- Sandbox: replays a chat's last messages with up to three systems side by side (replies, AI calls
+  per step, prompt size, time); nothing is sent.
+- Persona cards: a short version of each persona, written once by the AI and editable.
+
 ### Names, tags, languages and context
 - Nicknames: give anyone a name (People tab) that is used instead of their WhatsApp name in every
   chat — in the app, in what the persona reads and when it tags them.

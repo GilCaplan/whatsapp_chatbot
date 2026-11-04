@@ -119,6 +119,19 @@ export const GUIDE_SECTIONS = [
     ],
   },
   {
+    id: 'context', title: 'Context systems', short: 'How it thinks', icon: 'flow', art: 'memory',
+    lead: 'A context system decides when a persona thinks with the AI and what it reads before it writes: the rules for joining in, how often it plans a goal, what checks a reply, and how big each part of its prompt may be.',
+    blocks: [
+      { points: [
+        '**Three are built in.** **Classic** is how replies always worked: an AI check on every group message and a goal plan before every reply (about 4 AI calls before a group reply). **Lean** settles clear cases in code, checks every reply in code, plans every few replies and reads a short persona card (about 1.7 calls). **Fast** writes each reply with one call.',
+        '**Choose per chat.** The app has a default, a persona can have its own, and any chat can pick another one: Context › Who uses it, or the chat\'s Memory tab.',
+        '**Make your own.** Copy a built-in system, then tune its settings or draw its flowchart: drag blocks, wire them, add your own steps and notes. Or describe a system in words and let the AI draw it. Only the settings change how chats run; "Match settings to chart" reads them off your drawing.',
+        '**Try before you switch.** The sandbox answers a chat\'s last messages again with two or three systems, side by side: what each would have said, how many AI calls it took and how long. Nothing is sent.',
+        '**Checking replies** catches nonsense before it is sent: copied instructions, a private plan sent as the message, repeats of its last replies, the wrong language. A failing reply is written again with the reason; if it still fails, the persona stays quiet. The Log tab says why.',
+      ] },
+    ],
+  },
+  {
     id: 'faq', title: 'Questions', short: 'FAQ', icon: 'info', art: 'faq',
     lead: 'Quick answers to the things people ask most.',
     blocks: [
@@ -152,7 +165,7 @@ export const GUIDE_SECTIONS = [
 /** Which guide section the topbar "?" opens on each page. */
 export const PAGE_SECTION = {
   welcome: 'welcome', dashboard: 'welcome', chats: 'chats', personas: 'personas', persona: 'personas',
-  missions: 'goals', playground: 'personas', activity: 'how-it-works', approvals: 'safety', settings: 'behaviour',
+  missions: 'goals', context: 'context', playground: 'personas', activity: 'how-it-works', approvals: 'safety', settings: 'behaviour',
 };
 
 /** "?" help tips next to complex controls. section: where "Learn more" leads. */
@@ -179,6 +192,12 @@ export const TIPS = {
     text: 'Normally a message about money, health, meeting up or asking if it is a bot pauses the chat until you tap Resume. With this on, such messages are only flagged and the persona keeps replying.' },
   context: { title: 'What it reads', section: 'memory',
     text: 'Everything the persona gets for its next reply here: its prompt, your instructions for this chat, a summary of older messages and the recent messages. Edit the instructions or the summary, summarise now, or start fresh.' },
+  context: { title: 'Context systems', section: 'context',
+    text: 'How a persona decides when to use the AI and what it reads: joining in, goal planning, checks on each reply, background work and prompt size. Classic, Lean and Fast are built in; copy one to tune it or draw your own flowchart.' },
+  'ctx-sandbox': { title: 'Sandbox', section: 'context',
+    text: 'Answers a chat\'s last messages from them again with each system you pick, like the chat would, and counts every AI call. Nothing is sent and the chat is left as it was. Real AI calls, so it takes a while on a local model.' },
+  'ctx-card': { title: 'Persona card', section: 'context',
+    text: 'A short version of the persona written once by the AI, used instead of the full text by systems with "Short persona card". Smaller prompts are faster and small models follow them better. Edit it freely; changing the persona makes a new one.' },
   compact: { title: 'Long-term memory', section: 'memory',
     text: 'Each chat reads its recent messages word for word (at least 30). Every 70 new messages (200 in a busy chat) the older ones are folded into a short summary it keeps reading, so it remembers far back without a huge prompt. You can read and fix the summary in the chat\'s Memory tab.' },
   ratings: { title: 'Connection', section: 'chats',

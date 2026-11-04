@@ -108,6 +108,8 @@ const ICONS = {
   megaphone: '<path d="M3.6 10.1v3.8A1.6 1.6 0 0 0 5.2 15.5h2.1l7.6 4.2V4.3L7.3 8.5H5.2a1.6 1.6 0 0 0-1.6 1.6Z"/><path d="M18.2 9a4.2 4.2 0 0 1 0 6"/><path d="m7.6 15.6 1.3 4.6"/>',
   gauge: '<path d="M3.9 17.2a8.6 8.6 0 1 1 16.2 0"/><path d="m12 13.4 4.2-4.6"/>' + dot(12, 13.4, 1.5),
   hourglass: '<path d="M6.5 3.5h11M6.5 20.5h11M7.5 3.5c0 4.3 4.5 5.5 4.5 8.5s-4.5 4.2-4.5 8.5M16.5 3.5c0 4.3-4.5 5.5-4.5 8.5s4.5 4.2 4.5 8.5"/>',
+  flow: '<rect x="3.5" y="3" width="7" height="5" rx="1.6"/><rect x="13.5" y="16" width="7" height="5" rx="1.6"/><rect x="3.5" y="16" width="7" height="5" rx="1.6"/><path d="M7 8v8M7 12h10.2a.8.8 0 0 1 .8.8V16"/>',
+  layout: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 9.5h17M9.5 9.5v11"/>',
 };
 
 export function installIcons() {

@@ -23,9 +23,17 @@ func InstructionsSection(text string) string {
 
 // SummarySection is the summary of the older part of the chat, inside the
 // CHAT CONTEXT block (Options.Summary).
-func SummarySection(text string) string {
+func SummarySection(text string, facts ...bool) string {
 	if text = strings.TrimSpace(text); text == "" {
 		return ""
+	}
+	if len(facts) > 0 && facts[0] {
+		var b strings.Builder
+		b.WriteString("\nEARLIER IN THIS CHAT (facts from older messages you no longer see):")
+		for _, l := range SplitFacts(text) {
+			b.WriteString("\n- " + l[0] + ": " + l[1])
+		}
+		return b.String()
 	}
 	return "\nEARLIER IN THIS CHAT (a summary of older messages you no longer see): " + text
 }
@@ -38,9 +46,11 @@ type CompactInput struct {
 	PersonaName string
 	ChatName    string
 	IsGroup     bool
-	Previous    string          // the summary so far ("" = none)
-	Messages    []model.Message // the messages to fold in, oldest first
-	Zone        *time.Location
+	Previous    string // the summary so far ("" = none)
+	// PreviousProse: Previous is a paragraph, not facts (CompactFacts turns it into facts).
+	PreviousProse bool
+	Messages      []model.Message // the messages to fold in, oldest first
+	Zone          *time.Location
 }
 
 // Compact builds the request that folds older messages into the running

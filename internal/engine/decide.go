@@ -57,6 +57,14 @@ func decisionText(reason, name string) string {
 		return "Staying quiet — didn't feel like chiming in"
 	case ReasonLLMError:
 		return "Staying quiet — the AI check failed"
+	case ReasonAnswersMe:
+		return "Joining in — they're answering " + name
+	case ReasonAsksEveryone:
+		return "Joining in — a question to everyone"
+	case ReasonSmallReaction:
+		return "Staying quiet — just a short reaction"
+	case ReasonOthersTalking:
+		return "Staying quiet — two others are talking to each other"
 	}
 	return "Staying quiet"
 }
@@ -65,7 +73,12 @@ func decisionText(reason, name string) string {
 // behaviour profile: name mention → reply; @mention of me → reply; @mention of
 // someone else → skip; otherwise ask the LLM (aiJudgement) and/or roll
 // chimeInPercent (a lucky roll overrides an LLM "no").
-func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorProfile, text string, mentions []string) decision {
+//
+// The context system's joinIn (ctxsys) decides the rest: "ai" asks the AI,
+// "rules_first" settles the clear cases in code (joinRules) and asks the AI
+// only when unsure, "rules_only" rolls the chance when unsure. recent is the
+// history before the message, sender its sender's name.
+func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorProfile, cp model.ContextParams, text, sender string, mentions []string, recent []model.Message) decision {
 	if bp.ReplyWhenNameMentioned && guard.ContainsName(text, p.Name) {
 		return decision{true, ReasonNameMentioned, map[string]any{"reason": ReasonNameMentioned}}
 	}
@@ -99,9 +112,20 @@ func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorP
 	if pct >= 100 && !bp.AIJudgement {
 		return decision{true, ReasonAlwaysReply, map[string]any{"reason": ReasonAlwaysReply, "percent": pct}}
 	}
+	if cp.JoinIn == model.JoinRulesFirst || cp.JoinIn == model.JoinRulesOnly {
+		switch v, why := joinRules(text, sender, recent, e.clock.Now()); v {
+		case clearYes:
+			return decision{true, why, map[string]any{"reason": why, "rules": true}}
+		case clearNo:
+			return decision{false, why, map[string]any{"reason": why, "rules": true}}
+		}
+	}
 	lucky := e.rng.Hit(pct)
 	meta := map[string]any{"percent": pct}
-	if !bp.AIJudgement {
+	if cp.JoinIn == model.JoinRulesOnly {
+		meta["rules"] = true
+	}
+	if !bp.AIJudgement || cp.JoinIn == model.JoinRulesOnly {
 		if lucky {
 			meta["reason"] = ReasonChimeIn
 			return decision{true, ReasonChimeIn, meta}
@@ -179,6 +203,12 @@ type genResult struct {
 	Trimmed       bool
 	EmojiRemoved  int
 	EmojiAdded    string
+	// Reply check (replycheck.go): what failed, whether it was written
+	// again or judged by the AI, and Quiet = it kept failing, send nothing.
+	Checks         []string
+	CheckRewritten bool
+	Judged         bool
+	Quiet          bool
 }
 
 // crossUsed names the people whose other-chat context the reply was written
@@ -222,6 +252,15 @@ func (g genResult) meta() map[string]any {
 	}
 	if g.EmojiAdded != "" {
 		m["emojiAdded"] = true
+	}
+	if len(g.Checks) > 0 {
+		m["checks"] = g.Checks
+	}
+	if g.CheckRewritten {
+		m["checkRewritten"] = true
+	}
+	if g.Judged {
+		m["judged"] = true
 	}
 	return m
 }

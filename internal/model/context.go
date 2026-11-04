@@ -12,11 +12,14 @@ type ChatSummary struct {
 	Messages  int       `json:"messages"` // how many messages it covers in all
 	UpdatedAt time.Time `json:"updatedAt"`
 	Edited    bool      `json:"edited"` // you changed the text
+	// Format is "facts" when Text is one fact per line ("Plans: …"), from a
+	// context system with summary facts; "" = prose.
+	Format string `json:"format,omitempty"`
 }
 
 // MaxSummaryText and MaxInstructions cap the editable texts (runes).
 const (
-	MaxSummaryText  = 1500
+	MaxSummaryText  = 4000
 	MaxInstructions = 1000
 )
 
@@ -62,6 +65,9 @@ type ChatContext struct {
 	Instructions string           `json:"instructions"`
 	ContextFrom  *time.Time       `json:"contextFrom"`
 	Compact      CompactStatus    `json:"compact"`
+	// System is the chat's context system and where it comes from.
+	ContextSystem ContextChoice `json:"contextSystem"`
+	SystemName    string        `json:"contextSystemName"`
 }
 
 // CompactStatus is how a chat's long-term memory works right now.

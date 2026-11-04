@@ -48,6 +48,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 | `internal/server` | HTTP API per `docs/API.md` (Go 1.22 mux patterns), SSE `/api/events`, middleware (Host/Origin/Sec-Fetch-Site guard, `X-Doppel-Token`, JSON errors, logging, recovery), static UI with token templating, port scan + live `Rebind`, avatar processing |
 | `internal/engine` | per-chat `Runner`s: reply-cycle state machine (`pipeline.go`: idle → noticing → waiting → thinking → typing, or queued outside active hours), group decisions, guard, prompt, generation, split/quoted delivery, reactions, rate limits, proactive check-ins (`proactive.go`), approvals; "who it answers" gate + streak guard (`people.go`), @tags (`mentions.go`: member directory, prompt options, tag validation/encoding); playground + AI builder; wave 3: chat modes auto/approve/co-pilot (`drafts.go`: three tone drafts), typos (`typo.go`), routine gating + late-reply notes (`routine.go`), scheduled messages (`schedule.go`: per-runner timer, skip-never-late gate, `HandleGroupChange`), serialised background jobs (`jobs.go`: memory extraction `memory.go`, daily recaps `recap.go`, chat briefs `brief.go`), cross-chat context (`cross.go`: sources, selection, prompt section, `guardedReply` leak guard in `goal.go`), decision log (`decisionlog.go`: `Engine.act` → `logActivity`, entries per message id), hand-off pause/resume (`handoff.go`), reveal (`reveal.go`), clone builder (`clone.go`), missions (`goal.go`: `publishGoalReached` → `store.CompleteMission`, `goalMedia`) |
 | `internal/behavior` | reply-behaviour logic (leaf, imports only `model`): presets, ranges/enums + `Validate`/`Clamp`/`Normalize`/`ValidateOverrides`, `Resolve` (app profile → chat overrides, with sources), `NextOpen` (active hours), `Sampler`/`Fixed`, `PlanDelivery`/`PlanBubbles`/`SplitText`/`TypingDuration`/`PickReaction`, typos (`typo.go`), scheduled-message gaps (`schedule.go`: `ScheduleGap` fixed/uniform/normal/poisson, `NextTime`), v1 migration; vibe dials (`dials.go`: `Dials`/`DialTable`, `ApplyDial`, `ReadDials`) and the one-shot v4 relabel of old Busy/Slow presets (`relabel.go`) |
+| `internal/ctxsys` | context systems (leaf: `model` + stdlib): built-ins `classic`/`lean`/`fast` (`ParamsFor`, `Builtin`), knob specs + `Clamp`/`Normalize`, `Resolve` (chat → persona → app), chart `Blocks` catalog, built-in `Chart`, `Layout`, `Infer` (chart → knobs), `Estimates` |
 | `internal/mission` | missions (leaf, `model` + stdlib): ~15 goal templates with blanks (`Templates`, `Fill`, `Detector`/`MediaDetected`) and achievements computed from the history (`Achievements`) |
 | `internal/world` | where a persona lives (leaf): time zone, weekend, part of day, daily routine (`RoutineAt`…) for the prompt's "right now" section and routine gating |
 | `internal/lang` | languages (leaf: `model`): light classifier `Detect` (script, then common words for Latin languages; short/unclear = not sure), conversation language `Main`, `LanguagePrefs` rules (`Effective`, `Ignores`, `Reply`, `Validate`); `All` is mirrored in `web/components/language-controls.js` |
@@ -81,7 +82,7 @@ Windows `%APPDATA%\WhatsappDoppel\`, Linux `$XDG_CONFIG_HOME|~/.config/WhatsappD
 code: the .app starts with cwd `/`, shortcuts and .desktop files with other folders. Contents: `config.json`, `secrets.json`, `personas.json`,
 `chats.json`, `approvals.json`, `runtime.json` (per-chat reply timestamps, last incoming/reply,
 proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `avatars/`, `cache/`,
-`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `ratings/<chatKey>.json` (connection ratings), `nicknames.json`, `calendars.json` + `notes.json` (secretary, 0600), `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
+`history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `ratings/<chatKey>.json` (connection ratings), `nicknames.json`, `calendars.json` + `notes.json` (secretary, 0600), `contextsystems.json` (your context systems), `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
 (only with the Clone consent), `logs/server.log`, `logs/activity-YYYY-MM-DD.jsonl`,
 `instance.json` (`{pid, port, token, startedAt, version}` while serving), `server.lock`.
 
@@ -91,11 +92,11 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
 
 ## Contracts and conventions
 
-- The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx`, `lang` only —
+- The server depends on `contract.*` interfaces, `config`, `store`, `events`, `model`, `behavior`, `goals`, `crossctx`, `lang`, `ctxsys` only —
   never on `engine`/`wa`/`llm` directly. `internal/app` is the only place that imports everything.
-- Import rules: `model` has no deps; `behavior`, `mention`, `mission`, `world`, `memory`, `handoff`, `lang`, `calendar` import only `model`
+- Import rules: `model` has no deps; `behavior`, `ctxsys`, `mention`, `mission`, `world`, `memory`, `handoff`, `lang`, `calendar` import only `model`
   (+ stdlib); `crossctx` imports `model`+`memory`+`handoff`; `goals` imports `model`+`persona`; `platform` imports only stdlib + `x/sys`; `config` imports
-  `behavior`+`crossctx`+`model`+`platform`; `store` imports `config`+`behavior`+`model`(+`world`); `notify` imports
+  `behavior`+`crossctx`+`model`+`platform`; `store` imports `config`+`behavior`+`ctxsys`+`model`(+`world`); `notify` imports
   `config`+`model`+`platform`. OS-specific code goes only in `platform` (build-tagged files), never
   `runtime.GOOS` switches elsewhere except for pure decisions (notify backends, tests). Prompt text for every feature lives in
   `internal/prompt/<feature>.go` so the goldens stay in one package.
@@ -190,6 +191,14 @@ from: `--legacy-db`, `$DOPPEL_LEGACY_DB`, `./bot.db`, `<devProjectDir>/bot.db`,
   chat only; delays are drawn with `behavior.Delay` along the profile's `timingCurve`.
 - Connection ratings (`engine/ratings.go`, `prompt/rating.go`): own daily timer at `recap.time` (independent of
   `recap.enabled`), groups with 20+ messages in 24 h, one JSON call through the job slot; `ratings/<chatKey>.json`.
+- Context systems (`internal/ctxsys`, Context page): a chat runs `ChatAssignment.contextSystem` → `Persona.contextSystem` →
+  `settings.context.system` → Classic (`engine.systemOf`/`paramsOf`). Classic's knobs must keep the old behaviour exactly.
+  Knobs steer: `decide` (`joinIn`; `joinRules` in `engine/ctxsys.go`), `planAhead` (`planning`/`planDue`, `mergedCheck`,
+  `nudgeEvery` → `GoalTurn.Rest`), `checkedReply` (`replycheck.go`: code checks, judge, rewrite, `genResult.Quiet` →
+  `decision.skip reply_check`), `memoryTick` → `digestTick` (`digest.go`: one call, each part saved by the job's own
+  `saveMemories`/`saveBrief`/`saveNotes`), `compactChat` (facts: `prompt.CompactFacts`/`ApplyFacts`, `ChatSummary.Format`),
+  `shapePrompt` (card via `Persona.Card`/`queueCard`, budgets). Charts are pictures: only `params` run. The sandbox
+  (`replay.go`) counts calls with `llm.Meter` (context-carried; `Registry.Resolve` wraps providers) and never writes state.
 - Personal secretary (`model.SecretaryConfig` on the persona; `engine/secretary.go`, `prompt/secretary.go`): its job is a
   prompt part right after the character; meeting help gets `OWNER'S FREE TIMES` (meeting hours minus calendar busy times,
   never titles) inside the chat context; `secretaryTick` → job `secnote:<key>` (45 s, 5 s for urgent words/VIPs) writes

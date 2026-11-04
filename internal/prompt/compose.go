@@ -129,6 +129,10 @@ type Options struct {
 	// summary of older messages ("" = none).
 	Instructions string
 	Summary      string
+	SummaryFacts bool // Summary is one fact per line (a context system with summary facts)
+	// Card is the persona card used instead of the full persona text ("" =
+	// the full text; a context system with card-style prompts).
+	Card string
 	// Edits replace editable parts of the prompt for this chat (key → text).
 	Edits map[string]string
 
@@ -175,12 +179,16 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 		}
 		out = append(out, s)
 	}
-	add("character", "Character", "", Identity(p))
+	character := Identity(p)
+	if o.Card != "" && strings.TrimSpace(p.AdvancedPrompt) == "" {
+		character = CardIdentity(p, o.Card)
+	}
+	add("character", "Character", "", character)
 	add("secretary", "Secretary's job", "", SecretarySection(p.Secretary))
 	add("safety", "Safety rules", "", AntiJailbreakRules)
 	ctx := []model.PromptSection{
 		{Key: "people", Label: "People and your notes", Text: PeopleSection(o, isGroup)},
-		{Key: "summary", Label: "Summary of older messages", Text: SummarySection(o.Summary)},
+		{Key: "summary", Label: "Summary of older messages", Text: SummarySection(o.Summary, o.SummaryFacts)},
 		{Key: "free", Label: "Free times for meetings", Text: freeTimes(p, o)},
 		{Key: "memories", Label: "Memories", Text: MemorySection(o.Memories, isGroup)},
 		{Key: "cross", Label: "From its other chats", Text: CrossSection(o.Cross, o.CrossTurn)},

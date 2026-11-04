@@ -125,7 +125,7 @@ func distinctSpeakers(hist []model.Message, n int) int {
 func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile, d *mention.Directory, hist []model.Message) (prompt.Options, *crossUse) {
 	o := prompt.Options{LengthBias: bp.LengthBias, ReplyLanguage: lang.Name(e.replyLanguage(c, hist)), Instructions: c.Instructions, Edits: c.PromptEdits}
 	if sm, ok := e.store.Summary(c.Key); ok {
-		o.Summary = sm.Text // older messages (context.go)
+		o.Summary, o.SummaryFacts = sm.Text, sm.Format == model.SummaryFacts // older messages (context.go)
 	}
 	if _, s := e.secretaryOf(c); s != nil && s.Meetings {
 		o.FreeTimes, o.FreeKnown = e.freeTimes(s) // secretary.go
@@ -339,6 +339,9 @@ func (e *Engine) previewOptions(c model.ChatAssignment) prompt.Options {
 	}
 	hist := e.chatHistory(e.runner(c.Key), c)
 	o, _ := e.promptOptions(c, bp, e.directory(e.ctx, c, hist), hist)
+	if p, ok := e.store.Persona(c.PersonaID); ok {
+		e.shapePrompt(&o, e.paramsOf(c), p, hist)
+	}
 	return o
 }
 

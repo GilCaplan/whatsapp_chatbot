@@ -22,6 +22,9 @@ type GoalTurn struct {
 	Retry bool
 	// Off drops the agenda for this reply (last resort after leaky drafts).
 	Off bool
+	// Rest: no nudge this reply (a context system's nudge cap); the agenda
+	// stays known so it doesn't contradict it.
+	Rest bool
 }
 
 // GoalSection renders the goal part of the system prompt (replaces the old
@@ -66,7 +69,9 @@ func GoalSection(g goals.Config, t GoalTurn) string {
 	if t.Reached {
 		b.WriteString("\n(It already happened once. Keep it light — no need to push.)")
 	}
-	if p := strings.TrimSpace(t.Plan); p != "" {
+	if t.Rest && !t.Retry {
+		b.WriteString("\n\nTHIS MESSAGE: no step towards the agenda this time — just reply naturally to what was said.")
+	} else if p := strings.TrimSpace(t.Plan); p != "" {
 		b.WriteString("\n\nYOUR NEXT MOVE (private note to yourself — do this in this reply, in your own words and style, never quote it): " + p)
 	}
 	if t.Retry {

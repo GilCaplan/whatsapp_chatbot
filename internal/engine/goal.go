@@ -83,9 +83,18 @@ type goalPlan struct {
 // ask for it. st is the current status (read-only); the caller persists the
 // result with applyGoalPlan. Failures are silent: the reply goes ahead
 // without a plan.
-func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Config, st model.GoalStatus, hist []model.Message, isGroup, opening bool) goalPlan {
-	gp := goalPlan{cfg: cfg, status: st, turn: prompt.GoalTurn{Reached: st.Reached}}
-	if !cfg.PlanAhead || strings.TrimSpace(cfg.Text) == "" || cfg.Relaxed(gp.turn.Reached) {
+//
+// The context system decides how often (cp.Planning): before every reply,
+// every PlanEvery replies or after TopicShift messages (a new topic), or
+// never; MergedCheck leaves "has it happened?" to the plan call itself. The
+// nudge cap (NudgeEvery) rests the agenda in the replies in between.
+func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Config, cp model.ContextParams, st model.GoalStatus, hist []model.Message, isGroup, opening bool) (gp goalPlan) {
+	gp = goalPlan{cfg: cfg, status: st, turn: prompt.GoalTurn{Reached: st.Reached}}
+	if strings.TrimSpace(cfg.Text) == "" || cfg.Relaxed(gp.turn.Reached) {
+		return gp
+	}
+	defer func() { gp.turn.Rest = !gp.planned && !opening && restTurn(cp, st, hist) }()
+	if !cfg.PlanAhead || cp.Planning == model.PlanOff || (cp.Planning == model.PlanPeriodic && !opening && !planDue(cp, st, hist)) {
 		return gp
 	}
 	prov, mdl, err := e.llm.Resolve(p.LLM)
@@ -111,7 +120,7 @@ func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Confi
 		checkYes   bool
 		checkQuote string
 	)
-	if !isSay && !st.Reached && theirs {
+	if !isSay && !st.Reached && theirs && !cp.MergedCheck {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -177,6 +186,39 @@ func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Confi
 	return gp
 }
 
+// planDue: a periodic plan is due after PlanEvery own replies or TopicShift
+// messages since the last plan (or when there is none yet).
+func planDue(cp model.ContextParams, st model.GoalStatus, hist []model.Message) bool {
+	if st.LastPlanAt == nil {
+		return true
+	}
+	replies, msgs := 0, 0
+	for _, m := range hist {
+		if m.TS.After(*st.LastPlanAt) {
+			msgs++
+			if m.Speaker == "me" && m.FromBot {
+				replies++
+			}
+		}
+	}
+	return replies >= cp.PlanEvery || msgs >= cp.TopicShift
+}
+
+// restTurn: with a nudge cap, only every NudgeEvery-th reply since the goal
+// was set may step towards it.
+func restTurn(cp model.ContextParams, st model.GoalStatus, hist []model.Message) bool {
+	if cp.NudgeEvery <= 1 {
+		return false
+	}
+	n := 0
+	for _, m := range hist {
+		if m.Speaker == "me" && m.FromBot && (m.TS.IsZero() || !m.TS.Before(st.Since)) {
+			n++
+		}
+	}
+	return n%cp.NudgeEvery != 0
+}
+
 func evidenceLine(name, text string) string {
 	text = guard.Truncate(strings.Join(strings.Fields(text), " "), 160)
 	if name == "" {
@@ -190,7 +232,7 @@ func evidenceLine(name, text string) string {
 func (e *Engine) chatGoalTurn(ctx context.Context, c model.ChatAssignment, p model.Persona, hist []model.Message, isGroup, opening bool) (goals.Config, prompt.GoalTurn) {
 	cfg := goals.Resolve(p, c)
 	st := e.goalStatus(c.Key, cfg.Text)
-	gp := e.planAhead(ctx, p, cfg, st, hist, isGroup, opening)
+	gp := e.planAhead(ctx, p, cfg, e.paramsOf(c), st, hist, isGroup, opening)
 	if ctx.Err() != nil {
 		return cfg, gp.turn
 	}
@@ -419,7 +461,7 @@ func (e *Engine) playgroundGoalTurn(ctx context.Context, p model.Persona, chat m
 	if sw, ok := goals.ParseSayWord(cfg.Text); ok && !st.Reached && lastText != "" && goals.SaysWord(lastText, sw.Word) {
 		st.Reached, st.ReachedAt, st.How, st.Evidence = true, &now, model.GoalHowSaidWord, evidenceLine("", lastText)
 	}
-	gp := e.planAhead(ctx, p, cfg, *st, hist, isGroup, opening)
+	gp := e.planAhead(ctx, p, cfg, e.appParams(), *st, hist, isGroup, opening)
 	if gp.planned || gp.reachedNow {
 		*st = gp.status
 	}

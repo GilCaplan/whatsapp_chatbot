@@ -26,6 +26,7 @@ import Activity from './pages/activity.js';
 import Approvals from './pages/approvals.js';
 import Settings from './pages/settings.js';
 import Missions from './pages/missions.js';
+import Context from './pages/context.js';
 import Guide from './pages/guide.js';
 
 const ROUTES = {
@@ -39,6 +40,7 @@ const ROUTES = {
   approvals: Approvals,
   settings: Settings,
   missions: Missions,
+  context: Context,
   guide: Guide,
 };
 
@@ -47,6 +49,7 @@ const NAV = [
   { name: 'chats', label: 'Chats', icon: 'chats' },
   { name: 'personas', label: 'Personas', icon: 'personas', also: ['persona'] },
   { name: 'missions', label: 'Missions', icon: 'target' },
+  { name: 'context', label: 'Context', icon: 'flow' },
   { name: 'playground', label: 'Playground', icon: 'playground' },
   { name: 'activity', label: 'Activity', icon: 'activity' },
   { name: 'approvals', label: 'Approvals', icon: 'approvals', badge: () => store.state.approvals.length },

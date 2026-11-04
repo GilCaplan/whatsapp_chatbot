@@ -30,6 +30,7 @@ const (
 	TypeNotesChanged     = "notes.changed"    // the secretary's messages for you
 	TypeRecapsChanged    = "recaps.changed"   // data: {}
 	TypeMissionsChanged  = "missions.changed" // data: {}
+	TypeContextChanged   = "context.changed"  // context systems or a replay changed; data: {replayId?}
 )
 
 type Event struct {

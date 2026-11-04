@@ -57,8 +57,14 @@ type Persona struct {
 	World World `json:"world"`
 	// Secretary makes it the owner's personal secretary (secretary.go); nil = an ordinary persona.
 	Secretary *SecretaryConfig `json:"secretary,omitempty"`
-	CreatedAt time.Time        `json:"createdAt"`
-	UpdatedAt time.Time        `json:"updatedAt"`
+	// ContextSystem is this persona's context system ("" = the app's; see
+	// ctxsys); Card is its short persona card for card-style prompts ("" =
+	// not made yet), CardAt when it was made or edited.
+	ContextSystem string     `json:"contextSystem"`
+	Card          string     `json:"card"`
+	CardAt        *time.Time `json:"cardAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
 // ─── Chats ───────────────────────────────────────────────────
@@ -124,6 +130,9 @@ type ChatAssignment struct {
 	// PromptEdits replace parts of the system prompt in this chat only
 	// (key → text, keys in EditablePromptSections); the persona is unchanged.
 	PromptEdits map[string]string `json:"promptEdits,omitempty"`
+	// ContextSystem is this chat's context system ("" = the persona's, else
+	// the app's; see ctxsys).
+	ContextSystem string `json:"contextSystem"`
 	// RevealedAt is when you told this chat it was talking to a persona.
 	RevealedAt     *time.Time `json:"revealedAt"`
 	LastActivityAt *time.Time `json:"lastActivityAt"`

@@ -52,7 +52,7 @@ func (s *Server) handlePutSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	text := strings.TrimSpace(body.Text)
 	if text == "" || utf8.RuneCountInString(text) > model.MaxSummaryText {
-		writeError(w, http.StatusBadRequest, "invalid_summary", "Write the summary in at most 1500 characters (or forget it)")
+		writeError(w, http.StatusBadRequest, "invalid_summary", "Write the summary in at most 4000 characters (or forget it)")
 		return
 	}
 	sm, _ := s.d.Store.Summary(c.Key)

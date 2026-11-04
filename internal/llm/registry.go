@@ -111,7 +111,7 @@ func (r *Registry) Resolve(choice *model.LLMChoice) (Provider, string, error) {
 	if mdl == "" {
 		mdl = r.defaultModel(name)
 	}
-	return p, mdl, nil
+	return metered{p}, mdl, nil
 }
 
 func (r *Registry) defaultModel(provider string) string {

@@ -126,6 +126,26 @@ func fakeDefault(req Request, n int) string {
 	switch {
 	case strings.Contains(all, "YES or NO"):
 		return "YES"
+	case req.JSON && strings.Contains(req.System, "background jobs at once"):
+		return fakeDigest(req)
+	case req.JSON && strings.Contains(req.System, "You check a WhatsApp reply"):
+		// Reply check judge (prompt.Judge): everything is fine.
+		return `{"ok":true,"why":""}`
+	case req.JSON && strings.Contains(req.System, "keep a list of facts"):
+		// Summary facts (prompt.CompactFacts): one new fact per fold.
+		return `{"add":[{"kind":"Other","text":"They caught up about the week"}],"update":[],"remove":[]}`
+	case req.JSON && strings.Contains(req.System, "draw flowcharts"):
+		// A chart from your words (prompt.ChartFromText).
+		return `{"name":"My quick system","description":"Rules decide, one reply call, a check in code.","nodes":[` +
+			`{"id":"in","block":"message_in","label":"Message arrives"},{"id":"rules","block":"join_rules","label":"Rules: is it for me?"},` +
+			`{"id":"reply","block":"reply_ai","label":"AI: write the reply"},{"id":"check","block":"check_code","label":"Reply check"},` +
+			`{"id":"send","block":"send","label":"Send"},{"id":"quiet","block":"quiet","label":"Stay quiet"},{"id":"card","block":"persona_card","label":"Persona card"}],` +
+			`"edges":[{"from":"in","to":"rules","label":"","dashed":false},{"from":"rules","to":"reply","label":"yes","dashed":false},` +
+			`{"from":"rules","to":"quiet","label":"no","dashed":false},{"from":"reply","to":"check","label":"","dashed":false},` +
+			`{"from":"check","to":"send","label":"pass","dashed":false},{"from":"card","to":"reply","label":"","dashed":true}]}`
+	case strings.Contains(req.System, "compact persona card"):
+		// Persona card (prompt.Card).
+		return "You are a warm, curious friend. Short casual messages, mostly lowercase, a little sarcastic. Ask follow-up questions; never lecture."
 	case req.JSON && strings.Contains(req.System, "CO-PILOT"):
 		// Co-pilot drafts (prompt.Drafts).
 		b, _ := json.Marshal(map[string]any{"drafts": []map[string]string{
@@ -189,6 +209,27 @@ func (f *Fake) ListModels(context.Context) ([]model.ModelInfo, error) {
 
 func (f *Fake) Ping(context.Context) error { return nil }
 
+// fakeDigest answers a digest (prompt.Digest) with each job asked for.
+func fakeDigest(req Request) string {
+	out := map[string]any{}
+	if strings.Contains(req.System, `JOB "memories"`) {
+		var m map[string]any
+		_ = json.Unmarshal([]byte(fakeMemories(req)), &m)
+		out["memories"] = m["memories"]
+		if out["memories"] == nil {
+			out["memories"] = []any{}
+		}
+	}
+	if strings.Contains(req.System, `JOB "notes"`) {
+		out["notes"] = []any{}
+	}
+	if strings.Contains(req.System, `JOB "brief"`) {
+		out["brief"] = map[string]any{"topics": []string{"weekend plans"}, "commitments": []string{}, "tone": "warm", "people": []any{}, "sensitive": []string{}}
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
+}
+
 // fakeMemories answers a memory-extraction request with one memory about
 // the last line someone other than the persona wrote ("(not noted)" marks
 // the persona's own lines).
@@ -208,8 +249,14 @@ func fakeMemories(req Request) string {
 		if _, after, ok := strings.Cut(body, "New messages (oldest first):\n"); ok {
 			lines := strings.Split(after, "\n")
 			for i := len(lines) - 1; i >= 0; i-- {
-				who, text, ok := strings.Cut(lines[i], ": ")
-				if !ok || strings.Contains(who, "(not noted)") || len(strings.Fields(text)) < 3 {
+				line := lines[i]
+				if strings.HasPrefix(line, "[") { // "[Mon 15:04] Name: text" (prompt.Digest)
+					if _, rest, ok := strings.Cut(line, "] "); ok {
+						line = rest
+					}
+				}
+				who, text, ok := strings.Cut(line, ": ")
+				if !ok || strings.Contains(who, "(not noted)") || strings.HasPrefix(who, "Answer with") || len(strings.Fields(text)) < 3 {
 					continue
 				}
 				words := strings.Fields(text)

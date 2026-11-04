@@ -52,6 +52,9 @@ type RunnerState struct {
 
 	// NoteCursor: the secretary has taken notes from the messages up to here.
 	NoteCursor time.Time `json:"noteCursor"`
+	// DigestPending counts messages from them since the last digest (a
+	// context system with one digest call; engine/digest.go).
+	DigestPending int `json:"digestPending,omitempty"`
 }
 
 // TypoMark is one typo the persona made in a chat.

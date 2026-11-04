@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -117,8 +118,11 @@ func (e *Engine) secretaryTick(c model.ChatAssignment, in model.Incoming, text s
 		return
 	}
 	d := noteDelay
-	if s.FlagUrgent && (hasUrgentWord(text) || isVIP(s, in.PushName, in.SenderJID)) {
+	switch {
+	case s.FlagUrgent && (hasUrgentWord(text) || isVIP(s, in.PushName, in.SenderJID)):
 		d = noteDelayUrgent
+	case e.paramsOf(c).Background == model.BackgroundDigest:
+		return // the digest takes the notes (digest.go); urgent ones still go at once
 	}
 	key := c.Key
 	e.schedule(noteJob(key), d, func(ctx context.Context) {
@@ -175,43 +179,16 @@ func (e *Engine) takeNotes(ctx context.Context, key string) error {
 	if s == nil {
 		return nil
 	}
-	all, err := e.store.History(key, 0)
-	if err != nil {
+	nb, err := e.notesBatch(c)
+	if err != nil || nb.done {
 		return err
-	}
-	cursor := e.store.RunnerState(key).NoteCursor
-	start := len(all)
-	for i, m := range all {
-		if m.TS.After(cursor) {
-			start = i
-			break
-		}
-	}
-	fresh := all[start:]
-	theirs := false
-	for _, m := range fresh {
-		theirs = theirs || m.Speaker == "them"
-	}
-	if len(fresh) == 0 {
-		return nil
-	}
-	last := fresh[len(fresh)-1].TS
-	if !theirs {
-		e.updateState(key, func(st *store.RunnerState) { st.NoteCursor = last })
-		return nil
-	}
-	var open []string
-	for _, n := range e.store.SecretaryNotes() {
-		if n.ChatKey == key && !n.Done && len(open) < 10 {
-			open = append(open, n.From+": "+n.Text)
-		}
 	}
 	prov, mdl, err := e.llm.Resolve(p.LLM)
 	if err != nil {
 		return err
 	}
 	req := prompt.Notes(prompt.NotesInput{Owner: s.OwnerName, Assistant: p.Name, ChatName: c.Name, IsGroup: isGroupChat(c),
-		Messages: all[max(0, start-noteContext):], Open: open, Zone: time.Local, Now: e.clock.Now()})
+		Messages: nb.read, Open: nb.open, Zone: time.Local, Now: e.clock.Now()})
 	req.Model = mdl
 	cctx, cancel := context.WithTimeout(ctx, noteTimeout)
 	resp, err := prov.Chat(cctx, req)
@@ -223,12 +200,62 @@ func (e *Engine) takeNotes(ctx context.Context, key string) error {
 	if err != nil {
 		return errors.New("the model didn't write readable notes")
 	}
-	e.updateState(key, func(st *store.RunnerState) { st.NoteCursor = last })
+	return e.saveNotes(c, p, s, nb, taken)
+}
+
+// noteBatch is what the next note-taking reads.
+type noteBatch struct {
+	fresh []model.Message // since the note cursor
+	read  []model.Message // fresh plus a little context
+	open  []string        // notes already taken in this chat
+	last  time.Time
+	done  bool // nothing from them: the cursor already moved on
+}
+
+func (e *Engine) notesBatch(c model.ChatAssignment) (noteBatch, error) {
+	var nb noteBatch
+	all, err := e.store.History(c.Key, 0)
+	if err != nil {
+		return nb, err
+	}
+	cursor := e.store.RunnerState(c.Key).NoteCursor
+	start := len(all)
+	for i, m := range all {
+		if m.TS.After(cursor) {
+			start = i
+			break
+		}
+	}
+	nb.fresh = all[start:]
+	if len(nb.fresh) == 0 {
+		nb.done = true
+		return nb, nil
+	}
+	nb.last = nb.fresh[len(nb.fresh)-1].TS
+	if !slices.ContainsFunc(nb.fresh, func(m model.Message) bool { return m.Speaker == "them" }) {
+		e.updateState(c.Key, func(st *store.RunnerState) { st.NoteCursor = nb.last })
+		nb.done = true
+		return nb, nil
+	}
+	nb.read = all[max(0, start-noteContext):]
+	for _, n := range e.store.SecretaryNotes() {
+		if n.ChatKey == c.Key && !n.Done && len(nb.open) < 10 {
+			nb.open = append(nb.open, n.From+": "+n.Text)
+		}
+	}
+	return nb, nil
+}
+
+// saveNotes stores the notes taken from a batch, moves the cursor and
+// tells the owner (also the digest's part, digest.go).
+func (e *Engine) saveNotes(c model.ChatAssignment, p model.Persona, s *model.SecretaryConfig, nb noteBatch, taken []prompt.TakenNote) error {
+	key := c.Key
+	e.updateState(key, func(st *store.RunnerState) { st.NoteCursor = nb.last })
 	if len(taken) == 0 {
 		return nil
 	}
 	senders := map[string]string{} // display name → JID, for VIPs
-	for _, m := range fresh {
+	for _, m := range nb.fresh {
 		if m.Speaker == "them" && m.Name != "" {
 			senders[strings.ToLower(m.Name)] = m.SenderJID
 		}

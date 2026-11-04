@@ -685,6 +685,48 @@ steps:[{at, type (activity type, or "decision"), text}]}`. One reply can answer 
 reply). `pending` entries whose cycle was dropped (restart) stay pending; the web app shows them as "No reply"
 after 30 minutes.
 
+## Context systems
+
+How a chat decides when to use the AI and what it reads (`internal/ctxsys`). Three built-in
+systems — `classic` (how replies always worked), `lean`, `fast` — are locked; yours (`cs-…`) are
+copies you can tune. A chat runs `ChatAssignment.contextSystem` → `Persona.contextSystem` →
+`settings.context.system` → `classic` (unknown ids fall through). Only `params` change how chats
+run; `chart` is a picture (built-in charts are drawn from the code).
+
+`ContextSystem`: `{id, name, description, base: classic|lean|fast, builtIn, params, chart, createdAt, updatedAt}`.
+`params`: `joinIn` (ai|rules_first|rules_only), `replyCheck` (off|code|code_judge|judge), `checkRetries`,
+`repeatWindow`, `echoWords`, `planning` (every_reply|periodic|off), `planEvery`, `topicShift`, `mergedCheck`,
+`nudgeEvery`, `background` (separate|digest), `digestEvery`, `promptStyle` (full|card), `cardChars`,
+`historyMax`/`memoryLines`/`summaryChars` (0 = no limit), `summary` (prose|facts). Ranges: catalog `params`.
+`chart`: `{nodes:[{id, block, label, note, x, y}], edges:[{from, to, label, dashed}]}` (≤ 80 nodes, 160 edges).
+
+| Method | Path | |
+|---|---|---|
+| GET | `/api/context/catalog` | `{blocks:[ChartBlock{id,label,stage,kind,description,params}], stages, params:[ParamSpec], bases, nodeW, nodeH}` |
+| GET | `/api/context/systems` | `{items:[ContextSystem + {estimate:{perAnswer, background}, chats, personas}], appDefault}` |
+| POST | `/api/context/systems` | `{copyFrom, name?}` copies one, else the body is the new system → 201 |
+| PUT | `/api/context/systems/{id}` | replace one of yours (`403 built_in` for built-ins) |
+| DELETE | `/api/context/systems/{id}` | chats/personas using it inherit again; an app default using it → Classic |
+| POST | `/api/context/infer` | `{chart, params, base}` → `{params, changes:[text]}` (settings read off the blocks) |
+| POST | `/api/context/layout` | `{chart}` → the chart laid out again |
+| POST | `/api/context/draft` | `{text, base}` → `{system (unsaved), changes}`: the AI draws a chart from the blocks |
+| GET | `/api/context/instances` | `{items:[{chatKey, name, kind, enabled, personaId, personaName, chatSystem, personaSystem, choice:{systemId, source: chat|persona|app}, systemName}]}` |
+| PUT | `/api/personas/{id}/context` | `{systemId}` ("" = the app's) |
+| POST | `/api/personas/{id}/card` | `{chars?}` writes the persona card now → Persona |
+| PUT | `/api/personas/{id}/card` | `{card}` your own text ("" = written again when needed) |
+| POST | `/api/context/replay` | `{chatKey, systems:[1–3 ids], messages}` → 202 `Replay` (runs in the background) |
+| GET | `/api/context/replay/{id}` | `Replay {id, chatKey, chatName, status: running|done|failed|cancelled, done, total, results:[{systemId, systemName, calls, callsByStep, promptChars, totalMs, replied, skipped, background, steps:[{from, text, real, decision, why, reply, calls, ms, checks, plan}]}]}` |
+| DELETE | `/api/context/replay/{id}` | stop a run |
+
+`PATCH /api/chats/{key}` takes `contextSystem` ("" = inherit). `PUT /api/personas/{id}` keeps
+`contextSystem`/`card` (their own endpoints) and clears the card when the character changed.
+`GET /api/chats/{key}/context` adds `contextSystem {systemId, source}` and `contextSystemName`; a
+summary with `format: "facts"` is one fact per line (`Kind: text`). SSE `context.changed`
+(`{}` or `{replayId}`). Activity: a reply that keeps failing the check is `decision.skip` with
+`meta.reason: "reply_check"`, `meta.checks`; replies carry `meta.checks/checkRewritten/judged`;
+rule-based join-ins have `meta.rules: true` and reasons `answers_me`, `asks_everyone`,
+`small_reaction`, `others_talking`.
+
 ## Activity
 
 | Method & path | Body | Response |

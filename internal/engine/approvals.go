@@ -274,17 +274,18 @@ func (e *Engine) Regenerate(ctx context.Context, id string) (model.PendingReply,
 	bp := e.effective(c).Profile
 	dir := e.directory(ctx, c, hist)
 	opts, cross := e.promptOptions(c, bp, dir, hist)
+	ph := e.shapePrompt(&opts, e.paramsOf(c), per, hist) // ctxsys.go
 	if p.Opener {
 		opts.Opener = e.openerFor(prompt.Opener{Manual: true}, hist) // regenerate an opener as an opener
 	}
 	gcfg, gturn := e.chatGoalTurn(ctx, c, per, hist, c.Kind == "group", p.Opener)
 	copilot := c.Mode == model.ChatModeCopilot && !p.Opener // "More ideas" in co-pilot mode
-	res, err := e.replyFor(ctx, copilot, per, bp, hist, false, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
+	res, err := e.replyFor(ctx, copilot, per, bp, ph, false, gcfg, gturn, cross, func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
 		opts.Goal, opts.CrossTurn = t, x
 		if p.Opener {
-			return prompt.Initiate(per, c, hist, c.Kind == "group", opts)
+			return prompt.Initiate(per, c, ph, c.Kind == "group", opts)
 		}
-		return prompt.Compose(per, c, hist, c.Kind == "group", opts)
+		return prompt.Compose(per, c, ph, c.Kind == "group", opts)
 	})
 	if err != nil {
 		return model.PendingReply{}, err

@@ -123,6 +123,22 @@ type Engine interface {
 	CrossView(ctx context.Context, chatKey string) (model.CrossView, error)
 	// RefreshBrief writes a chat's brief (what other chats may use) now.
 	RefreshBrief(ctx context.Context, chatKey string) (model.Brief, error)
+
+	// ── context systems (ctxsys) ──
+
+	// MakeCard (re)writes a persona's short card for card-style prompts
+	// (chars 0 = the app system's card size).
+	MakeCard(ctx context.Context, personaID string, chars int) (model.Persona, error)
+	// DraftSystem drafts an unsaved context system from a description (the
+	// AI draws the chart, code reads the knobs off it); it also returns what
+	// the chart changed against base, in plain English.
+	DraftSystem(ctx context.Context, text, base string) (model.ContextSystem, []string, error)
+	// StartReplay answers a chat's recent messages again with some systems,
+	// in the background (nothing is sent); Replay reads a run, CancelReplay
+	// stops one.
+	StartReplay(req model.ReplayRequest) (model.Replay, error)
+	Replay(id string) (model.Replay, bool)
+	CancelReplay(id string) bool
 }
 
 // LLM is the provider registry facade used by the server.

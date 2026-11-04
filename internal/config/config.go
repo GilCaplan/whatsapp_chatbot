@@ -130,6 +130,11 @@ type MemorySettings struct {
 	Compact CompactSettings `json:"compact"` // long-term memory (engine/context.go)
 }
 
+// ContextSettings: the app default context system ("" = ctxsys.Default).
+type ContextSettings struct {
+	System string `json:"system"`
+}
+
 // CompactSettings: long-term memory. A chat's persona reads every message
 // since the last summary word for word (at least Keep); once Every more have
 // come in, all but the last Keep are folded into the chat's summary. A fast
@@ -217,6 +222,10 @@ type Settings struct {
 	Memory        MemorySettings       `json:"memory"`
 	Recap         RecapSettings        `json:"recap"`
 	SelfClone     CloneSettings        `json:"clone"` // "Clone yourself" (Settings.Clone is the deep copy)
+
+	// Context is the app's context system (ctxsys; per persona and per chat
+	// too). Zero = Classic.
+	Context ContextSettings `json:"context"`
 
 	// Deprecated v1 blocks; nil after migration.
 	Replies   *LegacyReplySettings    `json:"replies,omitempty"`

@@ -216,6 +216,8 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		ContextFrom  json.RawMessage    `json:"contextFrom"`
 		CompactEvery *int               `json:"compactEvery"`
 		PromptEdits  map[string]*string `json:"promptEdits"`
+		// ContextSystem: "" = inherit (the persona's, else the app's).
+		ContextSystem *string `json:"contextSystem"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -223,6 +225,12 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 	if body.PersonaID != nil {
 		if _, ok := s.d.Store.Persona(*body.PersonaID); !ok {
 			writeError(w, http.StatusBadRequest, "unknown_persona", "Unknown persona")
+			return
+		}
+	}
+	if body.ContextSystem != nil && *body.ContextSystem != "" {
+		if _, ok := s.d.Store.ContextSystem(*body.ContextSystem); !ok {
+			writeError(w, http.StatusBadRequest, "unknown_system", "Unknown context system")
 			return
 		}
 	}
@@ -424,6 +432,9 @@ func (s *Server) handlePatchChat(w http.ResponseWriter, r *http.Request) {
 		}
 		if body.CompactEvery != nil {
 			c.CompactEvery = *body.CompactEvery
+		}
+		if body.ContextSystem != nil {
+			c.ContextSystem = *body.ContextSystem
 		}
 		if len(body.PromptEdits) > 0 {
 			edits := maps.Clone(c.PromptEdits) // a fresh map: snapshots may be read elsewhere
