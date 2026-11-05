@@ -263,7 +263,7 @@ func (e *Engine) replayStep(ctx context.Context, c model.ChatAssignment, cp mode
 	}
 	if isGroup {
 		meter.Step("join")
-		d := e.decide(mctx, p, bp, cp, msg.Text, msg.Name, nil, hist, at)
+		d := e.decide(mctx, p, bp, cp, msg.Text, msg.Name, nil, hist, at, false)
 		out.Why = decisionText(d.Reason, p.Name)
 		if !d.Reply {
 			out.Decision = "skip"
@@ -319,6 +319,10 @@ func (e *Engine) replayStep(ctx context.Context, c model.ChatAssignment, cp mode
 				return r
 			})
 		})
+		out.Checks = res.Checks
+	}
+	if !res.Quiet {
+		res = e.finishReply(mctx, p, e.replyLanguage(c, full), res, nil)
 		out.Checks = res.Checks
 	}
 	if res.Quiet {

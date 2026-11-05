@@ -71,11 +71,20 @@ How each feature is wired (read the one you are changing). Shared rules stay in 
 - Languages are not behaviour (presets/dials never touch them): `settings.behavior.languages.{private,group}` →
   `ChatAssignment.language` (whole block) → `PersonPrefs.language` (reply language only); `engine/language.go` gates
   foreign messages and sets `prompt.Options.ReplyLanguage` (`REPLY LANGUAGE`, after STAY YOURSELF so it wins over the
-  persona's own Language line). A language chosen in the settings (chat or person, `lang.Fixed`) is a hard rule
-  (`Options.LanguageFixed`): it replaces the profile's Language line (also added to a persona card), `FixedLanguageSection`
-  comes last in the system prompt, `LanguageCue` repeats it on the last turn, and `replycheck.go` checks it at any length
-  and even when the context system's reply checks are off (a draft that fails twice stays quiet); Regenerate checks it
-  too. The reply language always counts as spoken (`lang.Effective`).
+  persona's own Language line). The reply language never reaches a normal prompt: `Options.WriteEnglish` ends every system prompt with
+  `prompt.EnglishRules` (who it is, respond in English) and `EnglishCue` repeats it on the last turn. `engine/finish.go`
+  then runs in code on every path (pipeline, Regenerate, replay, playground, openers, co-pilot drafts): content filter →
+  persona check → translation (`internal/runtime/translate`, or `prompt.Translate` when the add-on or pack isn't ready,
+  language-checked) → filter again. A failure is rewritten once, then the reply stays quiet. A reply already in the
+  target is left alone. `Message.Source` keeps the English, and `visible()` shows it to the model (`MsgKindPart` hides
+  later bubbles). A task's message carries checked times, so it keeps `ReplyLanguage`/`LanguageFixed` and is not translated.
+- Translator add-on (`internal/runtime/translate`): the app stays pure Go; `server.py` (embedded, run from
+  `<data>/translator`) is a JSON-lines child process with Opus-MT models (CTranslate2, Argos packs per language) and
+  spaCy. Links, tags, numbers, emoji and proper nouns (POS PROPN, not dates) become `XXn` tokens the model copies into
+  place, and code restores them, so placement comes from the translation itself. Same input, same output.
+- Content filter: `guard.Filter` (word lists per language, leetspeak, stretched and spaced spellings). Character:
+  `guard.FirstPersonClaim` gates a cosine check against the persona's profile (`nomic-embed-text`, floor 0.40); no
+  embedding model means no verdict.
 - The system prompt is built from labelled parts (`prompt.SystemSections`; `SystemPrompt` joins them). A chat's
   `promptEdits` replace the editable parts (`model.EditablePromptSections`: character, safety, history, stay) in that
   chat only; delays are drawn with `behavior.Delay` along the profile's `timingCurve`.
@@ -119,3 +128,4 @@ How each feature is wired (read the one you are changing). Shared rules stay in 
   pauses into flags (activity `handoff` with `meta.autoContinued`, no notification).
 - Typos (`engine/typo.go`): `behavior.VariedTypo` over seven kinds; `RunnerState.Typos` (last 10) keeps a kind to at
   most 2 and never twice in a row, and rotates the correction shape (`behavior.FixForms`).
+- Busy chats (`pipeline.go`, `jobs.go`): a new message during a draft cancels the model call and restarts it while that is cheap (under `draftRedoWindow`, at most `maxDraftRedos` times). In a group a reply also stops at `replyBatch` messages. After that newer messages wait in `cycle.later`; `followUpLocked` turns to them when the reply is sent, fails or stays quiet. In a group the AI "join in?" call is held during thinking/typing (`reasonCheckLater`) and `checkLater` asks it afterwards, so only relevant ones get a reply; the mention rules still run at once. Jobs from `scheduleYield` (compact, memory, brief, digest, card) are cancelled when a reply starts and rerun later, so they must save only on success; task, note, recap and rating jobs are not interrupted.

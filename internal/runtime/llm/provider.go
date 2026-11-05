@@ -78,6 +78,14 @@ type Provider interface {
 	Ping(ctx context.Context) error
 }
 
+// Embedder is a provider that can turn text into a vector.
+type Embedder interface {
+	Embed(ctx context.Context, model, text string) ([]float64, error)
+}
+
+// EmbedModel is the local model used to compare texts.
+const EmbedModel = "nomic-embed-text"
+
 // APIError is a non-2xx answer from an HTTP provider.
 type APIError struct {
 	Provider string

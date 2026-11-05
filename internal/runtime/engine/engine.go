@@ -65,15 +65,19 @@ type Deps struct {
 	ProactiveEvery time.Duration
 	// Calendar reads the owner's calendars for secretaries (nil = none).
 	Calendar *calendar.Service
+	// Translator turns finished replies into the chat's language (nil = the AI model does).
+	Translator contract.Translator
 }
 
 type Engine struct {
-	cfg   *config.Manager
-	store *store.Store
-	hub   *events.Hub
-	wa    contract.WhatsApp
-	llm   *llm.Registry
-	cal   *calendar.Service // secretary.go
+	cfg        *config.Manager
+	store      *store.Store
+	hub        *events.Hub
+	wa         contract.WhatsApp
+	llm        *llm.Registry
+	cal        *calendar.Service   // secretary.go
+	translator contract.Translator // finish.go
+	vectors    personaVectors      // finish.go
 	// lastTask is each chat's latest task turn (chat key → *taskUse), so a
 	// regenerated reply writes the same turn again (task.go).
 	lastTask sync.Map
@@ -131,6 +135,7 @@ func New(d Deps) *Engine {
 		wa:             d.WA,
 		llm:            d.LLM,
 		cal:            d.Calendar,
+		translator:     d.Translator,
 		clock:          clk,
 		rng:            rng,
 		runners:        map[string]*Runner{},

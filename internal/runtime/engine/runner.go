@@ -346,8 +346,12 @@ func (r *Runner) process(in model.Incoming) {
 	if isGroup && speaker == "them" && !forced {
 		r.mu.Lock()
 		recent := r.historyCopyLocked()
+		replying := r.phase == phaseThinking || r.phase == phaseTyping
 		r.mu.Unlock()
-		d := e.decide(r.ctx, p, bp, e.paramsOf(c), raw, in.PushName, in.MentionedJIDs, recent, now)
+		// During a reply the AI check would only hold up the queue and compete
+		// with that reply for the model: it runs afterwards (checkLater).
+		d := e.decide(r.ctx, p, bp, e.paramsOf(c), raw, in.PushName, in.MentionedJIDs, recent, now, replying)
+		pm.unchecked, pm.mentions = d.Reason == reasonCheckLater, in.MentionedJIDs
 		if !d.Reply {
 			e.act(model.ActDecisionSkip, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
 			if open, _ := eff.Available(now); open && e.rng.Hit(bp.ReactPercent) {
@@ -359,7 +363,9 @@ func (r *Runner) process(in model.Incoming) {
 			}
 			return
 		}
-		e.act(model.ActDecisionReply, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
+		if !pm.unchecked {
+			e.act(model.ActDecisionReply, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, in.MessageID))
+		}
 	}
 
 	g := guard.Inspect(text, bp.InjectionFilter)

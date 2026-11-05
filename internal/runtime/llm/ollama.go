@@ -262,3 +262,19 @@ func ollamaErrMsg(body []byte) string {
 	}
 	return snippet(string(body), 300)
 }
+
+// Embed returns the vector of text (not an LLM call: the same text always gives
+// the same vector).
+func (o *Ollama) Embed(ctx context.Context, mdl, text string) ([]float64, error) {
+	raw, err := o.post(ctx, "/api/embed", map[string]any{"model": mdl, "input": text})
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Embeddings [][]float64 `json:"embeddings"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil || len(r.Embeddings) == 0 {
+		return nil, fmt.Errorf("ollama: no embedding: %w", err)
+	}
+	return r.Embeddings[0], nil
+}

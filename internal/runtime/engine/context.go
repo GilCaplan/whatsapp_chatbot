@@ -108,7 +108,7 @@ func (e *Engine) compactTick(c model.ChatAssignment) {
 		return
 	}
 	key, keep := cur.Key, p.keep
-	e.schedule(compactJob(key), compactIdle, func(ctx context.Context) {
+	e.scheduleYield(compactJob(key), compactIdle, func(ctx context.Context) {
 		cc, ok := e.store.Chat(key)
 		if !ok || !e.compactPlan(cc, nil).on {
 			return

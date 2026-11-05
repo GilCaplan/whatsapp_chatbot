@@ -36,6 +36,8 @@ type Deps struct {
 	Builder    contract.Builder
 	// Tasks runs tasks (nil = the task routes answer 503).
 	Tasks contract.Tasks
+	// Translator is the translator add-on (nil = the routes answer 503).
+	Translator contract.Translator
 	// Notifier shows desktop notifications (wave 3); nil = POST
 	// /api/system/notify-test answers 501.
 	Notifier contract.Notifier

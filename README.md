@@ -480,6 +480,8 @@ engine/                         one package; files are named by feature
   engine.go                     the Engine: routes messages to per-chat runners, Reload, Stop
   runner.go                     a Runner owns one chat: incoming messages, gates, history
   pipeline.go                   the reply cycle: idle → noticing → waiting → thinking → typing
+  finish.go                     the last stage of a reply: filter, persona check, translation
+  progress.go                   the live steps shown on the Log tab
   clock.go                      the clock interface (tests step a fake clock)
   decide.go                     group "should I reply?" decisions
   people.go                     who it answers, streak guard
@@ -531,6 +533,10 @@ llm/
   ollama.go, anthropic.go, openai.go   the providers
   fake.go                       scripted provider for tests and --fake-llm
   meter.go                      counts AI calls (sandbox)
+translate/
+  translate.go                  installs and runs the translator add-on, language packs
+  server.py                     dedicated en→language models and spaCy, run as a small Python process
+
 wa/
   manager.go                    whatsmeow lifecycle: pairing, status, reconnect, logout, sending
   chats.go, recent.go           contacts and groups, recent chats index

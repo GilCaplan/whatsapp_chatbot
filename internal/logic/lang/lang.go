@@ -299,6 +299,13 @@ func OffAlphabet(text, code string) bool {
 	return letters >= 2 && in*2 < letters
 }
 
+// UsesAlphabet reports whether text has any letter of code's alphabet (always
+// true for a language written in Latin letters).
+func UsesAlphabet(text, code string) bool {
+	tables := alphabets[code]
+	return tables == nil || strings.ContainsFunc(text, func(r rune) bool { return unicode.IsOneOf(tables, r) })
+}
+
 func hasAny(s, chars string) bool { return strings.ContainsAny(s, chars) }
 
 // Main is the conversation's language: the most frequent sure language among

@@ -83,7 +83,7 @@ func (e *Engine) memoryTick(c model.ChatAssignment) {
 		return
 	}
 	key := c.Key
-	e.schedule(memoryJob(key), memoryIdle, func(ctx context.Context) {
+	e.scheduleYield(memoryJob(key), memoryIdle, func(ctx context.Context) {
 		cc, ok := e.store.Chat(key)
 		if !ok || !cc.Enabled || !e.memoryOn(cc) {
 			return

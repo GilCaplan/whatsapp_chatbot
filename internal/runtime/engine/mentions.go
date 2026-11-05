@@ -10,7 +10,6 @@ import (
 	"whatsappdoppel/internal/core/model"
 	"whatsappdoppel/internal/core/store"
 	"whatsappdoppel/internal/logic/behavior"
-	"whatsappdoppel/internal/logic/lang"
 	"whatsappdoppel/internal/logic/mention"
 	"whatsappdoppel/internal/runtime/prompt"
 )
@@ -123,8 +122,7 @@ func distinctSpeakers(hist []model.Message, n int) int {
 // the persona knows from its other chats (the *crossUse goes to the leak
 // guard; nil when there is none).
 func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile, d *mention.Directory, hist []model.Message) (prompt.Options, *crossUse) {
-	code, fixed := e.replyRule(c, hist)
-	o := prompt.Options{LengthBias: bp.LengthBias, ReplyLanguage: lang.Name(code), LanguageFixed: fixed, Instructions: c.Instructions, Edits: c.PromptEdits}
+	o := prompt.Options{LengthBias: bp.LengthBias, WriteEnglish: true, Instructions: c.Instructions, Edits: c.PromptEdits}
 	if sm, ok := e.store.Summary(c.Key); ok {
 		o.Summary, o.SummaryFacts = sm.Text, sm.Format == model.SummaryFacts // older messages (context.go)
 	}

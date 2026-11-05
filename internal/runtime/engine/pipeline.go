@@ -23,9 +23,9 @@ import (
 //	idle ─msg outside hours (queue)→ queued ─wake→ noticing …
 //
 // New messages: noticing → join; waiting → debounce reset (burst cap);
-// thinking → dirty (a draft that came quickly is discarded and regenerated, a
-// slow one is sent: see keepDraftLocked); typing → answered by the next cycle
-// right after. Your own reply cancels the cycle (pauseWhenYouReply).
+// thinking → a cheap draft is cancelled and restarted with the message, a fixed
+// one goes out and the message waits (draftFixedLocked); typing → answered by
+// the next cycle right after. Your own reply cancels the cycle (pauseWhenYouReply).
 type phase int
 
 const (
@@ -45,6 +45,8 @@ func (p phase) String() string {
 type pendingMsg struct {
 	ID, SenderJID, ChatJID, Name, Text string
 	read                               bool
+	unchecked                          bool     // group: came in during a reply, the "join in?" check waits (checkLater)
+	mentions                           []string // for that check
 }
 
 // cycle is one attempt to answer (or, proactively, to start) a conversation.
@@ -72,10 +74,11 @@ type cycle struct {
 	genDone     bool
 	draft       *genResult
 	genErr      error
-	dirty       bool
-	drafted     int       // pending messages the running generation can see
-	restarts    int       // drafts thrown away for newer messages
-	genStart    time.Time // when the running generation started
+	genSeq      uint64             // the running generation; older ones are ignored
+	genCancel   context.CancelFunc // stops the running generation
+	keptNoted   bool               // "sending this first" was logged
+	restarts    int                // drafts thrown away for newer messages
+	genStart    time.Time          // when the running generation started
 	persona     model.Persona
 	hist        []model.Message
 	dir         *mention.Directory // group members for encoding tags (nil in DMs)
@@ -258,8 +261,14 @@ func (r *Runner) admitLocked(fx *effects, c model.ChatAssignment, eff behavior.E
 			r.cyc.immediate = true
 			r.thinkLocked(fx)
 		case phaseThinking:
+			if r.draftFixedLocked(fx, r.cyc, eff) {
+				r.cyc.later = append(r.cyc.later, pm)
+				r.cyc.laterImmediate = true
+				return
+			}
 			r.cyc.pending = append(r.cyc.pending, pm)
-			r.cyc.immediate, r.cyc.dirty = true, true
+			r.cyc.immediate = true
+			r.redoDraftLocked(fx)
 		case phaseTyping:
 			r.cyc.later = append(r.cyc.later, pm)
 			r.cyc.laterImmediate = true
@@ -279,11 +288,18 @@ func (r *Runner) admitLocked(fx *effects, c model.ChatAssignment, eff behavior.E
 		r.moreLocked(fx, now)
 		return
 	case phaseThinking:
+		if r.draftFixedLocked(fx, r.cyc, eff) {
+			r.cyc.later = append(r.cyc.later, pm)
+			if bp.MarkRead {
+				r.markReadFxLocked(fx, []*pendingMsg{&r.cyc.later[len(r.cyc.later)-1]})
+			}
+			return
+		}
 		r.cyc.pending = append(r.cyc.pending, pm)
 		if bp.MarkRead {
 			r.markReadFxLocked(fx, []*pendingMsg{&r.cyc.pending[len(r.cyc.pending)-1]})
 		}
-		r.cyc.dirty = true
+		r.redoDraftLocked(fx)
 		return
 	case phaseTyping:
 		r.cyc.later = append(r.cyc.later, pm)
@@ -562,7 +578,11 @@ func (r *Runner) noticedLocked(fx *effects) {
 		r.thinkLocked(fx)
 		return
 	}
-	wait, cooling := r.cooldownWait(bp, now, time.Duration(bp.WaitForMoreSec)*time.Second)
+	wait := time.Duration(bp.WaitForMoreSec) * time.Second
+	if batchFull(cyc, r.effLocked()) {
+		wait = 0
+	}
+	wait, cooling := r.cooldownWait(bp, now, wait)
 	if wait <= 0 {
 		r.thinkLocked(fx)
 		return
@@ -580,9 +600,14 @@ func (r *Runner) noticedLocked(fx *effects) {
 // moreLocked: another message while waiting → reset the debounce (burst cap).
 func (r *Runner) moreLocked(fx *effects, now time.Time) {
 	cyc := r.cyc
-	bp := r.effLocked().Profile
+	eff := r.effLocked()
+	bp := eff.Profile
 	wait := time.Duration(bp.WaitForMoreSec) * time.Second
-	if burstCap := time.Duration(bp.BurstCapSec) * time.Second; burstCap > 0 {
+	if batchFull(cyc, eff) {
+		r.actFx(fx, model.ActWaiting, fmt.Sprintf("%d messages in — replying to those now", len(cyc.pending)),
+			map[string]any{"reason": "batch_full", "resetCount": cyc.resets})
+		wait = 0
+	} else if burstCap := time.Duration(bp.BurstCapSec) * time.Second; burstCap > 0 {
 		left := burstCap - now.Sub(cyc.burstStart)
 		if left <= 0 {
 			r.actFx(fx, model.ActWaiting, "Burst cap reached — replying now", map[string]any{"reason": "burst_cap", "resetCount": cyc.resets})
@@ -616,8 +641,8 @@ func (r *Runner) thinkLocked(fx *effects) {
 	r.phase = phaseThinking
 	cyc.approval = c.ApprovalMode
 	cyc.copilot = c.Mode == model.ChatModeCopilot
-	cyc.thinkDone, cyc.genDone, cyc.draft, cyc.genErr, cyc.dirty = false, false, nil, nil, false
-	cyc.drafted, cyc.genStart = len(cyc.pending), r.e.clock.Now()
+	cyc.thinkDone, cyc.genDone, cyc.draft, cyc.genErr = false, false, nil, nil
+	cyc.genStart = r.e.clock.Now()
 	var think, distracted time.Duration
 	if !cyc.immediate && !cyc.approval {
 		think, distracted = behavior.PlanThink(bp, r.e.rng)
@@ -627,7 +652,16 @@ func (r *Runner) thinkLocked(fx *effects) {
 	if n := len(cyc.pending); n > 0 {
 		answered = cyc.pending[n-1]
 	}
-	r.e.goBusy(func() { r.generate(cyc, c, eff, hist, answered) })
+	ctx, cancel := context.WithCancel(cyc.ctx)
+	cyc.genSeq++
+	cyc.genCancel = cancel
+	seq := cyc.genSeq
+	e := r.e
+	fx.add(e.preemptJobs) // the model is the reply's now (jobs.go)
+	e.goBusy(func() {
+		defer cancel()
+		r.generate(ctx, seq, cyc, c, eff, hist, answered)
+	})
 	if total := think + distracted; total > 0 {
 		r.armLocked(total, r.thinkDoneLocked)
 		r.actFx(fx, model.ActThinking, "Thinking for "+fmtDur(think), map[string]any{"delaySeconds": think.Seconds()})
@@ -665,7 +699,7 @@ func (r *Runner) thinkDoneLocked(fx *effects) {
 }
 
 // generate runs the LLM for a cycle (own goroutine).
-func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effective, hist []model.Message, answered pendingMsg) {
+func (r *Runner) generate(gctx context.Context, seq uint64, cyc *cycle, c model.ChatAssignment, eff behavior.Effective, hist []model.Message, answered pendingMsg) {
 	e := r.e
 	var res genResult
 	var dir *mention.Directory
@@ -676,7 +710,7 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 	if !ok {
 		err = fmt.Errorf("persona %q not found", c.PersonaID)
 	} else {
-		ctx, cancel := context.WithTimeout(e.withProgress(cyc.ctx, c, p.Name), generateLimit)
+		ctx, cancel := context.WithTimeout(e.withProgress(gctx, c, p.Name), generateLimit)
 		progress(ctx, fmt.Sprintf("Reading the chat (%d recent)", len(hist)), map[string]any{"stage": "read", "messages": len(hist)})
 		isGroup := c.Kind == "group"
 		dir = e.directory(ctx, c, hist)
@@ -694,7 +728,7 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 		tk = e.taskTurn(ctx, c, p, hist, cyc.proactive, e.replyLanguage(c, hist)) // a running task is the goal (task.go)
 		copilot := cyc.copilot && tk == nil                                       // a task writes one exact message
 		if tk != nil {
-			opts.Task = tk.prompt
+			e.taskLanguage(&opts, c, hist, tk)
 		}
 		gcfg, gturn := e.chatGoalTurn(ctx, c, p, hist, isGroup, cyc.proactive)
 		build := func(t prompt.GoalTurn, x prompt.CrossTurn) llm.Request {
@@ -715,6 +749,9 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 		if err == nil && tk != nil { // the task's leak check (task.go)
 			res = e.taskGuard(c, tk, res, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build))
 		}
+		if err == nil { // English → filtered, in character, translated (finish.go)
+			res = e.finishReply(ctx, p, e.finishLanguage(c, hist, tk), res, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build))
+		}
 		cancel()
 		res.Opener = cyc.proactive
 		if err == nil {
@@ -723,9 +760,9 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 	}
 	var fx effects
 	r.mu.Lock()
-	if r.stopped || r.cyc != cyc {
+	if r.stopped || r.cyc != cyc || cyc.genSeq != seq {
 		r.mu.Unlock()
-		e.taskDropped(tk) // the cycle is gone: its task turn never goes out
+		e.taskDropped(tk) // the cycle or draft is gone: its task turn never goes out
 		return
 	}
 	cyc.genDone, cyc.persona, cyc.hist, cyc.task = true, p, hist, tk
@@ -783,21 +820,120 @@ func pendingLast(hist []model.Message, pending []pendingMsg) []model.Message {
 }
 
 // A chat that keeps talking must not starve a reply: on a slow model every
-// finished draft would meet a newer message and be thrown away, forever. A
-// draft is only redone when redoing it is cheap, and only so many times.
+// draft would meet a newer message and start over, forever. A draft is only
+// restarted when that is cheap, and only so many times. In a group a reply
+// also takes in only replyBatch messages; the rest wait until it has gone out.
 const (
 	draftRedoWindow = 20 * time.Second
 	maxDraftRedos   = 2
+	replyBatch      = 3
 )
 
-// keepDraftLocked reports whether a draft that newer messages arrived behind
-// is sent anyway. Approvals, failed and quiet drafts are redone: those paths
-// end the cycle, so nothing would answer the newer messages.
-func (r *Runner) keepDraftLocked(cyc *cycle) bool {
-	if cyc.approval || cyc.genErr != nil || cyc.draft == nil || cyc.draft.Quiet {
+// batchFull: a group reply has enough to go on, so it stops waiting for more.
+func batchFull(cyc *cycle, eff behavior.Effective) bool {
+	return eff.Kind == behavior.KindGroup && len(cyc.pending) >= replyBatch
+}
+
+// draftFixedLocked reports whether the running draft goes out as it is, with
+// a newer message left for the next reply. Approvals are always redone: they
+// end the cycle, so nothing would answer the newer message.
+func (r *Runner) draftFixedLocked(fx *effects, cyc *cycle, eff behavior.Effective) bool {
+	if cyc.approval {
 		return false
 	}
-	return cyc.restarts >= maxDraftRedos || r.e.clock.Now().Sub(cyc.genStart) >= draftRedoWindow
+	if !batchFull(cyc, eff) && cyc.restarts < maxDraftRedos && r.e.clock.Now().Sub(cyc.genStart) < draftRedoWindow {
+		return false
+	}
+	if !cyc.keptNoted {
+		cyc.keptNoted = true
+		r.actFx(fx, model.ActProgress, "New messages came in. Sending this reply first, then answering them", map[string]any{"stage": "keep"})
+	}
+	return true
+}
+
+// redoDraftLocked stops the running draft and starts over with the newer
+// messages, so no model time goes on a reply that would be thrown away.
+func (r *Runner) redoDraftLocked(fx *effects) {
+	cyc := r.cyc
+	cyc.restarts++
+	cyc.genCancel()
+	cyc.genSeq++
+	r.taskFxLocked(fx, cyc, false)
+	cyc.typingShown = false
+	fx.add(r.typingFxLocked(false))
+	r.phase = phaseWaiting
+	wait := min(time.Duration(r.effLocked().Profile.WaitForMoreSec)*time.Second, 3*time.Second)
+	if cyc.immediate {
+		wait = 0
+	}
+	r.actFx(fx, model.ActWaiting, "New message while thinking — starting over",
+		map[string]any{"reason": "new_messages", "waitSeconds": wait.Seconds()})
+	if wait <= 0 {
+		r.thinkLocked(fx)
+	} else {
+		r.armLocked(wait, r.thinkLocked)
+	}
+}
+
+// followUpLocked ends a cycle and turns to the messages that came in behind
+// it. They skipped the group's "join in?" check, so unless one was already
+// meant for us the check runs now (checkLater).
+func (r *Runner) followUpLocked(fx *effects, cyc *cycle) {
+	later, imm := cyc.later, cyc.laterImmediate
+	r.endCycleLocked(fx)
+	if len(later) == 0 {
+		return
+	}
+	if !imm && !slices.ContainsFunc(later, func(m pendingMsg) bool { return !m.unchecked }) {
+		e := r.e
+		fx.add(func() { e.goBusy(func() { r.checkLater(later) }) })
+		return
+	}
+	// They wrote while we were busy: we're in the chat, no notice delay.
+	r.startCycleLocked(later, imm, false)
+	r.noticedLocked(fx)
+}
+
+// checkLater asks whether anything said during a reply is worth answering,
+// newest first, at most replyBatch messages.
+func (r *Runner) checkLater(later []pendingMsg) {
+	e := r.e
+	r.mu.Lock()
+	c := r.cfg
+	recent := r.historyCopyLocked()
+	r.mu.Unlock()
+	p, ok := e.store.Persona(c.PersonaID)
+	if !ok {
+		return
+	}
+	bp := e.effective(c).Profile
+	ids := make([]string, 0, len(later))
+	for _, m := range later {
+		ids = append(ids, m.ID)
+	}
+	var d decision
+	for i := len(later) - 1; i >= max(len(later)-replyBatch, 0) && r.ctx.Err() == nil; i-- {
+		m := later[i]
+		if d = e.decide(r.ctx, p, bp, e.paramsOf(c), m.Text, m.Name, m.mentions, recent, e.clock.Now(), false); d.Reply {
+			break
+		}
+	}
+	if r.ctx.Err() != nil {
+		return
+	}
+	if !d.Reply {
+		e.act(model.ActDecisionSkip, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, ids...))
+		return
+	}
+	e.act(model.ActDecisionReply, c, p.Name, decisionText(d.Reason, p.Name), withMsg(d.Meta, ids...))
+	var fx effects
+	r.mu.Lock()
+	if !r.stopped && r.cfg.Enabled && r.phase == phaseIdle { // else a newer reply already covers them
+		r.startCycleLocked(later, false, false)
+		r.noticedLocked(&fx)
+	}
+	r.mu.Unlock()
+	fx.run()
 }
 
 // maybeDeliverLocked acts once both the think time and the generation are done.
@@ -809,38 +945,11 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 	c := r.cfg
 	eff := r.effLocked()
 	bp := eff.Profile
-	if cyc.dirty && r.keepDraftLocked(cyc) {
-		// Too slow to redo: send it and answer the newer messages next.
-		cyc.later = append(cyc.later, cyc.pending[cyc.drafted:]...)
-		cyc.laterImmediate = cyc.immediate
-		cyc.pending, cyc.dirty = cyc.pending[:cyc.drafted], false
-		r.actFx(fx, model.ActProgress, "New messages came in. Sending this reply first, then answering them", map[string]any{"stage": "keep"})
-	}
-	if cyc.dirty {
-		// New messages arrived while thinking: drop the draft and think again.
-		cyc.restarts++
-		r.taskFxLocked(fx, cyc, false)
-		cyc.typingShown = false
-		fx.add(r.typingFxLocked(false))
-		r.phase = phaseWaiting
-		wait := min(time.Duration(bp.WaitForMoreSec)*time.Second, 3*time.Second)
-		if cyc.immediate {
-			wait = 0
-		}
-		r.actFx(fx, model.ActWaiting, "New message while thinking — starting over",
-			map[string]any{"reason": "new_messages", "waitSeconds": wait.Seconds()})
-		if wait <= 0 {
-			r.thinkLocked(fx)
-		} else {
-			r.armLocked(wait, r.thinkLocked)
-		}
-		return
-	}
 	if cyc.genErr != nil {
 		if cyc.ctx.Err() == nil {
 			r.actFx(fx, model.ActError, "Couldn't generate a reply: "+cyc.genErr.Error(), withMsg(nil, cyc.msgIDs()...))
 		}
-		r.endCycleLocked(fx)
+		r.followUpLocked(fx, cyc)
 		return
 	}
 	if !c.Enabled {
@@ -850,7 +959,7 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 	if d := cyc.draft; d.Quiet && !cyc.approval {
 		r.actFx(fx, model.ActDecisionSkip, "Staying quiet — the reply didn't pass the check: "+strings.Join(slices.Compact(slices.Clone(d.Checks)), "; "),
 			withMsg(map[string]any{"reason": "reply_check", "checks": d.Checks}, cyc.msgIDs()...))
-		r.endCycleLocked(fx)
+		r.followUpLocked(fx, cyc)
 		return
 	}
 	res, p, hist := *cyc.draft, cyc.persona, cyc.hist
@@ -927,7 +1036,11 @@ func (r *Runner) send(cyc *cycle, c model.ChatAssignment, p model.Persona, res g
 			return
 		}
 		tags := bubbleMentions(b.Text, dir)
-		msgID := e.recordSentBubble(r, c, text, b.Text, wire, tags, sres.ID, "", res.crossUsed())
+		kind, source := "", res.Source
+		if res.Source != "" && i > 0 {
+			kind, source = model.MsgKindPart, ""
+		}
+		msgID := e.recordSentBubble(r, c, text, b.Text, wire, tags, sres.ID, kind, res.crossUsed(), source)
 		m := mentionMeta(res.meta(), tags)
 		if i == typoAt {
 			m["typo"] = true
@@ -1000,13 +1113,7 @@ func (r *Runner) finishSend(cyc *cycle, sent int) {
 	r.mu.Lock()
 	if r.cyc == cyc && !r.stopped {
 		r.taskFxLocked(&fx, cyc, sent > 0)
-		later, imm := cyc.later, cyc.laterImmediate
-		r.endCycleLocked(&fx)
-		if len(later) > 0 {
-			// They wrote while we were typing: we're in the chat, no notice delay.
-			r.startCycleLocked(later, imm, false)
-			r.noticedLocked(&fx)
-		}
+		r.followUpLocked(&fx, cyc)
 	}
 	r.mu.Unlock()
 	fx.run()

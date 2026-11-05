@@ -8,10 +8,16 @@ The command-line bot became a desktop app with a web interface, for macOS, Windo
 Everything below is new unless noted.
 
 ### Reply rules
-- A reply language you choose is now a hard rule: it comes last in the prompt, is repeated on the
-  turn being answered, replaces the persona's own language line, and code checks every reply, even
-  short ones and with reply checks off. A reply that fails twice is not sent. The chosen language
+- Personas now always write in English, and code translates the reply just before it is sent, so
+  the language settings never change the prompt. A new Translator add-on does this with dedicated
+  en-to-language models (Settings › Translator), keeping names, places, @tags, numbers, links and
+  emoji exactly as they are; until it is installed the AI model translates, and the result is
+  checked in code. The persona reads its own earlier messages back in English. The chosen language
   always counts as one it speaks.
+- A content filter in code reads every reply, also after translating: curse words are taken out, and
+  a slur or talk of suicide or self-harm stops the reply. Your own words can be added in Settings › Safety.
+- A character check: when a reply makes a claim about the persona itself, it is compared with the
+  persona's profile using embeddings, and someone else's life is written again or not sent.
 - Chattiness on Answers everything now answers big groups too (the Picked mode, a size limit of 0
   and people switched off still win). The log explains the group-size rule when it applies.
 - A busy chat can't starve a reply on a slow model: a draft that took long is sent, and newer

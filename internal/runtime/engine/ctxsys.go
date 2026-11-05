@@ -99,7 +99,7 @@ func (e *Engine) queueCard(personaID string, chars int) {
 	if t, ok := e.cardTried.Load(personaID); ok && e.clock.Now().Sub(t.(time.Time)) < cardBackoff {
 		return // it failed a moment ago: the full text until then
 	}
-	e.schedule(cardJob(personaID), cardDelay, func(ctx context.Context) {
+	e.scheduleYield(cardJob(personaID), cardDelay, func(ctx context.Context) {
 		if p, ok := e.store.Persona(personaID); !ok || strings.TrimSpace(p.Card) != "" {
 			return
 		}

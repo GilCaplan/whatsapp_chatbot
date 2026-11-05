@@ -163,6 +163,19 @@ type Message struct {
 	// CrossUsed names the people whose context from other chats informed
 	// this persona bubble (cross-chat context).
 	CrossUsed []string `json:"crossUsed,omitempty"`
+	// Source is the English a translated reply was written in: the persona
+	// always reads its own earlier messages in the words it wrote them.
+	Source string `json:"source,omitempty"`
+}
+
+// TranslatorStatus is the translator add-on on this computer.
+type TranslatorStatus struct {
+	Installed  bool     `json:"installed"`
+	Installing bool     `json:"installing"`
+	Step       string   `json:"step,omitempty"`
+	Error      string   `json:"error,omitempty"`
+	Packs      []string `json:"packs"`              // languages ready to use
+	Fetching   []string `json:"fetching,omitempty"` // downloading now
 }
 
 // Message kinds (Message.Kind).
@@ -170,6 +183,7 @@ const (
 	MsgKindFix    = "fix"    // the "*word" correction bubble after a typo
 	MsgKindEdited = "edited" // a typo bubble that was edited in place
 	MsgKindReveal = "reveal" // the "it was a persona" message (sent by you)
+	MsgKindPart   = "part"   // a later bubble of a translated reply (the first one's Source has it all)
 )
 
 // Chat modes (ChatAssignment.Mode).

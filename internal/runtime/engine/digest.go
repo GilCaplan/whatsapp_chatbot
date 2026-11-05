@@ -40,7 +40,7 @@ func (e *Engine) digestTick(c model.ChatAssignment) {
 		return
 	}
 	key := c.Key
-	e.schedule(digestJob(key), digestIdle, func(ctx context.Context) {
+	e.scheduleYield(digestJob(key), digestIdle, func(ctx context.Context) {
 		cc, ok := e.store.Chat(key)
 		if !ok || !cc.Enabled {
 			return
@@ -57,7 +57,11 @@ func (e *Engine) digest(ctx context.Context, c model.ChatAssignment) error {
 	if !ok {
 		return fmt.Errorf("persona %q not found", c.PersonaID)
 	}
-	defer e.updateState(c.Key, func(st *store.RunnerState) { st.DigestPending = 0 })
+	defer func() {
+		if ctx.Err() == nil { // interrupted by a reply: it runs again
+			e.updateState(c.Key, func(st *store.RunnerState) { st.DigestPending = 0 })
+		}
+	}()
 	now := e.clock.Now()
 	in := prompt.DigestInput{PersonaName: p.Name, ChatName: c.Name, IsGroup: isGroupChat(c), Zone: time.Local, Now: now}
 
