@@ -112,6 +112,12 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 - Real WhatsApp testing: use a throwaway `--data-dir` to exercise pairing; assign a persona
   to "You (message yourself)" and send `1 hi` from the phone (`triggerPrefix`).
 
+## Privacy
+
+The repository is public. Nothing personal goes into code, tests, docs, commit messages or PRs: use the
+1555 range for example numbers and neutral names. `scripts/privacy-check.sh` runs in CI and, after
+`make hooks`, on every commit; never bypass it with `--no-verify`.
+
 ## Gotchas
 
 - Restart semantics: `runtime.json` keeps rate-limit counters, cooldown, proactive due time and a queued

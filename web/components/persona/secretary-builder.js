@@ -120,7 +120,7 @@ export function openSecretaryBuilder({ persona = null, onSaved = null } = {}) {
     <div class="sec-form">
       <div class="two-col">
         <div class="field"><label class="field-label" for="sec-owner">Your name</label>
-          <input class="input" id="sec-owner" .value=${f.ownerName} placeholder="e.g. Gil" @input=${(e) => { f.ownerName = e.target.value; }}>
+          <input class="input" id="sec-owner" .value=${f.ownerName} placeholder="e.g. Alex" @input=${(e) => { f.ownerName = e.target.value; }}>
           <div class="field-help">It introduces itself as "${(f.ownerName || 'your')}${f.ownerName ? "'s" : ''} assistant".</div></div>
         <div class="field"><label class="field-label" for="sec-name">Its name</label>
           <input class="input" id="sec-name" .value=${f.name} placeholder="e.g. Maya" @input=${(e) => { f.name = e.target.value; }}></div>
@@ -178,7 +178,7 @@ export function openSecretaryBuilder({ persona = null, onSaved = null } = {}) {
           <input class="input" id="sec-vips" placeholder="Names or numbers, separated by commas" .value=${f.vips} @input=${(e) => { f.vips = e.target.value; }}>
           <div class="field-help">Their messages always count as urgent.</div></div>
         <div class="field"><label class="field-label" for="sec-away">Away message</label>
-          <input class="input" id="sec-away" placeholder="e.g. Gil is on holiday until 12 Nov and checks messages in the evening." .value=${f.awayMessage}
+          <input class="input" id="sec-away" placeholder="e.g. Alex is on holiday until 12 Nov and checks messages in the evening." .value=${f.awayMessage}
             @input=${(e) => { f.awayMessage = e.target.value; }}></div>
       </div>` : ''}
     </div>

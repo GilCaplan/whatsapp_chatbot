@@ -77,7 +77,7 @@ cat >"$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key>
   <string>$APP_NAME</string>
   <key>CFBundleIdentifier</key>
-  <string>com.whatsappdoppel.whatsappdoppel</string>
+  <string>app.whatsappdoppel</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

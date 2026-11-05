@@ -10,7 +10,7 @@ DATA       ?= ./data
 FAKE_DATA  ?= ./data/fake
 UNAME      := $(shell uname -s)
 
-.PHONY: help build run dev-fake test vet fmt app install uninstall icon smoke clean \
+.PHONY: help build run dev-fake test vet fmt app install uninstall icon smoke clean hooks privacy \
         dist dist-mac dist-linux dist-windows mac-only
 
 help: ## Show this help
@@ -49,6 +49,12 @@ install: mac-only ## (Mac) Build and install to /Applications + Desktop alias + 
 
 uninstall: mac-only ## (Mac) Remove the installed app, alias and symlink (asks before deleting data)
 	scripts/uninstall_app.sh
+
+hooks: ## Check every commit for personal data (run once after cloning)
+	git config core.hooksPath .githooks
+
+privacy: ## Scan the tracked files for personal data
+	scripts/privacy-check.sh
 
 smoke: ## End-to-end test against a throwaway fake server
 	scripts/smoke.sh

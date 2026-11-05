@@ -8,4 +8,4 @@
 ## Checklist
 - [ ] docs/API.md updated if an endpoint or JSON shape changed
 - [ ] No emoji in UI or activity texts; user-facing text is plain English
-- [ ] No personal data (databases, history, keys) committed
+- [ ] No personal data (databases, history, keys, real names or numbers, screenshots of real chats) committed

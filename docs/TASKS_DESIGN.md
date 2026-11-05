@@ -50,7 +50,7 @@ type TaskSpec struct {            // tasks.json: templates you saved
     Privacy *PrivacyConfig        // nil = settings.tasks.privacy
     Limits  *TaskLimits           // nil = settings.tasks.limits
     Commit  CommitConfig          // approve | auto-if-free; book: off | ics | macalendar
-    Voice   string                // as-you | assistant ("I'm arranging this for Gil")
+    Voice   string                // as-you | assistant ("I'm arranging this for Alex")
 }
 type Slot struct { Key, Label, Kind string; Required bool; Limits SlotLimits; Value *SlotValue }
 // Kind: datetime | date | time | duration | place | text | choice | yesno

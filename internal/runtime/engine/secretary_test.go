@@ -12,18 +12,18 @@ import (
 func TestSecretary(t *testing.T) {
 	h := newHarness(t, nil, dmChat())
 	h.setPersona("leo", func(p *model.Persona) {
-		p.Secretary = &model.SecretaryConfig{OwnerName: "Gil", Tone: "friendly", TakeMessages: true, FlagUrgent: true,
+		p.Secretary = &model.SecretaryConfig{OwnerName: "Alex", Tone: "friendly", TakeMessages: true, FlagUrgent: true,
 			AnswerFAQs: true, Meetings: true, MeetDays: []string{"mon", "tue", "wed", "thu", "fri"}, MeetFrom: "09:00", MeetTo: "18:00",
 			MeetingMinutes: 30, FAQs: []model.FAQ{{Q: "Where is the office?", A: "Rothschild 1, Tel Aviv"}}}
 	})
 	h.e.Reload()
 	h.llm.SetFunc(func(req llm.Request) (llm.Response, error) {
 		if strings.Contains(req.System, "message pad") {
-			return llm.Response{Text: `{"notes":[{"from":"Dana","text":"Dana needs Gil to call her about the contract","urgent":true,"callback":"call today","meeting":""}]}`}, nil
+			return llm.Response{Text: `{"notes":[{"from":"Dana","text":"Dana needs Alex to call her about the contract","urgent":true,"callback":"call today","meeting":""}]}`}, nil
 		}
-		return llm.Response{Text: "I'll pass it on to Gil right away."}, nil
+		return llm.Response{Text: "I'll pass it on to Alex right away."}, nil
 	})
-	h.msg(dmKey, "m1", "hi, I need Gil to call me about the contract today, it's urgent")
+	h.msg(dmKey, "m1", "hi, I need Alex to call me about the contract today, it's urgent")
 	h.advance(15 * time.Second)
 	h.waitSent(1)
 	notes := h.st.SecretaryNotes()
@@ -34,7 +34,7 @@ func TestSecretary(t *testing.T) {
 		t.Errorf("acts = %+v", a)
 	}
 	sys := lastSystem(h)
-	for _, want := range []string{"YOUR JOB: you are Gil's personal assistant", "Rothschild 1", "Suggest times only when YOUR TASK RIGHT NOW"} {
+	for _, want := range []string{"YOUR JOB: you are Alex's personal assistant", "Rothschild 1", "Suggest times only when YOUR TASK RIGHT NOW"} {
 		if !strings.Contains(sys, want) {
 			t.Errorf("prompt lacks %q", want)
 		}
