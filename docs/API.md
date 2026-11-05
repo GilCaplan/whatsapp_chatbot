@@ -596,7 +596,7 @@ friendly "coming soon" state for them.
 ## Languages
 
 `settings.behavior.languages.{private,group}` and `ChatAssignment.language` (nil = the app's for the chat's kind) are a
-`LanguagePrefs` block `{languages: [code] (empty = ["en","he"]), others: "ignore"|"answer" ("" = ignore), reply:
+`LanguagePrefs` block `{understands?: [code] (empty = all; anything else is skipped, not kept as context), languages: [code] (empty = ["en","he"]), others: "ignore"|"answer" ("" = ignore), reply:
 "match"|code ("" = match)}`; a person's `PersonPrefs.language` (`""` = the chat's, `"match"`, a code) wins for replies to
 them. Codes: en he ar ru uk es fr de it pt nl tr el hi th zh ja ko (`internal/logic/lang`). A message the detector is sure is in
 a language the chat doesn't speak is skipped (activity `decision.skip`, `meta.reason: "language"`, `meta.language`) unless

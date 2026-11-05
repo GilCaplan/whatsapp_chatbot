@@ -8,7 +8,7 @@ The command-line bot became a desktop app with a web interface, for macOS, Windo
 Everything below is new unless noted.
 
 ### Reply rules
-- Languages it speaks is now a choice of All languages or Choose specific, with a dropdown to tick several at once.
+- Languages are three plain choices: which it understands, which it replies to, and which it replies in. Each list is All or a tick list in a dropdown.
 - The chat's Log shows a running reply on a timeline, with a circle that moves to the current step. Every step is listed as it happens,
   including writing, checking and translating, before the reply is sent.
 - Busy chats keep moving: a new message stops a draft instead of waiting for it, a group reply takes

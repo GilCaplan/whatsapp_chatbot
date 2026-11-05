@@ -117,3 +117,19 @@ func TestOffAlphabet(t *testing.T) {
 		}
 	}
 }
+
+func TestUnderstandsLimitsWhatItReads(t *testing.T) {
+	p := Effective(model.LanguagePrefs{Understands: []string{"en"}, Languages: []string{"he"}, Others: model.LangAnswer}, nil)
+	if !Understood(p, "he") || Understood(p, "ru") {
+		t.Fatalf("understands = %v", p.Understands)
+	}
+	if !Ignores(p, "ru") || Ignores(p, "en") {
+		t.Fatal("an unknown language is ignored even when others are answered")
+	}
+	if got := Reply(p, "", "ru", "en"); got != "en" {
+		t.Fatalf("reply = %s", got)
+	}
+	if !Understood(Effective(model.LanguagePrefs{}, nil), "ru") {
+		t.Fatal("empty means all")
+	}
+}

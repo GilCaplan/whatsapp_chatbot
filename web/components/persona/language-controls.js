@@ -26,6 +26,7 @@ export function effectiveLangs(p) {
   p = p || {};
   return {
     languages: p.languages && p.languages.length ? p.languages : DEFAULT_LANGS,
+    understands: p.understands || [],
     others: p.others || 'ignore',
     reply: p.reply || 'match',
   };
@@ -35,9 +36,30 @@ export function effectiveLangs(p) {
 export function langSummary(p) {
   const e = effectiveLangs(p);
   const names = e.languages.map(langName);
-  const list = e.others === 'answer' ? 'All languages' : names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  const list = e.others === 'answer' ? 'Replies to all languages' : `Replies to ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]}`;
   const reply = e.reply === 'match' ? 'replies in the language of the message' : `always replies in ${langName(e.reply)}`;
   return `${list} · ${reply}`;
+}
+
+/** All, or a tick list in a dropdown. list = null means all. */
+function langPicker(id, label, list, defaults, options, onChange) {
+  const toggle = (code) => {
+    const next = list.includes(code) ? list.filter((c) => c !== code) : [...list, code];
+    if (next.length) onChange(next);
+  };
+  const picked = list ? LANGS.filter((l) => list.includes(l.code)).map((l) => l.name).join(', ') : '';
+  return html`${seg([{ value: 'all', label: 'All' }, { value: 'some', label: 'Choose specific' }], list ? 'some' : 'all',
+    (v) => onChange(v === 'all' ? null : list || defaults), { label, cls: 'seg-sm' })}
+    ${list ? html`<details class="lang-menu" id=${id} ?open=${openMenus.has(id)}
+      @toggle=${(ev) => { if (ev.target.open) openMenus.add(id); else openMenus.delete(id); }}>
+      <summary class="select select-sm"><span class="ellipsis">${picked}</span></summary>
+      <div class="lang-menu-list" role="group" aria-label=${label}>
+        ${options.map((l) => {
+          const on = list.includes(l.code);
+          return html`<label class="lang-menu-item"><input type="checkbox" .checked=${on} ?disabled=${on && list.length === 1} @change=${() => toggle(l.code)}>${l.name}</label>`;
+        })}
+      </div>
+    </details>` : ''}`;
 }
 
 /**
@@ -47,35 +69,31 @@ export function langSummary(p) {
 export function languageControls(prefs, onChange, { idPrefix = 'lang' } = {}) {
   const e = effectiveLangs(prefs);
   const set = (patch) => onChange({ ...e, ...patch });
+  const known = e.understands.length ? LANGS.filter((l) => e.understands.includes(l.code)) : LANGS;
   const all = e.others === 'answer';
-  const toggle = (code) => {
-    const languages = e.languages.includes(code) ? e.languages.filter((c) => c !== code) : [...e.languages, code];
-    if (!languages.length) return;
-    set({ languages, reply: languages.includes(e.reply) || e.reply === 'match' ? e.reply : 'match' });
+  const setKnown = (list) => {
+    if (!list) return set({ understands: [] });
+    const languages = e.languages.filter((c) => list.includes(c));
+    set({ understands: list, languages: languages.length ? languages : [list[0]], reply: e.reply === 'match' || list.includes(e.reply) ? e.reply : 'match' });
   };
-  const picked = LANGS.filter((l) => e.languages.includes(l.code)).map((l) => l.name).join(', ');
+  const setReplyTo = (list) => (list ? set({ others: 'ignore', languages: list }) : set({ others: 'answer' }));
   return html`<div class="lang-controls">
     <div class="field-row field-row-stack">
-      <div><div class="field-label">${icon('globe', 'ic-sm')}Languages it speaks</div>
-        <div class="field-help">${all ? 'It answers messages in any language.' : 'It answers these and stays quiet on others, which it still reads as background. Short messages like "ok" or "lol" always count.'}</div></div>
-      ${seg([{ value: 'all', label: 'All languages' }, { value: 'some', label: 'Choose specific' }], all ? 'all' : 'some', (v) => set({ others: v === 'all' ? 'answer' : 'ignore' }), { label: 'Languages it speaks', cls: 'seg-sm' })}
-      ${all ? '' : html`<details class="lang-menu" id=${idPrefix + '-menu'} ?open=${openMenus.has(idPrefix)}
-          @toggle=${(ev) => { if (ev.target.open) openMenus.add(idPrefix); else openMenus.delete(idPrefix); }}>
-        <summary class="select select-sm"><span class="ellipsis">${picked}</span></summary>
-        <div class="lang-menu-list" role="group" aria-label="Languages it speaks">
-          ${LANGS.map((l) => {
-            const on = e.languages.includes(l.code);
-            return html`<label class="lang-menu-item"><input type="checkbox" .checked=${on} ?disabled=${on && e.languages.length === 1} @change=${() => toggle(l.code)}>${l.name}</label>`;
-          })}
-        </div>
-      </details>`}
+      <div><div class="field-label">${icon('globe', 'ic-sm')}Understands</div>
+        <div class="field-help">${e.understands.length ? 'Messages in any other language are skipped completely, as if it could not read them.' : 'It can read messages in any language.'}</div></div>
+      ${langPicker(idPrefix + '-known', 'Understands', e.understands.length ? e.understands : null, e.languages, LANGS, setKnown)}
+    </div>
+    <div class="field-row field-row-stack">
+      <div><div class="field-label">Replies to</div>
+        <div class="field-help">${all ? 'It answers everything it understands.' : 'It answers these. Other messages it understands stay as background. Short messages like "ok" or "lol" always count.'}</div></div>
+      ${langPicker(idPrefix + '-to', 'Replies to', all ? null : e.languages, e.languages, known, setReplyTo)}
     </div>
     <div class="field-row">
-      <div class="grow"><div class="field-label">Reply in</div>
-        <div class="field-help">${e.reply === 'match' ? 'The language the person wrote in. Unclear messages follow the conversation.' : all ? 'Always this language, whatever people write. You can still pick per person in the People tab.' : 'Always this language. Messages in a language it does not speak still get no answer: choose All languages to reply to those too.'}</div></div>
-      <select class="select select-sm" aria-label="Reply in" @change=${(ev) => set({ reply: ev.target.value })}>
+      <div class="grow"><div class="field-label">Replies in</div>
+        <div class="field-help">${e.reply === 'match' ? 'The language the person wrote in. Unclear messages follow the conversation.' : 'Always this language. You can still pick per person in the People tab.'}</div></div>
+      <select class="select select-sm" aria-label="Replies in" @change=${(ev) => set({ reply: ev.target.value })}>
         <option value="match" ?selected=${e.reply === 'match'}>Same as the message</option>
-        ${LANGS.map((l) => html`<option value=${l.code} ?selected=${e.reply === l.code}>${l.name}</option>`)}
+        ${known.map((l) => html`<option value=${l.code} ?selected=${e.reply === l.code}>${l.name}</option>`)}
       </select>
     </div>
   </div>`;

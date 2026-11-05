@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -1017,6 +1018,29 @@ func TestGroupMeetingTalkPausesOnlyWhenAimedAtPersona(t *testing.T) {
 	}
 	h.groupMsg("B", "Leo where should the meet be")
 	if n := countReqs(h.llm, isHandoffCheck); n != 1 {
+		t.Fatalf("checks = %d", n)
+	}
+}
+
+// A flood keeps every message, and the model isn't asked about each one.
+func TestBurstKeepsEveryMessage(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) {
+		p.ChimeInPercent, p.AIJudgement, p.ReplyWhenNameMentioned = 0, true, false
+		p.NoticeMinSec, p.NoticeMaxSec = 30, 30
+	}), groupChat())
+	h.llm.Push("YES")
+	for i := range 120 {
+		h.e.HandleIncoming(model.Incoming{ChatKey: groupKey, ChatJID: groupJID, IsGroup: true, SenderJID: "972502222222@s.whatsapp.net",
+			PushName: "Avi", Text: fmt.Sprintf("message %d", i), Timestamp: h.clk.Now(), MessageID: fmt.Sprintf("m%d", i)})
+	}
+	h.idle()
+	if n := len(h.acts(model.ActIncoming)); n != 120 {
+		t.Fatalf("incoming = %d", n)
+	}
+	if n := len(h.acts(model.ActError)); n != 0 {
+		t.Fatalf("errors = %d", n)
+	}
+	if n := countReqs(h.llm, isDecision); n >= 120 {
 		t.Fatalf("checks = %d", n)
 	}
 }
