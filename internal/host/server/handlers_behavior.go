@@ -115,6 +115,8 @@ func (s *Server) handleBehaviorSample(w http.ResponseWriter, r *http.Request) {
 	eff := behavior.Effective{Kind: kind, Profile: p}
 	rng := behavior.NewSampler(nil)
 	quote := &model.QuoteRef{MessageID: "sample", Text: "the message being answered"}
+	// The model writes during the think time, so a slow model stretches it.
+	modelTime := time.Duration(s.modelSeconds() * float64(time.Second))
 	runs := make([]sampleRun, 0, n)
 	var totals []float64
 	split := 0
@@ -136,7 +138,7 @@ func (s *Server) handleBehaviorSample(w http.ResponseWriter, r *http.Request) {
 			add("seen", 0, true)
 		}
 		add("wait", plan.Wait, false)
-		add("think", plan.Think, false)
+		add("think", max(plan.Think, modelTime), false)
 		add("distracted", plan.Distracted, false)
 		for _, b := range plan.Bubbles {
 			add("gap", b.GapBefore, false)
@@ -172,7 +174,7 @@ func (s *Server) handleBehaviorSample(w http.ResponseWriter, r *http.Request) {
 }
 
 // modelSeconds is how long the AI model has taken lately to plan and write a
-// reply, which comes on top of the timers (0 = no replies measured yet).
+// reply (0 = no replies measured yet).
 func (s *Server) modelSeconds() float64 {
 	if s.d.Hub == nil {
 		return 0
