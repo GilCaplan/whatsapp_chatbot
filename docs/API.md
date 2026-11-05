@@ -241,7 +241,7 @@ Goal settings are **not** part of the behaviour profile:
 WA `state` ∈ `disconnected | connecting | awaiting_qr | pairing | connected | logged_out | error | replaced | banned | outdated`.
 
 Activity `type` ∈ `incoming | decision.skip | decision.reply | blocked_injection | noticing | seen | waiting | thinking |
-generating | progress | typing | sent | deferred | reacted | proactive | approval.queued | approval.sent | approval.discarded |
+generating | progress | rating.step | typing | sent | deferred | reacted | proactive | approval.queued | approval.sent | approval.discarded |
 goal.reached | error | wa.status | system` and (wave 3) `handoff | handoff.resumed | reveal | memory | recap`. `text` is always plain English (never emoji; a reaction's emoji is only in `meta.emoji`).
 
 A normal reply narrates: `incoming` → `noticing` → `seen` → `waiting` → `thinking` → `typing` → `sent`
@@ -253,6 +253,7 @@ A normal reply narrates: `incoming` → `noticing` → `seen` → `waiting` → 
 | `seen` | "Seen (2 messages)" / "Looked at the chat (2 messages) — read receipts off" | `count`, `readReceipts` |
 | `waiting` | "Waiting 8s for more messages", "More messages — waiting 5s", "Burst cap reached — replying now", "3 messages in — replying to those now", "New message while thinking — starting over" | `waitSeconds`, `resetCount`, `reason` (`burst_cap`, `batch_full`, `new_messages`, `cooldown`) |
 | `thinking` | "Thinking for 6s" · distraction: "Got distracted — back in about 2 minutes" · plan ahead: "Planned the next move" · cross-chat: "Keeping in mind 2 things from your private chat with Dana — discreet" | `delaySeconds`, `distracted` (true for the distraction event); plan ahead: `stage:"plan"`, `plan` (the private next move), `latencyMs`; cross-chat: `stage:"cross"`, `crossContext` (below; never the notes themselves) |
+| `rating.step` | A step of a rating under way, for the People tab ("Reading 94 messages from the last 24 hours") | `stage` (wait, read, ask, check, failed) |
 | `generating` | "Writing a reply…" (trigger prefix and approval mode, which skip "thinking") | `model`, `messages` |
 | `progress` | A step of writing a reply, for the Log tab's Live progress view ("Asking llama3.1:8b to write the reply") | `stage` (read, planning, write, written, checked, rewrite, keep, filter, character, translate, translated), `latencyMs`, `promptChars`, `model`, `score`, `by` |
 | `typing` | "Typing for 12s (84 characters, part 1 of 2)" (single bubble: "Typing for 12s (84 characters)") | `typingSeconds`, `chars`, `part`, `parts`, `approvalId` (approved replies) |
