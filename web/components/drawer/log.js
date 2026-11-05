@@ -58,7 +58,7 @@ const PROGRESS_ICONS = {
 };
 
 const STEP_ICONS = {
-  decision: 'sparkles', noticing: 'eye', seen: 'check', waiting: 'hourglass', thinking: 'brain', generating: 'wand',
+  decision: 'sparkles', progress: 'brain', noticing: 'eye', seen: 'check', waiting: 'hourglass', thinking: 'brain', generating: 'wand',
   typing: 'typing', sent: 'send', deferred: 'clock', reacted: 'heart', 'approval.sent': 'check', 'approval.discarded': 'x',
 };
 
@@ -150,10 +150,10 @@ export function createLogTab(ctx) {
       ${runs.reverse().map((run, i) => html`<div class="log-run" data-key=${'run-' + run[0].id}>
         <div class="field-label small mt-12">${i === 0 && busy ? 'This reply' : `Reply at ${clockTime(run[0].ts)}`}
           <span class="faint"> · ${duration((toDate(run[run.length - 1].ts) - toDate(run[0].ts)) / 1000)} so far</span></div>
-        <ol class="log-steps">${run.map((ev) => {
+        <ol class=${'log-steps' + (i === 0 && busy ? ' is-live' : '')}>${run.map((ev, n) => {
           const m = ev.meta || {};
           const off = (toDate(ev.ts) - toDate(run[0].ts)) / 1000;
-          return html`<li data-key=${'ev-' + ev.id}><span class="log-step-t" title=${clockTime(ev.ts)}>+${duration(off)}</span>${icon(PROGRESS_ICONS[m.stage] || STEP_ICONS[ev.type] || 'info', 'ic-sm')}<span>${ev.text}${m.latencyMs ? html` <span class="faint">(${duration(m.latencyMs / 1000)})</span>` : ''}</span></li>`;
+          return html`<li data-key=${'ev-' + ev.id} class=${i === 0 && busy && n === run.length - 1 ? 'is-now' : ''}><span class="log-step-t" title=${clockTime(ev.ts)}>+${duration(off)}</span>${icon(PROGRESS_ICONS[m.stage] || STEP_ICONS[ev.type] || 'info', 'ic-sm')}<span>${ev.text}${m.latencyMs ? html` <span class="faint">(${duration(m.latencyMs / 1000)})</span>` : ''}</span></li>`;
         })}</ol>
       </div>`)}`;
   }
@@ -235,11 +235,13 @@ export function createLogTab(ctx) {
 
   function steps(d) {
     const t0 = toDate(d.at);
-    return html`<ol class="log-steps">
-      <li><span class="log-step-t">${clockTime(d.at)}</span>${icon('message', 'ic-sm')}<span>${d.kind === 'opener' ? 'Started writing' : 'Message sent to the chat'}</span></li>
-      ${(d.steps || []).map((st) => {
+    const live = outcomeOf(d) === 'pending';
+    const count = (d.steps || []).length;
+    return html`<ol class=${'log-steps' + (live ? ' is-live' : '')}>
+      <li class=${live && !count ? 'is-now' : ''}><span class="log-step-t">${clockTime(d.at)}</span>${icon('message', 'ic-sm')}<span>${d.kind === 'opener' ? 'Started writing' : 'Their message came in'}</span></li>
+      ${(d.steps || []).map((st, n) => {
         const off = t0 ? ((toDate(st.at) - t0) / 1000) : 0;
-        return html`<li><span class="log-step-t" title=${clockTime(st.at)}>+${duration(off)}</span>${icon(STEP_ICONS[st.type] || 'info', 'ic-sm')}<span>${st.text}</span></li>`;
+        return html`<li class=${live && n === count - 1 ? 'is-now' : ''}><span class="log-step-t" title=${clockTime(st.at)}>+${duration(off)}</span>${icon(STEP_ICONS[st.type] || 'info', 'ic-sm')}<span>${st.text}</span></li>`;
       })}
     </ol>`;
   }
@@ -330,7 +332,7 @@ export function createLogTab(ctx) {
     onBus(type, data) {
       if (type === 'activity' && data && data.chatKey === ctx.key) {
         addProgress(data);
-        if (data.type !== 'progress') reloadSoon();
+        reloadSoon();
       }
     },
     destroy() { reloadSoon.cancel && reloadSoon.cancel(); },

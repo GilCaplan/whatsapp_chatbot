@@ -1543,6 +1543,14 @@ count-ring { display: inline-grid; flex: none; }
 .log-steps li { display: flex; align-items: flex-start; gap: 6px; }
 .log-steps .ic { flex: none; margin-top: 1px; }
 .log-step-t { flex: none; min-width: 48px; font-variant-numeric: tabular-nums; color: var(--text-3); }
+/* A running reply: a rail with a circle that moves down to the current step. */
+.log-steps.is-live { padding-left: 62px; position: relative; }
+.log-steps.is-live li { position: relative; }
+.log-steps.is-live li::before { content: ''; position: absolute; left: -12px; top: 5px; bottom: -11px; width: 2px; background: var(--fill-2); }
+.log-steps.is-live li:last-child::before { display: none; }
+.log-steps.is-live li::after { content: ''; position: absolute; left: -14px; top: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.log-steps.is-live li.is-now { color: var(--text); font-weight: 600; }
+.log-steps.is-live li.is-now::after { left: -16px; top: 2px; width: 10px; height: 10px; background: var(--green); animation: log-now-in .35s ease-out, log-now-pulse 1.6s ease-in-out .35s infinite; }
 @media (max-width: 560px) { .log-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ── Languages (Settings › Behaviour, chat Behaviour tab) ── */
@@ -1551,6 +1559,12 @@ count-ring { display: inline-grid; flex: none; }
 .lang-x { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; padding: 0; }
 .lang-x:hover { background: var(--fill-2); }
 .lang-controls .select-sm { max-width: 200px; }
+.lang-menu { position: relative; max-width: 320px; }
+.lang-menu > summary { list-style: none; display: flex; align-items: center; max-width: 100%; cursor: pointer; }
+.lang-menu > summary::-webkit-details-marker { display: none; }
+.lang-menu-list { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: 220px; max-height: 260px; overflow-y: auto; padding: 4px; border-radius: 10px; border: 1px solid var(--fill-2); background: var(--glass-solid); }
+.lang-menu-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.lang-menu-item:hover { background: var(--fill-2); }
 
 /* ── What it reads (chat drawer › Memory) ── */
 .ctx-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }

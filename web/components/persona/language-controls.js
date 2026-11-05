@@ -18,6 +18,9 @@ export const DEFAULT_LANGS = ['en', 'he'];
 
 export const langName = (code) => (LANGS.find((l) => l.code === code) || {}).name || code;
 
+// Stays open across re-renders while you tick several.
+const openMenus = new Set();
+
 /** The preferences with defaults filled in (lang.Effective). */
 export function effectiveLangs(p) {
   p = p || {};
@@ -32,9 +35,9 @@ export function effectiveLangs(p) {
 export function langSummary(p) {
   const e = effectiveLangs(p);
   const names = e.languages.map(langName);
-  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  const list = e.others === 'answer' ? 'All languages' : names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
   const reply = e.reply === 'match' ? 'replies in the language of the message' : `always replies in ${langName(e.reply)}`;
-  return `${list} · ${reply}${e.others === 'answer' ? ' · answers other languages too' : ''}`;
+  return `${list} · ${reply}`;
 }
 
 /**
@@ -44,35 +47,32 @@ export function langSummary(p) {
 export function languageControls(prefs, onChange, { idPrefix = 'lang' } = {}) {
   const e = effectiveLangs(prefs);
   const set = (patch) => onChange({ ...e, ...patch });
-  const remove = (code) => {
-    const languages = e.languages.filter((c) => c !== code);
+  const all = e.others === 'answer';
+  const toggle = (code) => {
+    const languages = e.languages.includes(code) ? e.languages.filter((c) => c !== code) : [...e.languages, code];
     if (!languages.length) return;
-    set({ languages, reply: e.reply === code ? 'match' : e.reply });
+    set({ languages, reply: languages.includes(e.reply) || e.reply === 'match' ? e.reply : 'match' });
   };
-  const add = (code) => { if (code && !e.languages.includes(code)) set({ languages: [...e.languages, code] }); };
-  const rest = LANGS.filter((l) => !e.languages.includes(l.code));
+  const picked = LANGS.filter((l) => e.languages.includes(l.code)).map((l) => l.name).join(', ');
   return html`<div class="lang-controls">
     <div class="field-row field-row-stack">
       <div><div class="field-label">${icon('globe', 'ic-sm')}Languages it speaks</div>
-        <div class="field-help">It reads and answers these. Short messages like "ok" or "lol" always count.</div></div>
-      <div class="lang-chips">
-        ${e.languages.map((code) => html`<span class="chip chip-sm on lang-chip">${langName(code)}
-          ${e.languages.length > 1 ? html`<button type="button" class="lang-x" aria-label=${'Remove ' + langName(code)} @click=${() => remove(code)}>${icon('x', 'ic-sm')}</button>` : ''}</span>`)}
-        ${rest.length ? html`<select class="select select-sm" aria-label="Add a language" id=${idPrefix + '-add'}
-            @change=${(ev) => { add(ev.target.value); ev.target.value = ''; }}>
-          <option value="">Add a language…</option>
-          ${rest.map((l) => html`<option value=${l.code}>${l.name}</option>`)}
-        </select>` : ''}
-      </div>
-    </div>
-    <div class="field-row">
-      <div class="grow"><div class="field-label">Messages in other languages</div>
-        <div class="field-help">${e.others === 'answer' ? 'Answered anyway, in the reply language below.' : 'It stays quiet (the message is still read as background).'}</div></div>
-      ${seg([{ value: 'ignore', label: 'Stay quiet' }, { value: 'answer', label: 'Answer' }], e.others, (v) => set({ others: v }), { label: 'Messages in other languages', cls: 'seg-sm' })}
+        <div class="field-help">${all ? 'It answers messages in any language.' : 'It answers these and stays quiet on others, which it still reads as background. Short messages like "ok" or "lol" always count.'}</div></div>
+      ${seg([{ value: 'all', label: 'All languages' }, { value: 'some', label: 'Choose specific' }], all ? 'all' : 'some', (v) => set({ others: v === 'all' ? 'answer' : 'ignore' }), { label: 'Languages it speaks', cls: 'seg-sm' })}
+      ${all ? '' : html`<details class="lang-menu" id=${idPrefix + '-menu'} ?open=${openMenus.has(idPrefix)}
+          @toggle=${(ev) => { if (ev.target.open) openMenus.add(idPrefix); else openMenus.delete(idPrefix); }}>
+        <summary class="select select-sm"><span class="ellipsis">${picked}</span></summary>
+        <div class="lang-menu-list" role="group" aria-label="Languages it speaks">
+          ${LANGS.map((l) => {
+            const on = e.languages.includes(l.code);
+            return html`<label class="lang-menu-item"><input type="checkbox" .checked=${on} ?disabled=${on && e.languages.length === 1} @change=${() => toggle(l.code)}>${l.name}</label>`;
+          })}
+        </div>
+      </details>`}
     </div>
     <div class="field-row">
       <div class="grow"><div class="field-label">Reply in</div>
-        <div class="field-help">${e.reply === 'match' ? 'The language the person wrote in. Unclear messages follow the conversation.' : e.others === 'answer' ? 'Always this language, whatever people write. You can still pick per person in the People tab.' : 'Always this language. Messages in a language it does not speak still get no answer: set Messages in other languages to Answer to reply to those too.'}</div></div>
+        <div class="field-help">${e.reply === 'match' ? 'The language the person wrote in. Unclear messages follow the conversation.' : all ? 'Always this language, whatever people write. You can still pick per person in the People tab.' : 'Always this language. Messages in a language it does not speak still get no answer: choose All languages to reply to those too.'}</div></div>
       <select class="select select-sm" aria-label="Reply in" @change=${(ev) => set({ reply: ev.target.value })}>
         <option value="match" ?selected=${e.reply === 'match'}>Same as the message</option>
         ${LANGS.map((l) => html`<option value=${l.code} ?selected=${e.reply === l.code}>${l.name}</option>`)}

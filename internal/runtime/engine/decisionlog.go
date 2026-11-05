@@ -163,7 +163,7 @@ func (e *Engine) logActivity(typ string, c model.ChatAssignment, text string, me
 		e.logApprovalDone(c.Key, true, text, now)
 	case model.ActApprovalDiscarded:
 		e.logApprovalDone(c.Key, false, text, now)
-	case model.ActNoticing, model.ActSeen, model.ActWaiting, model.ActThinking, model.ActGenerating, model.ActTyping, model.ActDeferred:
+	case model.ActNoticing, model.ActSeen, model.ActWaiting, model.ActThinking, model.ActGenerating, model.ActProgress, model.ActTyping, model.ActDeferred:
 		e.logStep(c.Key, ids, typ, text, now)
 	}
 }

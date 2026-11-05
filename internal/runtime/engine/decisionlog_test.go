@@ -74,3 +74,17 @@ func TestDecisionLogOpener(t *testing.T) {
 		t.Fatalf("log = %+v", all)
 	}
 }
+
+// The steps of writing (planning, translating…) show before the reply goes out.
+func TestLogShowsWritingStepsBeforeSending(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.msg(dmKey, "A", "hello")
+	h.advance(10 * time.Second)
+	h.waitSent(1)
+	for _, st := range h.decisions(dmKey)["A"].Steps {
+		if st.Type == model.ActProgress {
+			return
+		}
+	}
+	t.Fatalf("no writing steps: %+v", h.decisions(dmKey)["A"].Steps)
+}
