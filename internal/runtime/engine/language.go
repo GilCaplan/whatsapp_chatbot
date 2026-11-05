@@ -45,6 +45,13 @@ func (e *Engine) foreignLanguage(c model.ChatAssignment, text string) string {
 // the message(s) it answers — theirs since its last message, or your own
 // trigger message — and the conversation.
 func (e *Engine) replyLanguage(c model.ChatAssignment, hist []model.Message) string {
+	code, _ := e.replyRule(c, hist)
+	return code
+}
+
+// replyRule is replyLanguage plus whether it was chosen in the settings (a
+// hard rule) rather than following the conversation.
+func (e *Engine) replyRule(c model.ChatAssignment, hist []model.Message) (string, bool) {
 	prefs := e.languages(c)
 	var sender string
 	var theirs, conv []string
@@ -83,5 +90,5 @@ func (e *Engine) replyLanguage(c model.ChatAssignment, hist []model.Message) str
 			person = c.People.People[i].Language
 		}
 	}
-	return lang.Reply(prefs, person, lang.Main(theirs), lang.Main(conv))
+	return lang.Reply(prefs, person, lang.Main(theirs), lang.Main(conv)), lang.Fixed(prefs, person)
 }

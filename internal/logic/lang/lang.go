@@ -82,6 +82,10 @@ func Effective(app model.LanguagePrefs, chat *model.LanguagePrefs) model.Languag
 	if p.Reply == "" {
 		p.Reply = model.LangMatch
 	}
+	// The language it replies in always counts as spoken.
+	if p.Reply != model.LangMatch && !slices.Contains(p.Languages, p.Reply) {
+		p.Languages = append(p.Languages, p.Reply)
+	}
 	return p
 }
 
@@ -140,6 +144,26 @@ func Reply(p model.LanguagePrefs, person, msg, conv string) string {
 		return p.Languages[0]
 	}
 	return Default[0]
+}
+
+// Code is the code of a language's English name ("" for an unknown name).
+func Code(name string) string {
+	for _, l := range All {
+		if l.Name == name {
+			return l.Code
+		}
+	}
+	return ""
+}
+
+// Fixed reports whether the language was chosen (for the person or the chat)
+// rather than following the conversation: a rule, not a preference.
+func Fixed(p model.LanguagePrefs, person string) bool {
+	choice := p.Reply
+	if person != "" {
+		choice = person
+	}
+	return choice != "" && choice != model.LangMatch
 }
 
 // ─── detection ───────────────────────────────────────────────
@@ -245,6 +269,34 @@ func detectLatin(text string) (string, bool) {
 		return "", false
 	}
 	return best, top >= minLatinScore && top >= 1.5*second && len(words) >= minLatinWords
+}
+
+// alphabets are the languages with their own writing system.
+var alphabets = map[string][]*unicode.RangeTable{
+	"he": {unicode.Hebrew}, "ar": {unicode.Arabic}, "ru": {unicode.Cyrillic}, "uk": {unicode.Cyrillic},
+	"el": {unicode.Greek}, "hi": {unicode.Devanagari}, "th": {unicode.Thai}, "ko": {unicode.Hangul},
+	"ja": {unicode.Hiragana, unicode.Katakana, unicode.Han}, "zh": {unicode.Han},
+}
+
+// OffAlphabet reports whether text is written outside code's alphabet: under
+// half its letters are in it. It catches what Detect can't place ("sure
+// thing mate" when the rule is Russian). Single words like "ok" pass, and so
+// does any text for a language written in Latin letters.
+func OffAlphabet(text, code string) bool {
+	tables := alphabets[code]
+	if tables == nil || len(strings.Fields(text)) < 2 {
+		return false
+	}
+	in, letters := 0, 0
+	for _, r := range text {
+		if unicode.IsLetter(r) {
+			letters++
+			if unicode.IsOneOf(tables, r) {
+				in++
+			}
+		}
+	}
+	return letters >= 2 && in*2 < letters
 }
 
 func hasAny(s, chars string) bool { return strings.ContainsAny(s, chars) }

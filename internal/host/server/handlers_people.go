@@ -74,7 +74,7 @@ func (s *Server) chatPeopleView(ctx context.Context, c model.ChatAssignment) peo
 	if mode == "" {
 		mode = model.PeopleAuto
 	}
-	v := peopleView{Kind: kind, Mode: mode, Threshold: bp.RespondToAllMaxMembers, AnswerAnyone: bp.AnswerAnyoneWhoAddressesIt, Members: []personView{}}
+	v := peopleView{Kind: kind, Mode: mode, Threshold: behavior.GroupLimit(bp), AnswerAnyone: bp.AnswerAnyoneWhoAddressesIt, Members: []personView{}}
 	prefOf := func(ids ...string) model.PersonPrefs {
 		if i := behavior.FindPerson(c.People.People, ids...); i >= 0 {
 			return c.People.People[i]

@@ -27,7 +27,7 @@ export default function Activity(ctx) {
   }
 
   function filtered(list) {
-    return list.filter((ev) => (st.group === 'all' || actMeta(ev.type).group === st.group) && (!st.chat || ev.chatKey === st.chat));
+    return list.filter((ev) => (st.group === 'all' ? actMeta(ev.type).group !== 'progress' : actMeta(ev.type).group === st.group) && (!st.chat || ev.chatKey === st.chat));
   }
 
   function chatOptions() {

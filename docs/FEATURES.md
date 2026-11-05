@@ -71,7 +71,11 @@ How each feature is wired (read the one you are changing). Shared rules stay in 
 - Languages are not behaviour (presets/dials never touch them): `settings.behavior.languages.{private,group}` →
   `ChatAssignment.language` (whole block) → `PersonPrefs.language` (reply language only); `engine/language.go` gates
   foreign messages and sets `prompt.Options.ReplyLanguage` (`REPLY LANGUAGE`, after STAY YOURSELF so it wins over the
-  persona's own Language line).
+  persona's own Language line). A language chosen in the settings (chat or person, `lang.Fixed`) is a hard rule
+  (`Options.LanguageFixed`): it replaces the profile's Language line (also added to a persona card), `FixedLanguageSection`
+  comes last in the system prompt, `LanguageCue` repeats it on the last turn, and `replycheck.go` checks it at any length
+  and even when the context system's reply checks are off (a draft that fails twice stays quiet); Regenerate checks it
+  too. The reply language always counts as spoken (`lang.Effective`).
 - The system prompt is built from labelled parts (`prompt.SystemSections`; `SystemPrompt` joins them). A chat's
   `promptEdits` replace the editable parts (`model.EditablePromptSections`: character, safety, history, stay) in that
   chat only; delays are drawn with `behavior.Delay` along the profile's `timingCurve`.

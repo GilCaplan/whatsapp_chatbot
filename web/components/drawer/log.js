@@ -3,7 +3,9 @@
 // kept by the engine). On top: a summary for the chosen time range — how
 // many it answered, typical reply time, why it stayed quiet, who gets
 // answers and how fast replies come; below: one row per message with its
-// decision and, on a tap, the steps on the way.
+// decision and, on a tap, the steps on the way. "Live progress" is a separate
+// view: each step of writing a reply as it happens (planning, the model
+// writing, checks, typing), with how long the current reply has taken.
 
 import { html } from '../../dom.js';
 import { icon } from '../../icons.js';
@@ -46,6 +48,13 @@ const RANGES = [
   { value: 'week', label: '7 days', ms: 7 * 24 * 3600 * 1000 },
   { value: 'all', label: 'All', ms: Infinity },
 ];
+
+// What the Live progress view shows, as activity types.
+const PROGRESS_TYPES = ['progress', 'thinking', 'generating', 'waiting', 'typing', 'sent', 'decision.reply', 'decision.skip', 'error'];
+const PROGRESS_LIMIT = 80;
+const PROGRESS_ICONS = {
+  read: 'chats', planning: 'target', plan: 'target', write: 'wand', written: 'check', checked: 'shield', rewrite: 'warning', keep: 'send',
+};
 
 const STEP_ICONS = {
   decision: 'sparkles', noticing: 'eye', seen: 'check', waiting: 'hourglass', thinking: 'brain', generating: 'wand',
@@ -107,7 +116,46 @@ function quietLabel(k) {
 }
 
 export function createLogTab(ctx) {
-  const ui = { items: null, error: '', range: 'week', filter: 'all', open: new Set(), shown: false };
+  const ui = { items: null, error: '', range: 'week', filter: 'all', open: new Set(), shown: false, tab: 'messages', progress: [] };
+
+  async function loadProgress() {
+    try {
+      const r = await api.activity.list({ chat: ctx.key, types: PROGRESS_TYPES.join(','), limit: 400 }, { quiet: true });
+      ui.progress = (r && r.items) || [];
+    } catch { /* the live events still arrive */ }
+    ctx.update();
+  }
+
+  function addProgress(ev) {
+    if (!PROGRESS_TYPES.includes(ev.type) || ui.progress.some((x) => x.id === ev.id)) return;
+    ui.progress = [...ui.progress, ev].slice(-400);
+    if (ui.tab === 'progress') ctx.update();
+  }
+
+  // Newest first, grouped into replies: one starts when it decides to answer.
+  function progressView(name) {
+    const steps = ui.progress.slice(-PROGRESS_LIMIT);
+    if (!steps.length) return emptyState({ artName: 'activity', small: true, title: 'Nothing to show yet', body: `The next time ${name} writes here, you will see every step as it happens.` });
+    const runs = [];
+    steps.forEach((ev, i) => {
+      const read = ev.type === 'progress' && ev.meta && ev.meta.stage === 'read';
+      if (!runs.length || ev.type === 'decision.reply' || (read && steps[i - 1].type !== 'decision.reply')) runs.push([]);
+      runs[runs.length - 1].push(ev);
+    });
+    const last = steps[steps.length - 1];
+    const busy = !['sent', 'decision.skip', 'error'].includes(last.type);
+    return html`
+      <div class=${'banner small ' + (busy ? 'info' : '')}>${icon(busy ? 'hourglass' : 'check')}<div>${busy ? html`<b>Working now:</b> ${last.text}` : `Nothing in progress. Last step ${relTime(last.ts)}.`}</div></div>
+      ${runs.reverse().map((run, i) => html`<div class="log-run" data-key=${'run-' + run[0].id}>
+        <div class="field-label small mt-12">${i === 0 && busy ? 'This reply' : `Reply at ${clockTime(run[0].ts)}`}
+          <span class="faint"> · ${duration((toDate(run[run.length - 1].ts) - toDate(run[0].ts)) / 1000)} so far</span></div>
+        <ol class="log-steps">${run.map((ev) => {
+          const m = ev.meta || {};
+          const off = (toDate(ev.ts) - toDate(run[0].ts)) / 1000;
+          return html`<li data-key=${'ev-' + ev.id}><span class="log-step-t" title=${clockTime(ev.ts)}>+${duration(off)}</span>${icon(PROGRESS_ICONS[m.stage] || STEP_ICONS[ev.type] || 'info', 'ic-sm')}<span>${ev.text}${m.latencyMs ? html` <span class="faint">(${duration(m.latencyMs / 1000)})</span>` : ''}</span></li>`;
+        })}</ol>
+      </div>`)}`;
+  }
 
   async function load() {
     try {
@@ -225,6 +273,14 @@ export function createLogTab(ctx) {
 
   function view(c, p) {
     const name = p ? p.name : 'The persona';
+    const switcher = seg([{ value: 'messages', label: 'What it did' }, { value: 'progress', label: 'Live progress' }], ui.tab, (v) => { ui.tab = v; if (v === 'progress') loadProgress(); ctx.update(); }, { label: 'Log view' });
+    if (ui.tab === 'progress') {
+      return html`<section class="drawer-section" data-key="log-progress">
+        <div class="log-controls">${switcher}</div>
+        <h4>${icon('activity', 'ic-sm')}How ${name} is getting on<span class="grow"></span></h4>
+        ${progressView(name)}
+      </section>`;
+    }
     if (ui.items == null) return html`<section class="drawer-section">${skeletonRows(4)}</section>`;
     const now = Date.now();
     const range = RANGES.find((r) => r.value === ui.range) || RANGES[1];
@@ -238,6 +294,7 @@ export function createLogTab(ctx) {
     const shown = inRange.filter(groups[ui.filter] || groups.all);
     return html`
       <section class="drawer-section" data-key="log">
+        <div class="log-controls">${switcher}</div>
         <h4>${icon('activity', 'ic-sm')}What ${name} did here ${helpTip('log')}<span class="grow"></span>
           ${ui.items.length ? html`<button class="btn btn-ghost btn-sm" title="Forget the logged decisions" @click=${clear}>${icon('trash')}Clear</button>` : ''}
         </h4>
@@ -270,7 +327,10 @@ export function createLogTab(ctx) {
     load,
     shown() { load(); },
     onBus(type, data) {
-      if (type === 'activity' && data && data.chatKey === ctx.key) reloadSoon();
+      if (type === 'activity' && data && data.chatKey === ctx.key) {
+        addProgress(data);
+        if (data.type !== 'progress') reloadSoon();
+      }
     },
     destroy() { reloadSoon.cancel && reloadSoon.cancel(); },
   };

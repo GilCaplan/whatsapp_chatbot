@@ -91,11 +91,15 @@ func (r *Runner) peopleGate(c model.ChatAssignment, bp model.BehaviorProfile, p 
 	}
 	if isGroup {
 		ids := personIDs(in.SenderJID, roster)
-		ok, src := behavior.Answerable(c.People, len(roster), bp.RespondToAllMaxMembers, ids...)
+		limit := behavior.GroupLimit(bp)
+		ok, src := behavior.Answerable(c.People, len(roster), limit, ids...)
 		if !ok && !(bp.AnswerAnyoneWhoAddressesIt && r.e.addressesMe(p, raw, in.MentionedJIDs)) {
 			text := "Not answering " + who + " — this group only answers people you picked"
-			if src == behavior.SourcePerson {
+			switch {
+			case src == behavior.SourcePerson:
 				text = "Not answering " + who + " — set not to answer them in this chat"
+			case c.People.Mode != model.PeopleSelected && limit > 0:
+				text = fmt.Sprintf("Not answering %s — this group has %d members and it answers everyone only up to %d. Choose who it answers in the People tab", who, len(roster), limit)
 			}
 			return gateResult{gateSkip, text, map[string]any{"reason": ReasonNotSelected, "sender": in.PushName}}
 		}

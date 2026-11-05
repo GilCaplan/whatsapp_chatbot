@@ -166,8 +166,41 @@ func (s *Server) handleBehaviorSample(w http.ResponseWriter, r *http.Request) {
 			"medianTotalSec": median,
 			"maxTotalSec":    totals[len(totals)-1],
 			"splitShare":     math.Round(float64(split)/float64(n)*100) / 100,
+			"modelSec":       s.modelSeconds(),
 		},
 	})
+}
+
+// modelSeconds is how long the AI model has taken lately to plan and write a
+// reply, which comes on top of the timers (0 = no replies measured yet).
+func (s *Server) modelSeconds() float64 {
+	if s.d.Hub == nil {
+		return 0
+	}
+	const recent = 20
+	var writes, plans []float64
+	got, _ := s.d.Hub.ActivitySince(0, "", map[string]bool{model.ActSent: true, model.ActThinking: true}, 1000)
+	for _, a := range got {
+		ms, ok := a.Meta["latencyMs"].(int64)
+		if !ok || ms <= 0 {
+			continue
+		}
+		switch {
+		case a.Type == model.ActSent:
+			writes = append(writes, float64(ms)/1000)
+		case a.Meta["stage"] == "plan":
+			plans = append(plans, float64(ms)/1000)
+		}
+	}
+	mid := func(xs []float64) float64 {
+		if len(xs) == 0 {
+			return 0
+		}
+		xs = slices.Clone(xs[max(0, len(xs)-recent):])
+		slices.Sort(xs)
+		return xs[len(xs)/2]
+	}
+	return math.Round((mid(writes) + mid(plans)))
 }
 
 // GET /api/chats/{key}/behavior — the chat's effective behaviour and where each value comes from.

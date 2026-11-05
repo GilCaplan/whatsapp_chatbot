@@ -733,3 +733,79 @@ func TestNoTimerLeaksAfterStop(t *testing.T) {
 		t.Error("sent after Stop")
 	}
 }
+
+// On a slow model a busy chat must not throw every finished reply away: the
+// draft goes out and the newer message gets the next cycle.
+func TestSlowDraftIsSentThenNewerMessagesAnswered(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.ThinkMinSec, p.ThinkMaxSec = 30, 30 }), dmChat())
+	h.llm.Push("reply one", "reply two")
+	h.msg(dmKey, "A", "first")
+	h.advance(25 * time.Second)
+	h.msg(dmKey, "B", "second thought")
+	h.advance(16 * time.Second) // the 9 s wait, then 30 s of thinking
+	if sent := h.waitSent(1); sent[0].text != "reply one" {
+		t.Fatalf("sent %+v", sent)
+	}
+	if w := h.acts(model.ActWaiting); lastMeta(w, "reason") == "new_messages" {
+		t.Fatalf("the draft was thrown away: %+v", w)
+	}
+	h.advance(45 * time.Second)
+	sent := h.waitSent(2)
+	if sent[1].text != "reply two" {
+		t.Fatalf("sent %+v", sent)
+	}
+	if reqs := replyRequests(h.llm); !strings.Contains(reqs[1].Messages[len(reqs[1].Messages)-1].Content, "second thought") {
+		t.Fatalf("second reply didn't answer B: %+v", reqs[1].Messages)
+	}
+}
+
+// Quick drafts are redone, but a chat that never pauses still gets an answer.
+func TestRedoLimit(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.ThinkMinSec, p.ThinkMaxSec = 5, 5 }), dmChat())
+	h.msg(dmKey, "A", "one")
+	for i, id := range []string{"B", "C", "D"} {
+		h.advance(3 * time.Second)
+		h.msg(dmKey, id, "more "+id)
+		if i < 2 {
+			h.advance(10 * time.Second)
+		}
+	}
+	h.advance(10 * time.Second)
+	h.waitSent(1)
+	if n := len(h.acts(model.ActWaiting)); n > 4 {
+		t.Fatalf("waiting = %d", n)
+	}
+}
+
+func TestProgressSteps(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.msg(dmKey, "A", "hello there")
+	h.advance(15 * time.Second)
+	h.waitSent(1)
+	var stages []string
+	for _, a := range h.acts(model.ActProgress) {
+		stages = append(stages, a.Meta["stage"].(string))
+		if strings.ContainsAny(a.Text, "_") {
+			t.Errorf("code in the text: %q", a.Text)
+		}
+	}
+	if !slices.Contains(stages, "read") || !slices.Contains(stages, "write") || !slices.Contains(stages, "written") {
+		t.Fatalf("stages = %v", stages)
+	}
+}
+
+func TestOldMessagesFollowTheLimit(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.StaleAfterMin = 5 }), dmChat())
+	in := func(id string, age time.Duration) {
+		h.e.HandleIncoming(model.Incoming{ChatKey: dmKey, ChatJID: dmJID, SenderJID: dmJID, PushName: "Dana", Text: "hello there",
+			Timestamp: h.clk.Now().Add(-age), MessageID: id})
+		h.idle()
+	}
+	in("old", 6*time.Minute)
+	if r := h.lastReason(model.ActDecisionSkip); r != "stale" {
+		t.Fatalf("old message: %v", r)
+	}
+	in("new", 4*time.Minute)
+	h.advance(15 * time.Second)
+	h.waitSent(1)
+}

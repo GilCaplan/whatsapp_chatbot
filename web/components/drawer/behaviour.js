@@ -259,7 +259,7 @@ export function createBehaviourTab(ctx) {
       <div class="field-row">
         <div class="grow"><div class="field-label">${icon('bolt', 'ic-sm')}Keep going when a message is flagged ${helpTip('auto-continue')}</div>
           <div class="field-help">${!handoffOn ? 'Hand-off is off in Settings › Safety, so nothing pauses this chat anyway.'
-            : on ? 'Messages about money, health, meeting up or asking if it is a bot are only flagged in the activity feed and the Log. The persona keeps replying and nothing needs Resume.'
+            : on ? 'Messages about money, health, someone seeming upset, legal trouble, meeting up or asking if it is a bot are only flagged in the activity feed and the Log. The persona keeps replying and nothing needs Resume.'
             : 'Off: such messages pause this chat until you tap Resume.'}</div></div>
         ${toggle(on, (v) => {
           c.autoContinue = v;

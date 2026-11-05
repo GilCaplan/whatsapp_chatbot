@@ -89,3 +89,31 @@ func TestPrefsAndReply(t *testing.T) {
 		t.Error("ValidPerson")
 	}
 }
+
+func TestFixed(t *testing.T) {
+	cases := []struct {
+		chat, person string
+		want         bool
+	}{{"", "", false}, {model.LangMatch, "", false}, {"ru", "", true}, {"", "he", true}, {"ru", model.LangMatch, false}}
+	for _, c := range cases {
+		if got := Fixed(model.LanguagePrefs{Reply: c.chat}, c.person); got != c.want {
+			t.Errorf("Fixed(%q, %q) = %v", c.chat, c.person, got)
+		}
+	}
+}
+
+func TestOffAlphabet(t *testing.T) {
+	cases := []struct {
+		text, code string
+		want       bool
+	}{
+		{"sure thing mate", "ru", true}, {"לא, תגידי לנו.", "ru", true}, {"Нет, скажи нам.", "ru", false},
+		{"Привет Ben, как дела?", "ru", false}, {"ok", "ru", false}, {"😀 😀", "ru", false},
+		{"sure thing mate", "en", false}, {"sure thing mate", "es", false}, {"こんにちは 友達", "ja", false},
+	}
+	for _, c := range cases {
+		if got := OffAlphabet(c.text, c.code); got != c.want {
+			t.Errorf("OffAlphabet(%q, %q) = %v", c.text, c.code, got)
+		}
+	}
+}
