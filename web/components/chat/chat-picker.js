@@ -17,8 +17,8 @@ export function chatSubtitle(it) {
   return prettyPhone(it.phone) || 'Contact';
 }
 
-/** createChatPicker({ update, onChange, autoSelectSelf }) */
-export function createChatPicker({ update = () => {}, onChange = () => {}, autoSelectSelf = true, hideAssigned = false } = {}) {
+/** createChatPicker({ update, onChange, autoSelectSelf, hideAssigned, noGroups }) */
+export function createChatPicker({ update = () => {}, onChange = () => {}, autoSelectSelf = true, hideAssigned = false, noGroups = false } = {}) {
   const st = { q: '', tab: 'recent', items: [], total: 0, loading: false, error: '', selected: null, seq: 0, ctl: null };
 
   async function load(reset = true) {
@@ -57,7 +57,7 @@ export function createChatPicker({ update = () => {}, onChange = () => {}, autoS
   }
 
   function view() {
-    const items = hideAssigned ? st.items.filter((i) => !i.assigned) : st.items;
+    const items = st.items.filter((i) => !(hideAssigned && i.assigned) && !(noGroups && i.kind === 'group'));
     const more = st.items.length < st.total;
     return html`<div class="chat-picker col gap-10">
       <div class="row gap-8 row-wrap">
@@ -70,7 +70,7 @@ export function createChatPicker({ update = () => {}, onChange = () => {}, autoS
         ${seg([
           { value: 'recent', label: 'Recent' },
           { value: 'contacts', label: 'Contacts' },
-          { value: 'groups', label: 'Groups' },
+          ...(noGroups ? [] : [{ value: 'groups', label: 'Groups' }]),
         ], st.tab, (v) => { st.tab = v; load(true); }, { cls: 'seg-sm', label: 'Chat type' })}
       </div>
       <div class="picker-list glass">
