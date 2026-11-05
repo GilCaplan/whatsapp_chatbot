@@ -1,4 +1,5 @@
-// tasks/task-sheet.js — set up a task: pick a private chat → say what the
+// tasks/task-sheet.js — set up a task: pick a private chat (one with a
+// persona, or any contact: it is assigned on Start) → say what the
 // meeting is and when it may happen → (More details) privacy, "why not?",
 // confirming, booking and limits → (Advanced) the rule list. Then Start,
 // Save for later, or Try it first: an AI plays the other side, nothing is
@@ -10,9 +11,11 @@
 import { html } from '../../dom.js';
 import { icon } from '../../icons.js';
 import { api } from '../../api.js';
-import { store, personaById } from '../../store.js';
+import { store, personaById, assignmentFor, loadChats, loadPersonas } from '../../store.js';
 import { openSheet, toast, seg, toggle } from '../../ui.js';
-import { avatarStack } from '../common/avatar.js';
+import { avatarStack, chatAvatar } from '../common/avatar.js';
+import { createChatPicker, chatSubtitle } from '../chat/chat-picker.js';
+import { assignChat } from '../chat/assign-sheet.js';
 import { helpTip } from '../common/help-tip.js';
 import { ruleEditor } from './rule-editor.js';
 import { STRATEGIES, PROBE_THEN, BOOK, when } from './task-labels.js';
@@ -34,6 +37,7 @@ export async function loadTaskCatalog(force = false) {
 }
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
+const NEW_ASSISTANT = '__assistant'; // the Assistant seed, added on Start
 
 export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone } = {}) {
   const defaults = () => (store.state.settings && store.state.settings.tasks) || {};
@@ -47,7 +51,10 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
     busy: '', error: '',
     try: null, tryStyle: 'cooperative', tryPersona: '',
     cals: [],
+    // A contact without a persona yet: assigned on Start.
+    picked: null, pickPersona: '', pickApproval: true,
   };
+  let picker = null;
   let ctl = null;
   const update = () => ctl && ctl.update();
 
@@ -59,7 +66,14 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
 
   api.calendars.list({ quiet: true }).then((r) => { st.cals = (r && r.items) || []; update(); }).catch(() => {});
 
-  const chat = () => (store.state.chats || []).find((c) => c.key === st.chatKey);
+  const assigned = () => (store.state.chats || []).find((c) => c.key === st.chatKey);
+  // The chat the task runs in; a picked contact stands in until Start assigns it.
+  const chat = () => assigned() || (st.picked && {
+    key: '', jid: st.picked.jid, name: st.picked.isSelf ? 'You (message yourself)' : (st.picked.name || st.picked.phone || st.picked.jid),
+    kind: st.picked.kind, personaId: st.pickPersona === NEW_ASSISTANT ? '' : st.pickPersona, enabled: true,
+    mode: 'auto', // the "Approve before sending" switch above says it
+  });
+  const assistantId = () => ((store.state.personas || []).find((p) => p.id === 'assistant' || p.name === 'Assistant') || {}).id;
   const m = () => st.spec.meeting;
   const block = (k, def) => { if (!st.spec[k]) st.spec[k] = clone(def); return st.spec[k]; };
   const privacy = () => block('privacy', defaults().privacy || {});
@@ -78,7 +92,21 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
     if (st.busy) return;
     st.busy = 'start'; update();
     try {
-      const run = await api.tasks.start(st.chatKey, { spec: payload(), open: st.open });
+      let key = st.chatKey;
+      if (!assigned() && st.picked) {
+        let personaId = st.pickPersona;
+        if (personaId === NEW_ASSISTANT) {
+          personaId = (await api.personas.create(catalog.assistant)).id;
+          st.pickPersona = personaId; // a retry reuses it
+          await loadPersonas();
+        }
+        key = (await assignChat(st.picked, personaId, st.pickApproval)).key;
+        st.chatKey = key; st.picked = null;
+      } else if (assigned() && !assigned().enabled) {
+        await api.chats.patch(key, { enabled: true });
+        await loadChats();
+      }
+      const run = await api.tasks.start(key, { spec: payload(), open: st.open });
       const c = chat();
       toast(st.open ? `Task started: ${(personaById(c && c.personaId) || {}).name || 'The persona'} is writing first` : 'Task started: it answers their next message', { type: 'success' });
       if (onDone) onDone(run);
@@ -109,12 +137,25 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
   }
 
   // ── Steps ──
+  function pickChat(it) {
+    const a = assignmentFor(it);
+    if (a && a.kind !== 'group') { st.chatKey = a.key; st.picked = null; } else {
+      st.chatKey = ''; st.picked = it;
+      if (!st.pickPersona) st.pickPersona = assistantId() || (catalog && catalog.assistant ? NEW_ASSISTANT : ((store.state.personas || [])[0] || {}).id || '');
+    }
+    st.step = 'setup'; update();
+  }
+
   function chatStep() {
     const chats = (store.state.chats || []).filter((c) => c.kind !== 'group');
+    if (!picker) {
+      picker = createChatPicker({ update, onChange: pickChat, autoSelectSelf: false, noGroups: true });
+      queueMicrotask(() => picker.load(true));
+    }
     return html`
       <div class="ms-title"><span class="ms-n">1</span>Who with?</div>
       <p class="small muted">Tasks run in private chats for now.</p>
-      ${!chats.length ? html`<div class="banner info">${icon('info')}<div>Assign a persona to a private chat first (Chats page).</div></div>` : html`
+      ${chats.length ? html`<div class="field-label small">Your chats</div>
         <div class="ms-chats">${chats.map((c) => {
           const p = personaById(c.personaId);
           return html`<button type="button" class="ms-chat" data-key=${'c-' + c.key} @click=${() => { st.chatKey = c.key; st.step = 'setup'; update(); }}>
@@ -124,15 +165,33 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
             ${c.enabled ? '' : html`<span class="chip chip-sm">off</span>`}
             ${icon('chevron-right', 'ic-sm faint')}
           </button>`;
-        })}</div>`}`;
+        })}</div>` : ''}
+      <div class="field-label small mt-12">${chats.length ? 'Or any other chat' : 'Pick a chat'}</div>
+      ${picker.view()}`;
   }
 
   function chatLine() {
     const c = chat();
     if (!c) return '';
+    const change = chatKey ? '' : html`<button class="link-btn" @click=${() => { st.step = 'chat'; update(); }}>Change</button>`;
+    if (!assigned()) {
+      const personas = store.state.personas || [];
+      return html`<div class="ms-for tk-pick">${chatAvatar({ jid: st.picked.jid, name: c.name, kind: st.picked.kind }, 30)}
+        <span class="grow ellipsis"><b>${c.name}</b> <span class="faint">${chatSubtitle(st.picked)}</span></span>${change}</div>
+      <div class="two-col mt-8">
+        <label class="field"><span class="field-label">Who writes</span>
+          <select class="select input-sm" @change=${(e) => { st.pickPersona = e.target.value; update(); }}>
+            ${!assistantId() && catalog && catalog.assistant ? html`<option value=${NEW_ASSISTANT} ?selected=${st.pickPersona === NEW_ASSISTANT}>Assistant (added for you)</option>` : ''}
+            ${personas.map((p) => html`<option value=${p.id} ?selected=${st.pickPersona === p.id}>${p.name}</option>`)}
+          </select>
+          <span class="field-help">This chat gets this persona when the task starts.</span></label>
+        <div class="field"><span class="field-label">Approve before sending</span>
+          <span class="row gap-8">${toggle(st.pickApproval, (v) => { st.pickApproval = v; update(); }, { label: 'Approve before sending' })}
+            <span class="field-help">Every message waits in Approvals until you tap Send.</span></span></div>
+      </div>`;
+    }
     const p = personaById(c.personaId);
-    return html`<div class="ms-for">${avatarStack(c, p, 30)}<span class="grow ellipsis"><b>${p ? p.name : 'The persona'}</b> with ${c.name || c.jid}</span>
-      ${chatKey ? '' : html`<button class="link-btn" @click=${() => { st.step = 'chat'; update(); }}>Change</button>`}</div>`;
+    return html`<div class="ms-for">${avatarStack(c, p, 30)}<span class="grow ellipsis"><b>${p ? p.name : 'The persona'}</b> with ${c.name || c.jid}</span>${change}</div>`;
   }
 
   function num(label, value, lo, hi, set, unit = '') {
@@ -259,7 +318,7 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
       ${st.advanced ? ruleEditor({ rules: st.spec.rules, vocab: catalog.vocabulary, slots: st.spec.slots, defaults: catalog.defaultRules,
         onChange: (r) => { st.spec.rules = r; update(); } }) : ''}
       ${tryPanel()}
-      ${c && !c.enabled ? html`<div class="banner warn small mt-8">${icon('warning')}<div>Replies are off in this chat. Turn them on in the chat panel first.</div></div>` : ''}
+      ${c && !c.enabled ? html`<div class="banner warn small mt-8">${icon('warning')}<div>Replies are off in this chat. Starting the task turns them on.</div></div>` : ''}
       ${c && c.mode && c.mode !== 'auto' ? html`<div class="banner info small mt-8">${icon('approvals')}<div>This chat is in ${c.mode === 'copilot' ? 'co-pilot' : 'approve'} mode: every task message waits in Approvals too.</div></div>` : ''}`;
   }
 
@@ -273,7 +332,7 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
     ${st.step === 'setup' && st.spec ? html`<div class="sheet-actions">
       ${st.saveOnly ? '' : html`<span class="row gap-8 small grow">${toggle(st.open, (v) => { st.open = v; update(); }, { label: 'Write first now', small: true })}Write first now</span>`}
       <button class=${'btn btn-ghost ' + (st.busy === 'save' ? 'loading' : '')} ?disabled=${!!st.busy} @click=${saveForLater}>${icon('pin')}${st.saveOnly ? 'Save' : 'Save for later'}</button>
-      ${st.saveOnly ? '' : html`<button class=${'btn btn-primary ' + (st.busy === 'start' ? 'loading' : '')} ?disabled=${!!st.busy || !chat()} @click=${start}>${icon('play')}Start</button>`}
+      ${st.saveOnly ? '' : html`<button class=${'btn btn-primary ' + (st.busy === 'start' ? 'loading' : '')} ?disabled=${!!st.busy || !chat() || !chat().personaId && st.pickPersona !== NEW_ASSISTANT} @click=${start}>${icon('play')}Start</button>`}
     </div>` : ''}`, { size: 'wide', label: 'New task', noAutofocus: true });
   return ctl;
 }

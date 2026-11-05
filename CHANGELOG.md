@@ -10,6 +10,9 @@ Everything below is new unless noted.
 ### Tasks
 - New Tasks page: a persona does an errand in a private chat. The first template, Find a time,
   agrees on a meeting time: what it is about, how long, which days and hours, how far ahead.
+- A task can start with any WhatsApp contact: one without a persona gets the one you pick
+  (Assistant by default, with approval on) when the task starts, and starting a task in a chat
+  whose replies are off turns them on.
 - Your calendar stays private: the AI never sees events, titles or free/busy lists, only the
   times code picked. Round times, a buffer around busy times, the same answer when a time is
   asked twice, and a limit on "doesn't work" answers, after which it sends options, asks for

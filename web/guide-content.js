@@ -93,7 +93,7 @@ export const GUIDE_SECTIONS = [
     lead: 'A task is an errand with a clear result, like agreeing on a meeting time with Dana next week. The persona does the talking; code decides which times to offer and checks every message before it goes.',
     blocks: [
       { steps: [
-        '**Start one** on the Tasks page: pick a private chat, say what the meeting is, how long, which days and hours, and how far ahead.',
+        '**Start one** on the Tasks page: pick a private chat (any contact; one without a persona gets the one you choose when the task starts), say what the meeting is, how long, which days and hours, and how far ahead.',
         '**It offers times.** Round times only, never right next to something busy, picked by code. The AI only ever sees the times it may say.',
         '**They answer.** Each reply is read into plain facts (they agree, they suggest Tuesday at 10, they ask why not…), then the first rule that fits decides the next message.',
         '**You confirm.** When they say yes, it checks your calendar once more and asks you on the Tasks page (with a notification). Then it confirms in the chat and books it, if you chose a calendar.',
