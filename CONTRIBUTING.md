@@ -40,6 +40,23 @@ target and runs each OS's installer end to end. If you touch anything OS-specifi
   whitelist, so new top-level files must be added to it explicitly.
 - Add or update tests with every behaviour change; engine timing tests use the fake clock and seeded randomness.
 
+## Keeping personal data out
+
+This repository is public, and anything committed stays in its history. Your WhatsApp login, chats and
+keys live in the data folder, outside the project, so the normal setup can't commit them. `make dev-fake`
+and `make run` use `./data`, which is ignored.
+
+After cloning, run `make hooks` once. Every commit is then scanned for session and data files, API keys,
+personal email addresses, home-folder paths and real-looking phone numbers, and CI runs the same check.
+Use the 1555 range for example numbers.
+
+- To also block your own details, list them one per line in `.git/info/privacy-words` (your number, name,
+  group names). That file can't be committed.
+- Your commits show your git email. To keep it private use GitHub's noreply address:
+  `git config user.email ID+USERNAME@users.noreply.github.com`.
+- Never paste real chats, numbers or screenshots of them into issues, PRs or test data.
+- Don't bypass the check with `--no-verify`. If it stops a commit wrongly, ask in the PR.
+
 ## Reporting bugs and ideas
 
 Use the issue templates. For bugs, include your OS, the relevant lines from the **Activity** page and

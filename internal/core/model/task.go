@@ -42,7 +42,7 @@ const (
 // Voices.
 const (
 	VoiceAsYou     = "as-you"    // writes as you
-	VoiceAssistant = "assistant" // openly your assistant ("I'm arranging this for Gil")
+	VoiceAssistant = "assistant" // openly your assistant ("I'm arranging this for Alex")
 )
 
 // Slot kinds.
@@ -110,7 +110,7 @@ type TaskTone struct {
 
 // TaskOwner is you, as tasks may describe you.
 type TaskOwner struct {
-	Name  string `json:"name"`  // "Gil"
+	Name  string `json:"name"`  // "Alex"
 	About string `json:"about"` // what it may say about you, if it helps
 }
 

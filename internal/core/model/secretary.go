@@ -8,7 +8,7 @@ import "time"
 
 // SecretaryConfig turns a persona into the owner's personal secretary.
 type SecretaryConfig struct {
-	OwnerName string `json:"ownerName"` // "Gil"
+	OwnerName string `json:"ownerName"` // "Alex"
 	Tone      string `json:"tone"`      // friendly|formal ("" = friendly)
 
 	// Duties.

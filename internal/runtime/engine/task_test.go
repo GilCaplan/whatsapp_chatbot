@@ -148,18 +148,18 @@ func TestTaskLeakFallback(t *testing.T) {
 func TestSecretaryMeetingStartsTask(t *testing.T) {
 	h := newHarness(t, nil, dmChat())
 	h.setPersona("leo", func(p *model.Persona) {
-		p.Secretary = &model.SecretaryConfig{OwnerName: "Gil", Meetings: true, MeetDays: []string{"mon", "tue", "wed", "thu", "fri"},
+		p.Secretary = &model.SecretaryConfig{OwnerName: "Alex", Meetings: true, MeetDays: []string{"mon", "tue", "wed", "thu", "fri"},
 			MeetFrom: "10:00", MeetTo: "16:00", MeetingMinutes: 30}
 	})
 	h.e.Reload()
 	taskLLM(h, func(string) string {
 		return `{"intent":"ask_availability","times":[],"values":[],"quote":"when is he free"}`
 	})
-	h.msg(dmKey, "m1", "hi, can we set up a meeting with Gil? when is he free")
+	h.msg(dmKey, "m1", "hi, can we set up a meeting with Alex? when is he free")
 	h.advance(15 * time.Second)
 	sent := h.waitSent(1)
 	run := activeRun(h)
-	if run.Spec.Voice != model.VoiceAssistant || run.Spec.Meeting.Minutes != 30 || run.Owner.Name != "Gil" {
+	if run.Spec.Voice != model.VoiceAssistant || run.Spec.Meeting.Minutes != 30 || run.Owner.Name != "Alex" {
 		t.Fatalf("Find a time with the secretary's settings, run = %+v", run.Spec)
 	}
 	if c, _ := h.st.Chat(dmKey); c.Handoff != nil {

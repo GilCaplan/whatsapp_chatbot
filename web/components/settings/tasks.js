@@ -43,7 +43,7 @@ export function tasksSection(h) {
     <div class="eyebrow">About you</div>
     <div class="two-col">
       <label class="field"><span class="field-label">Your name</span>
-        <input class="input input-sm" maxlength="60" placeholder="e.g. Gil" .value=${owner.name || ''} @change=${(e) => save({ owner: { name: e.target.value.trim() } })}></label>
+        <input class="input input-sm" maxlength="60" placeholder="e.g. Alex" .value=${owner.name || ''} @change=${(e) => save({ owner: { name: e.target.value.trim() } })}></label>
       <label class="field"><span class="field-label">About you <span class="faint">(optional)</span></span>
         <input class="input input-sm" maxlength="300" placeholder="e.g. product designer, based in Tel Aviv" .value=${owner.about || ''} @change=${(e) => save({ owner: { about: e.target.value.trim() } })}>
         <span class="field-help">Only used when a task writes as your assistant, and only if it helps.</span></label>

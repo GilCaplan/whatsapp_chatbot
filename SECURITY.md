@@ -3,6 +3,14 @@
 WhatsApp Doppel runs entirely on your computer. This page explains what it stores, who can reach it,
 and how to report a problem.
 
+## Publishing this project
+
+If you fork or publish your copy, your personal data stays out of it by default: everything above lives
+in the data folder, outside the project. `.gitignore` only allows listed source folders, and it blocks
+sessions, data files and keys even inside them. `make hooks` adds a scan on every commit, and CI runs it too.
+Details are in [CONTRIBUTING.md](CONTRIBUTING.md). Never move the data folder into a repository, and
+keep `whatsapp.db` and `secrets.json` out of cloud sync: anyone with `whatsapp.db` can act as your WhatsApp.
+
 ## What stays on your computer
 
 Everything lives in one folder: `~/Library/Application Support/WhatsappDoppel/` on a Mac,
