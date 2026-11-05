@@ -88,7 +88,7 @@ func (e *Engine) secretaryTick(c model.ChatAssignment, in model.Incoming, text s
 		return // the digest takes the notes (digest.go); urgent ones still go at once
 	}
 	key := c.Key
-	e.schedule(noteJob(key), d, func(ctx context.Context) {
+	e.scheduleYield(noteJob(key), d, func(ctx context.Context) {
 		if err := e.takeNotes(ctx, key); err != nil && ctx.Err() == nil {
 			if cc, ok := e.store.Chat(key); ok {
 				e.act(model.ActError, cc, "", "Couldn't take the message down: "+err.Error(), nil)

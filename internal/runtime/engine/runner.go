@@ -60,6 +60,8 @@ type Runner struct {
 	sched    Timer  // next scheduled message (schedule.go)
 	schedGen uint64 // invalidates stale schedule callbacks
 
+	lateMu sync.Mutex // one late hand-off check at a time (handoff.go)
+
 	typSeq     uint64 // order of typing on/off decisions
 	typMu      sync.Mutex
 	typApplied uint64
@@ -90,6 +92,17 @@ func newRunner(e *Engine, c model.ChatAssignment) *Runner {
 	r.restoreQueue()
 	go r.loop()
 	return r
+}
+
+// replyingLocked: a reply is being written or sent, so the model is busy.
+func (r *Runner) replyingLocked() bool {
+	return r.phase == phaseThinking || r.phase == phaseTyping
+}
+
+func (r *Runner) replying() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.replyingLocked()
 }
 
 func (r *Runner) loop() {
@@ -346,7 +359,7 @@ func (r *Runner) process(in model.Incoming) {
 	if isGroup && speaker == "them" && !forced {
 		r.mu.Lock()
 		recent := r.historyCopyLocked()
-		replying := r.phase == phaseThinking || r.phase == phaseTyping
+		replying := r.replyingLocked()
 		r.mu.Unlock()
 		// During a reply the AI check would only hold up the queue and compete
 		// with that reply for the model: it runs afterwards (checkLater).

@@ -65,7 +65,7 @@ def protect(text):
         kept[token] = m.group(0)
         return token
 
-    return PROTECT.sub(stash, text), kept
+    return PROTECT.sub(stash, text), kept, len(kept)
 
 
 def restore(out, kept):
@@ -81,7 +81,7 @@ def restore(out, kept):
     return (out.rstrip() + " " + " ".join(missing)) if missing else out
 
 
-def translate_sentence(sentence, translator, sp, kept):
+def translate_sentence(sentence, translator, sp, kept, next_token):
     core = sentence.strip()
     if not any(c.isalpha() for c in TOKEN.sub("", core)):
         return sentence
@@ -97,7 +97,7 @@ def translate_sentence(sentence, translator, sp, kept):
         core = core[: m.start()]
     names = {}
     for start, stop in reversed(name_spans(core)):
-        token = "XX%d" % (len(kept) + len(names))
+        token = "XX%d" % (next_token + len(names))
         names[token] = core[start:stop]
         core = core[:start] + token + core[stop:]
     here = {t: kept[t] for t in TOKEN.findall(core) if t in kept}
@@ -113,8 +113,13 @@ def translate_sentence(sentence, translator, sp, kept):
 
 def translate(path, text):
     translator, sp = pack(path)
-    masked, kept = protect(text)
-    return "".join(translate_sentence(s, translator, sp, kept) for s in SENTENCE.findall(masked))
+    masked, kept, first = protect(text)
+    out = []
+    for sentence in SENTENCE.findall(masked):
+        # Names get numbers of their own, past the protected words.
+        out.append(translate_sentence(sentence, translator, sp, kept, first))
+        first += 50
+    return "".join(out)
 
 
 def main():

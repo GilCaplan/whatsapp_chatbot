@@ -130,7 +130,7 @@ func TestPromptIgnoresTheLanguageSetting(t *testing.T) {
 		h.advance(15 * time.Second)
 		h.waitSent(1)
 		sys := lastSystem(h)
-		if !strings.HasSuffix(sys, "never write in any other language.") {
+		if !strings.HasSuffix(sys, "2. Respond in English.") {
 			t.Fatalf("the English rule isn't last: %q", sys[len(sys)-120:])
 		}
 		req := replyRequests(h.llm)[0]

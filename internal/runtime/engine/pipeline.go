@@ -652,7 +652,7 @@ func (r *Runner) thinkLocked(fx *effects) {
 	if n := len(cyc.pending); n > 0 {
 		answered = cyc.pending[n-1]
 	}
-	ctx, cancel := context.WithCancel(cyc.ctx)
+	ctx, cancel := context.WithCancel(llm.ForReply(cyc.ctx))
 	cyc.genSeq++
 	cyc.genCancel = cancel
 	seq := cyc.genSeq

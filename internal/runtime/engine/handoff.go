@@ -12,6 +12,7 @@ import (
 	"whatsappdoppel/internal/core/store"
 	"whatsappdoppel/internal/logic/guard"
 	"whatsappdoppel/internal/logic/handoff"
+	"whatsappdoppel/internal/runtime/llm"
 	"whatsappdoppel/internal/runtime/prompt"
 )
 
@@ -25,6 +26,10 @@ import (
 
 // timeoutHandoffCheck bounds the AI confirmation; on timeout nothing pauses.
 const timeoutHandoffCheck = 15 * time.Second
+
+// timeoutHandoffLate bounds the check that runs beside a reply: it may have
+// to wait for the model, and the queue isn't held up meanwhile.
+const timeoutHandoffLate = 90 * time.Second
 
 // handoffSkipEvery: while paused, the "waiting for you" skip is logged at
 // most this often (not for every message).
@@ -95,19 +100,39 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 		if !hs.AICheck {
 			return false
 		}
-		cat, serious := e.handoffCheck(r.ctx, p, cats, r.historySnapshot(), who, text)
+		if r.replying() {
+			// Waiting here would stall the chat until the model is free, and
+			// the check could run out of time: it runs beside the reply, one
+			// at a time so a burst can't crowd out the replies.
+			e.goBusy(func() {
+				r.lateMu.Lock()
+				defer r.lateMu.Unlock()
+				if r.config().Handoff != nil {
+					return
+				}
+				cat, serious := e.handoffCheck(r.ctx, p, cats, r.historySnapshot(), who, text, timeoutHandoffLate)
+				if !serious || r.ctx.Err() != nil {
+					return
+				}
+				late := hit
+				late.Category = cat
+				e.triggerHandoff(r, c, p, late, model.HandoffHowAI, who, in, text, mentions, bp, now, true)
+			})
+			return false
+		}
+		cat, serious := e.handoffCheck(r.ctx, p, cats, r.historySnapshot(), who, text, timeoutHandoffCheck)
 		if !serious {
 			return false
 		}
 		hit.Category, how = cat, model.HandoffHowAI
 	}
-	e.triggerHandoff(r, c, p, hit, how, who, in, text, mentions, bp, now)
+	e.triggerHandoff(r, c, p, hit, how, who, in, text, mentions, bp, now, false)
 	return true
 }
 
 // handoffCheck asks the persona's model whether a weak keyword hit is really
 // about one of the categories. Any error means "no".
-func (e *Engine) handoffCheck(ctx context.Context, p model.Persona, cats handoff.Categories, hist []model.Message, who, text string) (string, bool) {
+func (e *Engine) handoffCheck(ctx context.Context, p model.Persona, cats handoff.Categories, hist []model.Message, who, text string, limit time.Duration) (string, bool) {
 	prov, mdl, err := e.llm.Resolve(p.LLM)
 	if err != nil {
 		return "", false
@@ -115,7 +140,7 @@ func (e *Engine) handoffCheck(ctx context.Context, p model.Persona, cats handoff
 	list := cats.List()
 	req := prompt.HandoffCheck(p.Name, list, hist, who, text)
 	req.Model = mdl
-	cctx, cancel := context.WithTimeout(ctx, timeoutHandoffCheck)
+	cctx, cancel := context.WithTimeout(llm.ForReply(ctx), limit) // ahead of the next reply: it may have to stop it
 	defer cancel()
 	resp, err := prov.Chat(cctx, req)
 	if err != nil {
@@ -125,9 +150,10 @@ func (e *Engine) handoffCheck(ctx context.Context, p model.Persona, cats handoff
 }
 
 // triggerHandoff pauses a chat: the reply cycle ends (typing off), pending
-// replies stop auto-sending, the message is kept as context and you are told.
+// replies stop auto-sending, the message is kept as context (unless it is in
+// the history already: kept) and you are told.
 func (e *Engine) triggerHandoff(r *Runner, c model.ChatAssignment, p model.Persona, hit handoff.Hit, how, who string,
-	in model.Incoming, text string, mentions []string, bp model.BehaviorProfile, now time.Time) {
+	in model.Incoming, text string, mentions []string, bp model.BehaviorProfile, now time.Time, kept bool) {
 	if who == "" {
 		who = c.Name
 	}
@@ -155,7 +181,9 @@ func (e *Engine) triggerHandoff(r *Runner, c model.ChatAssignment, p model.Perso
 	if wasQueued {
 		e.updateState(c.Key, func(st *store.RunnerState) { st.QueuedWakeAt = nil })
 	}
-	r.keepAsContext(in, text, mentions, bp, now)
+	if !kept {
+		r.keepAsContext(in, text, mentions, bp, now)
+	}
 	e.holdApprovals(c.Key)
 	e.forgetBrief(c.Key) // its window held the sensitive message: nothing of it crosses (brief.go)
 	meta := withMsg(map[string]any{"category": hit.Category, "excerpt": hs.Excerpt, "how": how, "sender": who}, in.MessageID)

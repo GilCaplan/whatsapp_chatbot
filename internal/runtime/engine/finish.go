@@ -240,7 +240,9 @@ func (e *Engine) translated(ctx context.Context, p model.Persona, text, code str
 		return "", "it couldn't be translated into " + name
 	}
 	out = strings.TrimSpace(out)
-	if out == "" || tokenLeft.MatchString(out) || !lang.UsesAlphabet(out, code) {
+	// Unchanged is fine: a reply of only names has nothing to translate.
+	if out == "" || tokenLeft.MatchString(out) || (out != text && !lang.UsesAlphabet(out, code)) {
+		progress(ctx, "The translation came out wrong: "+out, map[string]any{"stage": "rewrite", "source": text})
 		return "", "the translation into " + name + " came out wrong"
 	}
 	c := e.filtered(out)

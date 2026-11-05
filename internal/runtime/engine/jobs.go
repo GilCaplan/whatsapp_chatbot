@@ -81,31 +81,39 @@ func (e *Engine) scheduleJob(name string, d time.Duration, yields bool, fn func(
 				e.scheduleJob(name, jobRetryBusy, yields, fn)
 				return
 			}
-			e.withJobSlot(e.ctx, func() {
-				if !yields {
-					fn(e.ctx)
-					return
-				}
-				ctx, cancel := context.WithCancel(e.ctx)
-				defer cancel()
-				j.mu.Lock()
-				j.yield[id] = cancel
-				j.mu.Unlock()
-				if !e.anyGenerating() { // a reply may have started while waiting for the slot
-					fn(ctx)
-				} else {
-					cancel()
-				}
-				j.mu.Lock()
-				delete(j.yield, id)
-				j.mu.Unlock()
-				if ctx.Err() != nil && e.ctx.Err() == nil {
-					e.scheduleJob(name, jobRetryBusy, yields, fn)
-				}
-			})
+			if !yields {
+				e.withJobSlot(e.ctx, func() { fn(e.ctx) })
+			} else if e.yieldingSlot(e.ctx, fn) {
+				e.scheduleJob(name, jobRetryBusy, yields, fn)
+			}
 		})
 	})
 	j.timers[name] = jobTimer{t: t, id: id}
+}
+
+// yieldingSlot runs fn holding the background slot, with a context a starting
+// reply cancels; true when that happened and the work should run again.
+func (e *Engine) yieldingSlot(parent context.Context, fn func(ctx context.Context)) (interrupted bool) {
+	j := &e.jobs
+	e.withJobSlot(parent, func() {
+		ctx, cancel := context.WithCancel(parent)
+		defer cancel()
+		j.mu.Lock()
+		j.seq++
+		id := j.seq
+		j.yield[id] = cancel
+		j.mu.Unlock()
+		if !e.anyGenerating() { // a reply may have started while waiting for the slot
+			fn(ctx)
+		} else {
+			cancel()
+		}
+		j.mu.Lock()
+		delete(j.yield, id)
+		j.mu.Unlock()
+		interrupted = ctx.Err() != nil && parent.Err() == nil
+	})
+	return interrupted
 }
 
 // preemptJobs cancels the running jobs that yield to replies.

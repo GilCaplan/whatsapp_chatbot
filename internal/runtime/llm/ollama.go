@@ -19,6 +19,7 @@ type Ollama struct {
 	base   string
 	numCtx int
 	hc     *http.Client
+	gate   gate // one call at a time, replies first
 }
 
 func NewOllama(baseURL string, numCtx int, hc *http.Client) *Ollama {
@@ -53,6 +54,10 @@ type ollamaChatResp struct {
 }
 
 func (o *Ollama) Chat(ctx context.Context, req Request) (Response, error) {
+	if err := o.gate.acquire(ctx); err != nil {
+		return Response{}, err
+	}
+	defer o.gate.release()
 	if req.Model == "" {
 		req.Model = DefaultOllamaModel
 	}

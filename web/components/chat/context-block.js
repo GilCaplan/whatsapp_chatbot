@@ -125,7 +125,7 @@ const WHERE = {
   late: 'Added when it answers long after a message.',
   goal: 'Change it in the Goal tab.',
   instructions: 'Edit it in "Your instructions for this chat" below.',
-  language: 'Change it in the Behaviour tab › Languages.',
+  language: 'Always English: code translates the reply afterwards, so the language settings never change this prompt.',
   guidance: "Built for every reply from the persona's message length and emoji settings.",
 };
 

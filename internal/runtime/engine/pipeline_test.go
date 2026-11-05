@@ -928,3 +928,44 @@ func TestReplyPreemptsYieldingJob(t *testing.T) {
 		t.Fatalf("runs = %d", runs.Load())
 	}
 }
+
+// A weak hand-off hit during a reply doesn't hold up the chat, and still pauses it.
+func TestLateHandoffCheckPausesWithoutBlocking(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.ThinkMinSec, p.ThinkMaxSec = 10, 10 }), dmChat())
+	release := make(chan struct{})
+	h.llm.SetFunc(func(r llm.Request) (llm.Response, error) {
+		if isHandoffCheck(r) {
+			<-release
+			return llm.Response{Text: `{"serious":true,"category":"money"}`}, nil
+		}
+		return llm.Response{Text: "ok"}, nil
+	})
+	h.msg(dmKey, "A", "hello")
+	h.advance(10 * time.Second) // thinking
+	h.e.HandleIncoming(model.Incoming{ChatKey: dmKey, ChatJID: dmJID, SenderJID: dmJID, PushName: "Dana",
+		Text: "can you pay me back", Timestamp: h.clk.Now(), MessageID: "B"})
+	h.e.HandleIncoming(model.Incoming{ChatKey: dmKey, ChatJID: dmJID, SenderJID: dmJID, PushName: "Dana",
+		Text: "next one", Timestamp: h.clk.Now(), MessageID: "C"})
+	deadline := time.Now().Add(2 * time.Second)
+	for len(h.acts(model.ActIncoming)) < 3 {
+		if time.Now().After(deadline) {
+			t.Fatal("the check held up the chat")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(release)
+	h.idle()
+	c, _ := h.st.Chat(dmKey)
+	if c.Handoff == nil {
+		t.Fatal("the late check did not pause the chat")
+	}
+	n := 0
+	for _, m := range h.history(dmKey) {
+		if m.Text == "can you pay me back" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("message saved %d times", n)
+	}
+}
