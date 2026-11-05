@@ -14,6 +14,7 @@ import (
 	"whatsappdoppel/internal/core/model"
 	"whatsappdoppel/internal/core/store"
 	"whatsappdoppel/internal/logic/behavior"
+	"whatsappdoppel/internal/logic/goals"
 	"whatsappdoppel/internal/runtime/llm"
 	"whatsappdoppel/internal/runtime/prompt"
 )
@@ -1042,5 +1043,33 @@ func TestBurstKeepsEveryMessage(t *testing.T) {
 	}
 	if n := countReqs(h.llm, isDecision); n >= 120 {
 		t.Fatalf("checks = %d", n)
+	}
+}
+
+// A reply goes by the last plan, and the next one is written once the chat is quiet.
+func TestPlanNextRunsAfterTheReply(t *testing.T) {
+	chat := dmChat()
+	chat.GoalOverride, chat.GoalPlanAhead = "Get them to read more", goalBool(true)
+	h := newHarness(t, nil, chat)
+	h.llm.SetFunc(func(r llm.Request) (llm.Response, error) {
+		return llm.Response{Text: `{"next":"ask about books","achieved":false,"evidence":""}`}, nil
+	})
+	p, _ := h.st.Persona("leo")
+	h.msg(dmKey, "A", "hello")
+	h.e.planNext(h.e.runner(dmKey), p)
+	if !h.e.jobPending(planJob(dmKey)) {
+		t.Fatal("no plan job")
+	}
+	h.advance(planQuiet)
+	h.idle()
+	c, _ := h.st.Chat(dmKey)
+	cfg := goals.Resolve(p, c)
+	if st := h.e.goalStatus(dmKey, cfg.Text); st.LastPlan != "ask about books" {
+		t.Fatalf("plan = %q", st.LastPlan)
+	}
+	ctx := skipPlanning(context.Background())
+	st := h.e.goalStatus(dmKey, cfg.Text)
+	if gp := h.e.planAhead(ctx, p, cfg, h.e.paramsOf(c), st, nil, false, false); gp.turn.Plan != "ask about books" {
+		t.Fatalf("turn plan = %q", gp.turn.Plan)
 	}
 }

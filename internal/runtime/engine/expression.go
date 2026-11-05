@@ -61,7 +61,9 @@ func (e *Engine) expressDraft(ctx context.Context, p model.Persona, bp model.Beh
 	}
 	budget := prompt.WordBudget(p.MessageLength, bp.LengthBias, last)
 	limit := prompt.HardLimit(budget)
-	if words := prompt.WordCount(res.Text); words > limit && regen != nil && retryAllowed(ctx, res.Latency) {
+	// A little over is trimmed below: a rewrite costs a whole model call.
+	if words := prompt.WordCount(res.Text); words > 2*limit && regen != nil && retryAllowed(ctx, res.Latency) {
+		progress(ctx, "The reply came out far too long, so it is writing it again", map[string]any{"stage": "rewrite"})
 		again, err := regen(prompt.LengthRetryNote(budget, words))
 		if err == nil && !again.Fallback && prompt.WordCount(again.Text) < words {
 			again.Latency += res.Latency

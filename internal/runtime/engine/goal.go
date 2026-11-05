@@ -71,8 +71,10 @@ func (e *Engine) updateGoal(key, goal string, fn func(g *model.GoalStatus)) mode
 
 type skipPlanKey struct{}
 
-// skipPlanning leaves the plan-ahead call out of a reply: in a busy chat the
-// wait costs more than the plan is worth, and the next calm reply plans again.
+// skipPlanning leaves the plan-ahead call out of a reply, which goes by the
+// last plan: in a busy chat, or on a local model where the call takes longer
+// than the reply and pushes the prompt out of the model's cache. planNext
+// writes the next plan once the chat is quiet.
 func skipPlanning(ctx context.Context) context.Context {
 	return context.WithValue(ctx, skipPlanKey{}, true)
 }
@@ -104,7 +106,11 @@ func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Confi
 		return gp
 	}
 	defer func() { gp.turn.Rest = !gp.planned && !opening && restTurn(cp, st, hist) }()
-	if planningSkipped(ctx) || !cfg.PlanAhead || cp.Planning == model.PlanOff || (cp.Planning == model.PlanPeriodic && !opening && !planDue(cp, st, hist)) {
+	if planningSkipped(ctx) {
+		gp.turn.Plan = st.LastPlan
+		return gp
+	}
+	if !cfg.PlanAhead || cp.Planning == model.PlanOff || (cp.Planning == model.PlanPeriodic && !opening && !planDue(cp, st, hist)) {
 		return gp
 	}
 	prov, mdl, err := e.llm.Resolve(p.LLM)
@@ -197,6 +203,40 @@ func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Confi
 	return gp
 }
 
+// planQuiet is how long a chat stays quiet before the next plan is written.
+const planQuiet = 30 * time.Second
+
+func planJob(key string) string { return "plan:" + key }
+
+// plansLater reports whether a persona's replies leave planning to planNext.
+func (e *Engine) plansLater(p model.Persona) bool {
+	prov, _, err := e.llm.Resolve(p.LLM)
+	return err == nil && prov.Name() == "ollama"
+}
+
+// planNext writes the plan for the next reply once the chat is quiet. It
+// plans now and then, not after every reply, in one call: each plan pushes the
+// reply prompt out of the model's cache.
+func (e *Engine) planNext(r *Runner, p model.Persona) {
+	key := r.key
+	e.scheduleYield(planJob(key), planQuiet, func(ctx context.Context) {
+		cc, ok := e.store.Chat(key)
+		if !ok || !cc.Enabled || e.taskRunning(key) {
+			return
+		}
+		cfg := goals.Resolve(p, cc)
+		cp := e.paramsOf(cc)
+		if cp.Planning == model.PlanEveryReply {
+			cp.Planning = model.PlanPeriodic
+		}
+		cp.MergedCheck = true
+		gp := e.planAhead(ctx, p, cfg, cp, e.goalStatus(key, cfg.Text), r.historySnapshot(), isGroupChat(cc), false)
+		if ctx.Err() == nil {
+			e.saveGoalPlan(cc, p, cfg, gp)
+		}
+	})
+}
+
 // planDue: a periodic plan is due after PlanEvery own replies or TopicShift
 // messages since the last plan (or when there is none yet).
 func planDue(cp model.ContextParams, st model.GoalStatus, hist []model.Message) bool {
@@ -250,6 +290,12 @@ func (e *Engine) chatGoalTurn(ctx context.Context, c model.ChatAssignment, p mod
 	if ctx.Err() != nil {
 		return cfg, gp.turn
 	}
+	e.saveGoalPlan(c, p, cfg, gp)
+	return cfg, gp.turn
+}
+
+// saveGoalPlan keeps what a plan-ahead call found.
+func (e *Engine) saveGoalPlan(c model.ChatAssignment, p model.Persona, cfg goals.Config, gp goalPlan) {
 	if gp.planned || gp.reachedNow {
 		var final model.GoalStatus
 		reachedNow := false
@@ -271,7 +317,6 @@ func (e *Engine) chatGoalTurn(ctx context.Context, c model.ChatAssignment, p mod
 			"plan": gp.turn.Plan, "stage": "plan", "latencyMs": gp.latency.Milliseconds(),
 		})
 	}
-	return cfg, gp.turn
 }
 
 // goalIncoming checks a message from them against a say-the-word goal

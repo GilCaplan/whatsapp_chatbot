@@ -41,6 +41,8 @@ type ollamaChatReq struct {
 	Think    *bool          `json:"think,omitempty"`
 	Format   any            `json:"format,omitempty"`
 	Options  map[string]any `json:"options,omitempty"`
+	// KeepAlive holds the model in memory between messages.
+	KeepAlive string `json:"keep_alive,omitempty"`
 }
 
 type ollamaChatResp struct {
@@ -77,7 +79,7 @@ func (o *Ollama) Chat(ctx context.Context, req Request) (Response, error) {
 		opts["temperature"] = req.Temperature
 	}
 	think := false
-	body := ollamaChatReq{Model: req.Model, Messages: msgs, Think: &think, Options: opts}
+	body := ollamaChatReq{Model: req.Model, Messages: msgs, Think: &think, Options: opts, KeepAlive: "30m"}
 	if req.JSON {
 		body.Format = "json"
 		if len(req.Schema) > 0 {

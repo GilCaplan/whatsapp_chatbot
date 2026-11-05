@@ -347,7 +347,7 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 - Sample: assumes ONE incoming message and simulates the engine's planner with fresh randomness each call (so "re-roll"
   = call again). `phases[].name` ∈ `notice | seen | wait | think | distracted | gap | typing | send` in time order;
   `seen` (only when `markRead`) and `send` are instants (`sec` 0); zero-length phases are omitted. `startSec` is the
-  offset from the incoming message. `text` defaults to a sample reply whose length follows `lengthBias`.
+  offset from the incoming message. The `think` phase is stretched to `summary.modelSec` (the model's recent time) when that is longer. `text` defaults to a sample reply whose length follows `lengthBias`.
   `quoted` = the first bubble would quote the message (groups only). `splitShare` = fraction of samples with > 1 bubble.
   With `approval:true`: no think/distraction, typing and bubble gaps capped at 3 s (the human review time is not
   included). This is also how approved replies (`POST /api/approvals/{id}/approve`, auto-send) are delivered.

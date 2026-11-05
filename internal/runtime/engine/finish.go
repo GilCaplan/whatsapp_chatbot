@@ -31,7 +31,7 @@ const (
 )
 
 // tokenLeft is a placeholder that survived translation.
-var tokenLeft = regexp.MustCompile(`[XХ]{2,3}\d`)
+var tokenLeft = regexp.MustCompile(`[XxХхΧχＸｘ]{2,3}\p{Nd}`)
 
 // finishLanguage is the language a reply ends up in ("" = leave it: a task
 // writes its exact message in the language directly).

@@ -715,6 +715,9 @@ func (r *Runner) generate(gctx context.Context, seq uint64, cyc *cycle, c model.
 	if !ok {
 		err = fmt.Errorf("persona %q not found", c.PersonaID)
 	} else {
+		if !cyc.proactive && e.plansLater(p) {
+			gctx = skipPlanning(gctx)
+		}
 		ctx, cancel := context.WithTimeout(e.withProgress(gctx, c, p.Name), generateLimit)
 		progress(ctx, fmt.Sprintf("Reading the chat (%d recent)", len(hist)), map[string]any{"stage": "read", "messages": len(hist)})
 		isGroup := c.Kind == "group"
@@ -1114,6 +1117,9 @@ func (r *Runner) sendAborted(cyc *cycle, err error, sent int) {
 func (r *Runner) finishSend(cyc *cycle, sent int) {
 	if sent > 0 {
 		r.recordReply(cyc.proactive, cyc.proactive && !cyc.scheduled)
+		if p := cyc.persona; !cyc.proactive && r.e.plansLater(p) {
+			r.e.planNext(r, p)
+		}
 	}
 	var fx effects
 	r.mu.Lock()

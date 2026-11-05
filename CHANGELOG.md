@@ -8,6 +8,10 @@ The command-line bot became a desktop app with a web interface, for macOS, Windo
 Everything below is new unless noted.
 
 ### Reply rules
+- Replies on a local model are much faster: planning happens after the reply, in the background,
+  and a reply a little over its length is trimmed instead of written again. The reply preview now
+  includes the real time your model takes. Translation keeps names and numbers intact in every
+  alphabet, not only Cyrillic.
 - Languages are three plain choices: which it understands, which it replies to, and which it replies in. Each list is All or a tick list in a dropdown.
 - The chat's Log shows a running reply on a timeline, with a circle that moves to the current step. Every step is listed as it happens,
   including writing, checking and translating, before the reply is sent.

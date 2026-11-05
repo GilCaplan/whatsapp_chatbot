@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 
 import ctranslate2
 import sentencepiece
@@ -57,6 +58,12 @@ def name_spans(text):
     return spans
 
 
+# X as other alphabets write it (Latin, Cyrillic, Greek, full width) and every
+# decimal digit there is.
+X_LOOKALIKES = "Xx\u0425\u0445\u03a7\u03c7\uff38\uff58"
+LOCAL_DIGITS = [chr(c) for c in range(sys.maxunicode + 1) if unicodedata.category(chr(c)) == "Nd"]
+
+
 def protect(text):
     """Text with links, tags, numbers and emoji as tokens, and the words by token."""
     kept = {}
@@ -69,12 +76,19 @@ def protect(text):
     return PROTECT.sub(stash, text), kept
 
 
+def token_pattern(token):
+    n = token[2:]
+    digits = "".join("[%s]" % "".join(c for c in LOCAL_DIGITS if unicodedata.digit(c) == int(d)) for d in n)
+    return re.compile("[%s]{1,3}%s(?!\\d)" % (X_LOOKALIKES, digits))
+
+
 def restore(out, kept):
     """Puts every word back where its token landed; a lost token goes last."""
     missing = []
     for token, word in kept.items():
-        # The models sometimes shorten XX1 to X1 or spell it in Cyrillic.
-        hit = re.compile(r"[X\u0425]{1,3}" + token[2:] + r"(?!\d)")
+        # The models sometimes shorten XX1 to X1, spell it in their own
+        # alphabet or write the number in their own digits.
+        hit = token_pattern(token)
         if hit.search(out):
             out = hit.sub(lambda _: word, out, count=1)
         else:
