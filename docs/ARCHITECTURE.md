@@ -47,7 +47,7 @@ Windows `%APPDATA%\WhatsappDoppel\`, Linux `$XDG_CONFIG_HOME|~/.config/WhatsappD
 `--data-dir` or `DOPPEL_DATA_DIR`; `make run` uses `./data`, gitignored). Never use relative paths in
 code: the .app starts with cwd `/`, shortcuts and .desktop files with other folders. Contents: `config.json`, `secrets.json`, `personas.json`,
 `chats.json`, `approvals.json`, `runtime.json` (per-chat reply timestamps, last incoming/reply,
-proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `avatars/`, `cache/`,
+proactive log/due time, queued wake-up, goal progress — best effort), `whatsapp.db` (whatsmeow session), `whatsapp.db.bak` + `whatsapp.db.bak.version` (the one session backup: replaced the first time a new app version runs, removed on log out), `translator/` (add-on: `venv/`, `server.py`, `packs/en_<code>/`), `avatars/`, `cache/`,
 `history/<chatKey>.jsonl`, `memories/<chatKey>.json`, `briefs/<chatKey>.json` (cross-chat summaries), `decisions/<chatKey>.json` (decision log), `summaries/<chatKey>.json` (compacted older messages), `ratings/<chatKey>.json` (connection ratings), `nicknames.json`, `calendars.json` + `notes.json` (secretary, 0600), `contextsystems.json` (your context systems), `recaps.json`, `missions.json`, `cache/self-samples.jsonl`
 (only with the Clone consent), `logs/server.log`, `logs/activity-YYYY-MM-DD.jsonl`,
 `instance.json` (`{pid, port, token, startedAt, version}` while serving), `server.lock`.

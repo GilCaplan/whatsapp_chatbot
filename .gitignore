@@ -32,6 +32,17 @@
 *.db-*
 *.db.bak*
 *.sqlite*
+*.argosmodel
+*.whl
+model.bin
+sentencepiece.model
+translator/
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
 *.jsonl
 *.log
 *.pem

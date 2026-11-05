@@ -2,14 +2,16 @@
 // not an LLM, so the same text always gives the same translation. The app
 // stays one pure Go binary: the add-on is a small Python process (server.py)
 // in the data directory, installed from Settings, with one language pack per
-// target language. Packs come from the Argos Translate index.
+// target language. Packs are Argos Translate models, pinned in packs.go.
 package translate
 
 import (
 	"archive/zip"
 	"bufio"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -30,23 +33,54 @@ import (
 //go:embed server.py
 var serverPy []byte
 
-const (
-	indexURL = "https://raw.githubusercontent.com/argosopentech/argospm-index/main/index.json"
-	spacyWhl = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+//go:embed pyproject.toml
+var pyproject string
+
+var (
+	dependencyList = regexp.MustCompile(`(?s)\ndependencies = \[(.*?)\n\]`)
+	dependencyName = regexp.MustCompile(`"([^"]+)"`)
 )
+
+// pipPackages are the add-on's libraries, pinned in pyproject.toml. pip checks
+// the spaCy model against the hash in its link.
+func pipPackages() []string {
+	var out []string
+	for _, m := range dependencyName.FindAllStringSubmatch(dependencyList.FindStringSubmatch(pyproject)[1], -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+// addonStamp identifies the pins. It goes in the add-on's ready file, the way a
+// pack's checksum goes in the pack's.
+func addonStamp() string {
+	sum := sha256.Sum256([]byte(strings.Join(pipPackages(), "\n")))
+	return hex.EncodeToString(sum[:])
+}
+
+// packRetry is how long a failed pack waits before a reply tries it again, so
+// a broken download isn't repeated for every message.
+const packRetry = time.Hour
+
+// packDownloads is how many packs download at once: "Download all" asks for
+// every one, and each has its own time limit that only starts in its turn.
+const packDownloads = 3
 
 // ErrNotReady: the add-on or the language pack isn't there (yet).
 var ErrNotReady = errors.New("translator not ready")
 
 // Service owns the add-on's files and process.
 type Service struct {
-	dir string
+	dir   string
+	packs map[string]pack
+	slots chan struct{} // a place in line to download
 
 	mu         sync.Mutex // status fields
 	installing bool
 	step       string
 	lastErr    string
 	fetching   map[string]bool
+	failedAt   map[string]time.Time
 
 	procMu sync.Mutex // the process: one request at a time
 	cmd    *exec.Cmd
@@ -56,7 +90,7 @@ type Service struct {
 
 // New uses <dataDir>/translator.
 func New(dataDir string) *Service {
-	return &Service{dir: filepath.Join(dataDir, "translator"), fetching: map[string]bool{}}
+	return &Service{dir: filepath.Join(dataDir, "translator"), packs: packs, slots: make(chan struct{}, packDownloads), fetching: map[string]bool{}, failedAt: map[string]time.Time{}}
 }
 
 func (s *Service) python() string {
@@ -70,17 +104,38 @@ func (s *Service) packDir(code string) string { return filepath.Join(s.dir, "pac
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
+// installed: the add-on on disk was set up from the pinned libraries. One from
+// before the pins, or from older pins, isn't, so Settings offers Install again
+// instead of running server.py on libraries it may not work with.
+func (s *Service) installed() bool {
+	got, err := os.ReadFile(filepath.Join(s.dir, "ready"))
+	return err == nil && string(got) == addonStamp()
+}
+
+// packReady: the pack on disk is the pinned one. A pack from before the pins,
+// or from an older pin, isn't, so it gets downloaded again.
+func (s *Service) packReady(code string) bool {
+	p, ok := s.packs[code]
+	if !ok {
+		return false
+	}
+	got, err := os.ReadFile(filepath.Join(s.packDir(code), "ready"))
+	return err == nil && string(got) == p.sha256
+}
+
 // Status reports what is installed.
 func (s *Service) Status() model.TranslatorStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := model.TranslatorStatus{Installed: exists(filepath.Join(s.dir, "ready")), Installing: s.installing, Step: s.step, Error: s.lastErr, Packs: []string{}}
-	dirs, _ := os.ReadDir(filepath.Join(s.dir, "packs"))
-	for _, d := range dirs {
-		if code, ok := strings.CutPrefix(d.Name(), "en_"); ok && exists(filepath.Join(s.packDir(code), "ready")) {
+	st := model.TranslatorStatus{Installed: s.installed(), Installing: s.installing, Step: s.step, Error: s.lastErr, Packs: []string{}}
+	for code, p := range s.packs {
+		st.Available = append(st.Available, model.TranslatorPack{Code: code, SizeMB: int(p.size / 1_000_000)})
+		if s.packReady(code) {
 			st.Packs = append(st.Packs, code)
 		}
 	}
+	slices.SortFunc(st.Available, func(a, b model.TranslatorPack) int { return strings.Compare(a.Code, b.Code) })
+	slices.Sort(st.Packs)
 	for code := range s.fetching {
 		st.Fetching = append(st.Fetching, code)
 	}
@@ -94,7 +149,8 @@ func (s *Service) setStep(step string) {
 	s.mu.Unlock()
 }
 
-// Install sets the add-on up in the background, then fetches langs.
+// Install sets the add-on up in the background if it isn't yet, then fetches
+// langs. Asking again is how a pack that failed gets another try.
 func (s *Service) Install(langs []string) {
 	s.mu.Lock()
 	if s.installing {
@@ -102,9 +158,13 @@ func (s *Service) Install(langs []string) {
 		return
 	}
 	s.installing, s.lastErr = true, ""
+	clear(s.failedAt)
 	s.mu.Unlock()
 	go func() {
-		err := s.install()
+		var err error
+		if !s.installed() {
+			err = s.install()
+		}
 		s.mu.Lock()
 		s.installing, s.step = false, ""
 		if err != nil {
@@ -119,20 +179,22 @@ func (s *Service) Install(langs []string) {
 	}()
 }
 
-// findPython picks a Python the translator's libraries have builds for.
-func findPython() (string, error) {
-	for _, name := range []string{"python3.12", "python3.11", "python3.10", "python3", "python"} {
-		if p, err := exec.LookPath(name); err == nil {
+// findPython picks a Python the pinned libraries have builds for: 3.10 or newer.
+// A plain python3 can be older, and it is on a stock Mac.
+func findPython(ctx context.Context) (string, error) {
+	for _, name := range []string{"python3.12", "python3.11", "python3.10", "python3.13", "python3.14", "python3", "python"} {
+		p, err := exec.LookPath(name)
+		if err == nil && exec.CommandContext(ctx, p, "-c", "import sys; sys.exit(sys.version_info < (3, 10))").Run() == nil {
 			return p, nil
 		}
 	}
-	return "", errors.New("Python 3 isn't installed on this computer")
+	return "", errors.New("the translator needs Python 3.10 or newer on this computer")
 }
 
 func (s *Service) install() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	py, err := findPython()
+	py, err := findPython(ctx)
 	if err != nil {
 		return err
 	}
@@ -148,52 +210,60 @@ func (s *Service) install() error {
 		}
 		return nil
 	}
-	if err := run("Preparing", py, "-m", "venv", filepath.Join(s.dir, "venv")); err != nil {
+	// --clear: a venv left from an older install would keep its old Python.
+	if err := run("Preparing", py, "-m", "venv", "--clear", filepath.Join(s.dir, "venv")); err != nil {
 		return err
 	}
-	if err := run("Installing the translator", s.python(), "-m", "pip", "install", "--quiet", "ctranslate2", "sentencepiece", "spacy", spacyWhl); err != nil {
+	if err := run("Installing the translator", s.python(), append([]string{"-m", "pip", "install", "--quiet"}, pipPackages()...)...); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(s.dir, "ready"), nil, 0o600)
+	return os.WriteFile(filepath.Join(s.dir, "ready"), []byte(addonStamp()), 0o600)
 }
 
 // EnsurePack fetches a language pack in the background, once.
 func (s *Service) EnsurePack(code string) {
-	if code == "" || code == "en" || exists(filepath.Join(s.packDir(code), "ready")) {
+	if _, ok := s.packs[code]; !ok {
 		return
 	}
 	s.mu.Lock()
-	if s.fetching[code] {
+	// Under the lock: a fetch that just ended has already written its ready file.
+	if s.packReady(code) || s.fetching[code] || time.Since(s.failedAt[code]) < packRetry {
 		s.mu.Unlock()
 		return
 	}
 	s.fetching[code] = true
 	s.mu.Unlock()
 	go func() {
+		s.slots <- struct{}{}
 		err := s.fetchPack(code)
+		<-s.slots
+		label := "Language pack " + code + ": "
 		s.mu.Lock()
 		delete(s.fetching, code)
 		if err != nil {
-			s.lastErr = fmt.Sprintf("Language pack %s: %v", code, err)
+			s.failedAt[code] = time.Now()
+			s.lastErr = label + err.Error()
+		} else if strings.HasPrefix(s.lastErr, label) {
+			s.lastErr = ""
 		}
 		s.mu.Unlock()
 	}()
 }
 
 func (s *Service) fetchPack(code string) error {
+	p, ok := s.packs[code]
+	if !ok {
+		return errors.New("no pack for this language")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	link, err := packLink(ctx, code)
-	if err != nil {
-		return err
-	}
 	tmp, err := os.CreateTemp(s.dir, "pack-*.zip")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
 	defer tmp.Close()
-	if err := download(ctx, link, tmp); err != nil {
+	if err := download(ctx, p, tmp); err != nil {
 		return err
 	}
 	dest := s.packDir(code)
@@ -201,37 +271,13 @@ func (s *Service) fetchPack(code string) error {
 	if err := unpack(tmp.Name(), dest); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dest, "ready"), nil, 0o600)
+	return os.WriteFile(filepath.Join(dest, "ready"), []byte(p.sha256), 0o600)
 }
 
-func packLink(ctx context.Context, code string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, indexURL, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	var index []struct {
-		From  string   `json:"from_code"`
-		To    string   `json:"to_code"`
-		Links []string `json:"links"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
-		return "", err
-	}
-	for _, p := range index {
-		if p.From == "en" && p.To == code && len(p.Links) > 0 {
-			return p.Links[0], nil
-		}
-	}
-	return "", errors.New("no pack for this language")
-}
-
-func download(ctx context.Context, url string, to io.Writer) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// download saves a pack and checks it against its pin. Nothing reads the file
+// unless this returns nil, and it stops reading past the pinned size.
+func download(ctx context.Context, p pack, to io.Writer) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.url, nil)
 	if err != nil {
 		return err
 	}
@@ -243,8 +289,14 @@ func download(ctx context.Context, url string, to io.Writer) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download: %s", resp.Status)
 	}
-	_, err = io.Copy(to, resp.Body)
-	return err
+	sum := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(to, sum), io.LimitReader(resp.Body, p.size+1)); err != nil {
+		return err
+	}
+	if hex.EncodeToString(sum.Sum(nil)) != p.sha256 {
+		return errors.New("the download doesn't match its checksum, so it wasn't used")
+	}
+	return nil
 }
 
 // unpack extracts a pack without its top folder, keeping only what it needs.
@@ -333,10 +385,10 @@ func (s *Service) Close() {
 // Translate turns English text into code. A pack that isn't there yet is
 // fetched in the background and ErrNotReady comes back for now.
 func (s *Service) Translate(ctx context.Context, text, code string) (string, error) {
-	if !exists(filepath.Join(s.dir, "ready")) {
+	if !s.installed() {
 		return "", ErrNotReady
 	}
-	if !exists(filepath.Join(s.packDir(code), "ready")) {
+	if !s.packReady(code) {
 		s.EnsurePack(code)
 		return "", ErrNotReady
 	}

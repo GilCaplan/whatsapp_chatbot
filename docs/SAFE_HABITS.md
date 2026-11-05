@@ -45,10 +45,14 @@ leaves the machine.
 - Error messages and logs must not carry tokens, full URLs with secrets, message text or personal details.
   Show the hostname at most.
 - Secrets belong in the environment or a secret store, not in code, command-line arguments or URLs.
+- A check must not print what it checks for. Test for presence by name, count or length. A filter that fails prints the
+  value, and the session transcript is then one more copy of the secret.
 
 **Copies are leaks waiting to happen.** Backups, scratch folders, temp directories and test sandboxes that
 hold a real session or database are live credentials. Before copying one, ask whether a copy is needed.
-If it is, record where it is and delete it as soon as it has served its purpose. When auditing, search
+If a step needs a backup each time, build it into the app: one copy, in the protected folder, replaced rather
+than added to, and removed on log out. An instruction to "back it up" produces a new copy per session. For a
+one-off copy, record where it is and delete it as soon as it has served its purpose. When auditing, search
 temp and scratch locations too, including other tools' folders, and test whether a file is a real credential
 rather than guessing from its name.
 

@@ -23,6 +23,7 @@ make build            # build/whatsapp-doppel
 make dev-fake         # serve with fake WhatsApp + fake LLM, data in ./data/fake, opens browser
 make run              # serve for real with ./data
 make test             # go test -race ./...
+make test-py          # translator add-on: pytest + ruff, no models needed
 make vet              # go vet + gofmt check
 make smoke            # scripts/smoke.sh: end-to-end against a throwaway fake server
 make app              # (Mac) build/WhatsappDoppel.app (icon, Info.plist, ad-hoc codesign; ARCHS="arm64 amd64" = universal)
@@ -35,7 +36,7 @@ go run . status|quit [--data-dir D]
 ```
 
 Do not run `go get` / `go mod tidy` casually — dependencies (notably the whatsmeow pin) are
-deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (back it up).
+deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db`. The app keeps one backup itself (`whatsapp.db.bak`), so never copy the session yourself: every copy is a live login.
 
 ## Where the details live
 

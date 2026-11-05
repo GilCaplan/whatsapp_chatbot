@@ -79,8 +79,11 @@ How each feature is wired (read the one you are changing). Shared rules stay in 
   target is left alone. `Message.Source` keeps the English, and `visible()` shows it to the model (`MsgKindPart` hides
   later bubbles). A task's message carries checked times, so it keeps `ReplyLanguage`/`LanguageFixed` and is not translated.
 - Translator add-on (`internal/runtime/translate`): the app stays pure Go; `server.py` (embedded, run from
-  `<data>/translator`) is a JSON-lines child process with Opus-MT models (CTranslate2, Argos packs per language) and
-  spaCy. Links, tags, numbers, emoji and proper nouns (POS PROPN, not dates) become `XXn` tokens the model copies into
+  `<data>/translator`) is a JSON-lines child process with CTranslate2 models (Argos packs) and spaCy. `packs.go` pins one
+  pack per language in `lang.All` (URL, SHA-256, size; a test keeps the two lists equal): a download that doesn't match is
+  never unpacked, `packDownloads` run at once, failed packs wait `packRetry` (Settings retries), and `ready` holds the checksum, so a pack from an older
+  pin is fetched again. `pyproject.toml` (embedded) holds the pip pins, and the add-on's own `ready` holds a stamp of them, so an install from older pins shows as not installed and Install rebuilds its venv; only the spaCy model has a hash, not pip's own dependencies. `pydantic` checks each request line (`Request`, input hidden from errors) and the pipe is forced to UTF-8. Models
+  are downloaded by each user into the data folder: `.gitignore` and `privacy-check.sh` both refuse them. Links, tags, numbers, emoji and proper nouns (POS PROPN, not dates) become `XXn` tokens the model copies into
   place, and code restores them, so placement comes from the translation itself. Same input, same output.
 - Content filter: `guard.Filter` (word lists per language, leetspeak, stretched and spaced spellings). Character:
   `guard.FirstPersonClaim` gates a cosine check against the persona's profile (`nomic-embed-text`, floor 0.40); no

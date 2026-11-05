@@ -19,7 +19,7 @@ On Windows use `scripts\dev.ps1` (`build`, `dev-fake`, `test`, `vet`, …) inste
 ## Before opening a pull request
 
 ```bash
-make vet test smoke
+make vet test test-py smoke
 find web -name '*.js' -print0 | xargs -0 -n1 node --check
 ```
 
