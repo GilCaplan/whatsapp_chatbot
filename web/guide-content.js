@@ -258,7 +258,7 @@ export const TIPS = {
   character: { title: 'Keep it in character', section: 'chats',
     text: 'When a reply makes a claim about the persona itself, code compares it with the persona\'s profile. If it sounds like someone else\'s life, it is written again once and otherwise not sent. This needs the small nomic-embed-text model in Ollama; without it this check is skipped.' },
   'task-calendar': { title: 'Use my calendars', section: 'tasks',
-    text: 'Takes the busy times of the calendars in Settings › Calendars out of the times it offers. Entries without an end time (reminders) never count as busy.' },
+    text: 'Off unless you switch it on, for each task. When on, code reads the busy times of the calendars in Settings › Calendars and takes them out of the times it offers. Events, titles and your schedule never reach the AI or any chat. Entries without an end time (reminders) never count as busy.' },
   missions: { title: 'Missions', section: 'goals',
     text: 'Ready-made goals with blanks to fill in. The persona works on it quietly; when it happens, the mission is complete and badges unlock.' },
   looks: { title: 'Looks', section: 'faq',

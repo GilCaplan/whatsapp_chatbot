@@ -26,7 +26,7 @@ func FindTime() model.TaskSpec {
 	return model.TaskSpec{
 		Template: model.TaskFindTime, Title: "Find a time", Voice: model.VoiceAsYou,
 		Meeting: model.TaskMeeting{Minutes: 60, Days: []string{"mon", "tue", "wed", "thu", "fri"}, From: "09:00", To: "18:00",
-			HorizonDays: 7, Calendars: true},
+			HorizonDays: 7}, // Calendars stays off until you allow it
 		Slots: []model.TaskSlot{{Key: "when", Label: "Time", Kind: model.SlotWhen, Required: true}},
 		Rules: []model.TaskRule{},
 	}

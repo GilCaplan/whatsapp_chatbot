@@ -17,9 +17,9 @@ import (
 // whether it's answering late. Nothing here is added when Options.Now is
 // zero, so goldens without a clock are unchanged.
 
-// WorldSection renders "RIGHT NOW: …" for the persona at now. mac is this
-// Mac's zone (where the people chatting probably are; nil = Local).
-func WorldSection(w model.World, now time.Time, mac *time.Location) string {
+// WorldSection renders "RIGHT NOW: …" for the persona at now. It only knows
+// the persona's own world: nothing about this computer reaches the prompt.
+func WorldSection(w model.World, now time.Time) string {
 	if now.IsZero() {
 		return ""
 	}
@@ -52,21 +52,6 @@ func WorldSection(w model.World, now time.Time, mac *time.Location) string {
 		b.WriteString(fmt.Sprintf("\nYou just finished: %s (ended %s ago).", a.Block.Label, agoText(now.Sub(a.End))))
 	} else if next := upcoming(w, now, time.Hour); next != nil {
 		b.WriteString(fmt.Sprintf("\nComing up: %s at %s.", next.Block.Label, next.Start.In(loc).Format("15:04")))
-	}
-	if mac == nil {
-		mac = time.Local
-	}
-	if other := now.In(mac); other.Format("2006-01-02 15:04") != local.Format("2006-01-02 15:04") {
-		zone := world.ZoneName(mac)
-		when := other.Format("15:04")
-		if other.YearDay() != local.YearDay() {
-			when += " on " + other.Format("Monday")
-		}
-		if zone != "" {
-			b.WriteString(fmt.Sprintf("\nThe people you're chatting with are probably on %s time, where it's %s.", zone, when))
-		} else {
-			b.WriteString(fmt.Sprintf("\nThe people you're chatting with are probably in another time zone, where it's %s.", when))
-		}
 	}
 	b.WriteString("\nBe aware of the time when it matters (late at night, early morning, weekends, meal times), but don't announce it.")
 	return b.String()

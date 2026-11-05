@@ -115,10 +115,9 @@ type Options struct {
 	ContactNote   string
 
 	// Realism (wave 3; world.go, memory.go). All zero = nothing added.
-	Now      time.Time      // when the reply is written (zero: no time/world section)
-	MacZone  *time.Location // this Mac's zone, where the people chatting probably are (nil = Local)
-	Late     *LateNote      // answering long after the message
-	Memories []MemoryLine   // what the persona learned about the people here
+	Now      time.Time    // when the reply is written (zero: no time/world section)
+	Late     *LateNote    // answering long after the message
+	Memories []MemoryLine // what the persona learned about the people here
 
 	// Cross-chat context (cross.go): what the persona knows about these
 	// people from its other chats, and this generation's turn (retry/off).
@@ -207,7 +206,7 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 		{Key: "summary", Label: "Summary of older messages", Text: SummarySection(o.Summary, o.SummaryFacts)},
 		{Key: "memories", Label: "Memories", Text: MemorySection(o.Memories, isGroup)},
 		{Key: "cross", Label: "From its other chats", Text: CrossSection(o.Cross, o.CrossTurn)},
-		{Key: "world", Label: "Right now (time and place)", Text: WorldSection(p.World, o.Now, o.MacZone)},
+		{Key: "world", Label: "Right now (time and place)", Text: WorldSection(p.World, o.Now)},
 		{Key: "late", Label: "Late reply", Text: LateSection(o.Late)},
 	}
 	if slices.ContainsFunc(ctx, func(s model.PromptSection) bool { return s.Text != "" }) {

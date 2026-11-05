@@ -231,7 +231,7 @@ export function openTaskSheet({ chatKey = '', spec = null, save = false, onDone 
         <div class="field"><span class="field-label">Prefer</span>${seg(PREFER, mt.prefer || '', (v) => { mt.prefer = v; update(); }, { label: 'Preferred part of day', cls: 'seg-sm' })}</div>
         <div class="field-row">
           <div class="grow"><div class="field-label">Use my calendars ${helpTip('task-calendar')}</div>
-            <div class="field-help">Takes your busy times out. The AI never sees your calendar, only the times it may offer.</div></div>
+            <div class="field-help">${mt.calendars ? 'Allowed for this task: code reads your busy times to choose what to offer. The AI never sees your calendar, only those times.' : 'Off: your calendar is not read. It offers any time in the hours above, and a confirmation always waits for your OK.'}</div></div>
           ${toggle(mt.calendars, (v) => { mt.calendars = v; update(); }, { label: 'Use my calendars' })}
         </div>
         <div class="field"><span class="field-label">Writes</span>

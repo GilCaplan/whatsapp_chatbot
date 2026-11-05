@@ -3,6 +3,13 @@
 WhatsApp Doppel runs entirely on your computer. This page explains what it stores, who can reach it,
 and how to report a problem.
 
+## Your calendars
+
+Calendars are off until you allow them, for each task or secretary. When allowed, code reads your busy
+times to choose which times to offer. Events, titles and your schedule never go to the AI or into a chat,
+and the app never reads them just because a calendar is connected. Nothing about this computer, such as
+its time zone, goes into prompts.
+
 ## Publishing this project
 
 If you fork or publish your copy, your personal data stays out of it by default: everything above lives

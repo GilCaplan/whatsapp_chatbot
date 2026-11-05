@@ -37,6 +37,9 @@ Everything below is new unless noted.
   unfolds now also says how long your AI model has been taking.
 
 ### Tasks
+- Calendars are off until you allow them, per task or secretary. A task that can't read your calendar
+  never confirms by itself. Events and titles never reach the AI or a chat, and prompts no longer
+  carry this computer's time zone.
 - New Tasks page: a persona does an errand in a private chat. The first template, Find a time,
   agrees on a meeting time: what it is about, how long, which days and hours, how far ahead.
 - A task can start with any WhatsApp contact: one without a persona gets the one you pick

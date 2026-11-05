@@ -57,7 +57,7 @@ export function openSecretaryBuilder({ persona = null, onSaved = null } = {}) {
     meetFrom: sec.meetFrom || '09:00',
     meetTo: sec.meetTo || '18:00',
     meetingMinutes: sec.meetingMinutes || 30,
-    useCalendars: sec.useCalendars ?? true,
+    useCalendars: sec.useCalendars ?? false,
     shareable: sec.shareable || '',
     never: sec.never || '',
     awayMessage: sec.awayMessage || '',
