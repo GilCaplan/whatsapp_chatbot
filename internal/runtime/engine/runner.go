@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	inboxSize     = 64
+	inboxSize     = 2048 // a dropped message is lost for good, so this is far above any burst
 	generateLimit = 120 * time.Second
 	echoWindow    = 2 * time.Minute
 	contextSize   = 6 // messages shown with a pending approval
@@ -337,7 +337,9 @@ func (r *Runner) process(in model.Incoming) {
 	if code := e.foreignLanguage(c, text); speaker == "them" && code != "" { // language.go
 		e.act(model.ActDecisionSkip, c, p.Name, "Staying quiet — the message is in "+lang.Name(code)+", not one of its languages",
 			withMsg(map[string]any{"reason": "language", "language": code}, in.MessageID))
-		r.keepAsContext(in, text, mentionNames, bp, now)
+		if lang.Understood(e.languages(c), code) { // what it can't read isn't context either
+			r.keepAsContext(in, text, mentionNames, bp, now)
+		}
 		return
 	}
 
@@ -359,7 +361,9 @@ func (r *Runner) process(in model.Incoming) {
 	if isGroup && speaker == "them" && !forced {
 		r.mu.Lock()
 		recent := r.historyCopyLocked()
-		replying := r.replyingLocked()
+		// A restart is about to use the model too, and with others queued
+		// behind this message the check would only make them wait.
+		replying := r.replyingLocked() || (r.cyc != nil && (r.cyc.restarts > 0 || r.queued.Load() > 1))
 		r.mu.Unlock()
 		// During a reply the AI check would only hold up the queue and compete
 		// with that reply for the model: it runs afterwards (checkLater).

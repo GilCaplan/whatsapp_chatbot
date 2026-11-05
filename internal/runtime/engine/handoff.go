@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,6 +101,9 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 		if !hs.AICheck {
 			return false
 		}
+		if isGroup && hit.Category == model.HandoffMeeting && !e.aimedAtPersona(p, in, text) {
+			return false // a group planning to meet isn't anyone asking to meet you
+		}
 		if r.replying() {
 			// Waiting here would stall the chat until the model is free, and
 			// the check could run out of time: it runs beside the reply, one
@@ -128,6 +132,20 @@ func (r *Runner) handoffGate(c model.ChatAssignment, p model.Persona, in model.I
 	}
 	e.triggerHandoff(r, c, p, hit, how, who, in, text, mentions, bp, now, false)
 	return true
+}
+
+// aimedAtPersona: the message names the persona or tags you.
+func (e *Engine) aimedAtPersona(p model.Persona, in model.Incoming, text string) bool {
+	if guard.ContainsName(text, p.Name) {
+		return true
+	}
+	own := e.wa.OwnJIDs()
+	for _, m := range in.MentionedJIDs {
+		if slices.ContainsFunc(own, func(j string) bool { return jidUser(j) == jidUser(m) }) {
+			return true
+		}
+	}
+	return false
 }
 
 // handoffCheck asks the persona's model whether a weak keyword hit is really

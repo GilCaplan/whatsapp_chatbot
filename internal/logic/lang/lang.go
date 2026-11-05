@@ -73,6 +73,7 @@ func Effective(app model.LanguagePrefs, chat *model.LanguagePrefs) model.Languag
 		p = *chat
 	}
 	p.Languages = slices.Clone(p.Languages)
+	p.Understands = slices.Clone(p.Understands)
 	if len(p.Languages) == 0 {
 		p.Languages = slices.Clone(Default)
 	}
@@ -86,7 +87,20 @@ func Effective(app model.LanguagePrefs, chat *model.LanguagePrefs) model.Languag
 	if p.Reply != model.LangMatch && !slices.Contains(p.Languages, p.Reply) {
 		p.Languages = append(p.Languages, p.Reply)
 	}
+	// What it replies to or in, it understands.
+	if len(p.Understands) > 0 {
+		for _, c := range p.Languages {
+			if !slices.Contains(p.Understands, c) {
+				p.Understands = append(p.Understands, c)
+			}
+		}
+	}
 	return p
+}
+
+// Understood reports whether it can read code (effective preferences).
+func Understood(p model.LanguagePrefs, code string) bool {
+	return len(p.Understands) == 0 || slices.Contains(p.Understands, code)
 }
 
 // Speaks reports whether the (effective) preferences include code.
@@ -96,20 +110,22 @@ func Speaks(p model.LanguagePrefs, code string) bool {
 
 // Ignores reports whether a message detected as code (sure) is left alone.
 func Ignores(p model.LanguagePrefs, code string) bool {
-	return code != "" && p.Others != model.LangAnswer && !Speaks(p, code)
+	return code != "" && (!Understood(p, code) || p.Others != model.LangAnswer && !Speaks(p, code))
 }
 
 // Validate checks a preferences block (zero values are fine).
 func Validate(p model.LanguagePrefs) error {
-	seen := map[string]bool{}
-	for _, c := range p.Languages {
-		if !Known(c) {
-			return fmt.Errorf("unknown language %q", c)
+	for _, list := range [][]string{p.Languages, p.Understands} {
+		seen := map[string]bool{}
+		for _, c := range list {
+			if !Known(c) {
+				return fmt.Errorf("unknown language %q", c)
+			}
+			if seen[c] {
+				return fmt.Errorf("language %q is listed twice", c)
+			}
+			seen[c] = true
 		}
-		if seen[c] {
-			return fmt.Errorf("language %q is listed twice", c)
-		}
-		seen[c] = true
 	}
 	if p.Others != "" && p.Others != model.LangIgnore && p.Others != model.LangAnswer {
 		return errors.New("others must be ignore or answer")
@@ -136,7 +152,7 @@ func Reply(p model.LanguagePrefs, person, msg, conv string) string {
 		return choice
 	}
 	for _, c := range []string{msg, conv} {
-		if c != "" && (Speaks(p, c) || p.Others == model.LangAnswer) {
+		if c != "" && Understood(p, c) && (Speaks(p, c) || p.Others == model.LangAnswer) {
 			return c
 		}
 	}

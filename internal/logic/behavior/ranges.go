@@ -35,6 +35,9 @@ var ranges = map[string]Range{
 
 	"respondToAllMaxMembers": {0, 1024},
 	"maxStreak":              {0, 50},
+	"replyBatchSize":         {0, 50},
+	"draftRestartSec":        {0, 300},
+	"maxDraftRestarts":       {0, 10},
 
 	"typingJitterPercent": {0, 80},
 

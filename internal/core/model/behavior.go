@@ -83,6 +83,9 @@ type BehaviorProfile struct {
 	RespondToAllMaxMembers     int      `json:"respondToAllMaxMembers"`     // group: groups up to this size answer everyone by default (0 = never)
 	AnswerAnyoneWhoAddressesIt bool     `json:"answerAnyoneWhoAddressesIt"` // group: people not picked still get an answer when they address it
 	MaxStreak                  int      `json:"maxStreak"`                  // replies in a row to one person while nobody else speaks (0 = unlimited)
+	ReplyBatchSize             int      `json:"replyBatchSize"`             // group: a reply takes in this many messages, newer ones wait for the next (0 = no limit)
+	DraftRestartSec            int      `json:"draftRestartSec"`            // a new message restarts a draft younger than this; an older one goes out first
+	MaxDraftRestarts           int      `json:"maxDraftRestarts"`           // restarts per reply before the draft goes out anyway
 	TriggerWords               []string `json:"triggerWords"`               // always reply when a message contains one
 	MuteWords                  []string `json:"muteWords"`                  // never reply to a message containing one
 
@@ -152,6 +155,9 @@ type BehaviorOverrides struct {
 	RespondToAllMaxMembers     *int      `json:"respondToAllMaxMembers,omitempty"`
 	AnswerAnyoneWhoAddressesIt *bool     `json:"answerAnyoneWhoAddressesIt,omitempty"`
 	MaxStreak                  *int      `json:"maxStreak,omitempty"`
+	ReplyBatchSize             *int      `json:"replyBatchSize,omitempty"`
+	DraftRestartSec            *int      `json:"draftRestartSec,omitempty"`
+	MaxDraftRestarts           *int      `json:"maxDraftRestarts,omitempty"`
 	TriggerWords               *[]string `json:"triggerWords,omitempty"`
 	MuteWords                  *[]string `json:"muteWords,omitempty"`
 

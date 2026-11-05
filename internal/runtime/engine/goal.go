@@ -69,6 +69,16 @@ func (e *Engine) updateGoal(key, goal string, fn func(g *model.GoalStatus)) mode
 	return out
 }
 
+type skipPlanKey struct{}
+
+// skipPlanning leaves the plan-ahead call out of a reply: in a busy chat the
+// wait costs more than the plan is worth, and the next calm reply plans again.
+func skipPlanning(ctx context.Context) context.Context {
+	return context.WithValue(ctx, skipPlanKey{}, true)
+}
+
+func planningSkipped(ctx context.Context) bool { return ctx.Value(skipPlanKey{}) != nil }
+
 // goalPlan is the outcome of the plan-ahead step for one reply.
 type goalPlan struct {
 	cfg        goals.Config
@@ -94,7 +104,7 @@ func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Confi
 		return gp
 	}
 	defer func() { gp.turn.Rest = !gp.planned && !opening && restTurn(cp, st, hist) }()
-	if !cfg.PlanAhead || cp.Planning == model.PlanOff || (cp.Planning == model.PlanPeriodic && !opening && !planDue(cp, st, hist)) {
+	if planningSkipped(ctx) || !cfg.PlanAhead || cp.Planning == model.PlanOff || (cp.Planning == model.PlanPeriodic && !opening && !planDue(cp, st, hist)) {
 		return gp
 	}
 	prov, mdl, err := e.llm.Resolve(p.LLM)

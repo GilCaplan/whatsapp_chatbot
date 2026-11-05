@@ -143,3 +143,21 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// Settings saved before a field existed read its default, not zero.
+func TestOldSettingsGetNewBehaviourDefaults(t *testing.T) {
+	p, err := NewPaths(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.ConfigFile(), []byte(`{"version":5,"behavior":{"group":{"preset":"natural","burstCapSec":45}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := m.Get().Behavior.Group; g.ReplyBatchSize != 3 || g.MaxDraftRestarts != 2 || g.DraftRestartSec != 20 {
+		t.Fatalf("group = %d %d %d", g.ReplyBatchSize, g.MaxDraftRestarts, g.DraftRestartSec)
+	}
+}

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -967,5 +968,79 @@ func TestLateHandoffCheckPausesWithoutBlocking(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("message saved %d times", n)
+	}
+}
+
+// Messages per reply comes from the settings; 0 means no limit.
+func TestReplyBatchSizeSetting(t *testing.T) {
+	for _, tc := range []struct {
+		size int
+		full bool
+	}{{2, true}, {0, false}} {
+		h := newHarness(t, both(func(p *model.BehaviorProfile) {
+			p.ChimeInPercent, p.AIJudgement, p.ReplyBatchSize = 100, false, tc.size
+		}), groupChat())
+		h.groupMsg("A", "one")
+		h.groupMsg("B", "two")
+		h.groupMsg("C", "three")
+		full := false
+		for _, a := range h.acts(model.ActWaiting) {
+			full = full || a.Meta["reason"] == "batch_full"
+		}
+		if full != tc.full {
+			t.Errorf("size %d: batch_full = %v", tc.size, full)
+		}
+	}
+}
+
+func TestBusyReplySkipsPlanning(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) {
+		p.ChimeInPercent, p.AIJudgement, p.ThinkMinSec, p.ThinkMaxSec = 100, false, 5, 5
+	}), groupChat())
+	h.setPersona("leo", func(p *model.Persona) { p.Goal = "get them to read more" })
+	for _, id := range []string{"A", "B", "C"} {
+		h.groupMsg(id, "chat "+id)
+	}
+	h.advance(30 * time.Second)
+	h.waitSent(1)
+	for _, a := range h.acts(model.ActThinking) {
+		if a.Meta["stage"] == "plan" {
+			t.Fatal("a busy reply planned ahead")
+		}
+	}
+}
+
+func TestGroupMeetingTalkPausesOnlyWhenAimedAtPersona(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.ChimeInPercent, p.AIJudgement = 0, false }), groupChat())
+	h.groupMsg("A", "can we please not meet at the sushi place again")
+	if n := countReqs(h.llm, isHandoffCheck); n != 0 {
+		t.Fatalf("checks = %d", n)
+	}
+	h.groupMsg("B", "Leo where should the meet be")
+	if n := countReqs(h.llm, isHandoffCheck); n != 1 {
+		t.Fatalf("checks = %d", n)
+	}
+}
+
+// A flood keeps every message, and the model isn't asked about each one.
+func TestBurstKeepsEveryMessage(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) {
+		p.ChimeInPercent, p.AIJudgement, p.ReplyWhenNameMentioned = 0, true, false
+		p.NoticeMinSec, p.NoticeMaxSec = 30, 30
+	}), groupChat())
+	h.llm.Push("YES")
+	for i := range 120 {
+		h.e.HandleIncoming(model.Incoming{ChatKey: groupKey, ChatJID: groupJID, IsGroup: true, SenderJID: "972502222222@s.whatsapp.net",
+			PushName: "Avi", Text: fmt.Sprintf("message %d", i), Timestamp: h.clk.Now(), MessageID: fmt.Sprintf("m%d", i)})
+	}
+	h.idle()
+	if n := len(h.acts(model.ActIncoming)); n != 120 {
+		t.Fatalf("incoming = %d", n)
+	}
+	if n := len(h.acts(model.ActError)); n != 0 {
+		t.Fatalf("errors = %d", n)
+	}
+	if n := countReqs(h.llm, isDecision); n >= 120 {
+		t.Fatalf("checks = %d", n)
 	}
 }

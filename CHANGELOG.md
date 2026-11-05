@@ -8,6 +8,13 @@ The command-line bot became a desktop app with a web interface, for macOS, Windo
 Everything below is new unless noted.
 
 ### Reply rules
+- Languages are three plain choices: which it understands, which it replies to, and which it replies in. Each list is All or a tick list in a dropdown.
+- The chat's Log shows a running reply on a timeline, with a circle that moves to the current step. Every step is listed as it happens,
+  including writing, checking and translating, before the reply is sent.
+- Busy chats keep moving: a new message stops a draft instead of waiting for it, a group reply takes
+  in a set number of messages (Messages per reply, 3 by default) and looks at newer ones after
+  sending, and replies go ahead of background work on the model. A group making its own plans to
+  meet no longer pauses the persona unless someone names it or tags you.
 - Personas now always write in English, and code translates the reply just before it is sent, so
   the language settings never change the prompt. A new Translator add-on does this with dedicated
   en-to-language models (Settings › Translator), keeping names, places, @tags, numbers, links and

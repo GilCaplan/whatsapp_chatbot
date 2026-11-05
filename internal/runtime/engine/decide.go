@@ -290,6 +290,9 @@ func (e *Engine) generateReply(ctx context.Context, p model.Persona, req llm.Req
 	res := genResult{Provider: prov.Name(), Model: mdl}
 	start := time.Now()
 
+	if ctx.Err() != nil { // the draft was stopped: don't report a call it won't make
+		return res, ctx.Err()
+	}
 	chars := len([]rune(req.System))
 	for _, m := range req.Messages {
 		chars += len([]rune(m.Content))

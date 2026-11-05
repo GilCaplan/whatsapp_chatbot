@@ -77,6 +77,7 @@ type cycle struct {
 	genSeq      uint64             // the running generation; older ones are ignored
 	genCancel   context.CancelFunc // stops the running generation
 	keptNoted   bool               // "sending this first" was logged
+	followUp    bool               // answers what came in behind the last reply
 	restarts    int                // drafts thrown away for newer messages
 	genStart    time.Time          // when the running generation started
 	persona     model.Persona
@@ -652,7 +653,11 @@ func (r *Runner) thinkLocked(fx *effects) {
 	if n := len(cyc.pending); n > 0 {
 		answered = cyc.pending[n-1]
 	}
-	ctx, cancel := context.WithCancel(llm.ForReply(cyc.ctx))
+	ctx := llm.ForReply(cyc.ctx)
+	if cyc.followUp || cyc.restarts > 0 || batchFull(cyc, eff) {
+		ctx = skipPlanning(ctx) // the chat is busy: answer now (goal.go)
+	}
+	ctx, cancel := context.WithCancel(ctx)
 	cyc.genSeq++
 	cyc.genCancel = cancel
 	seq := cyc.genSeq
@@ -822,16 +827,16 @@ func pendingLast(hist []model.Message, pending []pendingMsg) []model.Message {
 // A chat that keeps talking must not starve a reply: on a slow model every
 // draft would meet a newer message and start over, forever. A draft is only
 // restarted when that is cheap, and only so many times. In a group a reply
-// also takes in only replyBatch messages; the rest wait until it has gone out.
-const (
-	draftRedoWindow = 20 * time.Second
-	maxDraftRedos   = 2
-	replyBatch      = 3
-)
+// also takes in only so many messages (ReplyBatchSize); the rest wait until it
+// has gone out. All three limits are behaviour settings.
+
+// maxLaterChecks bounds the "join in?" calls after a reply.
+const maxLaterChecks = 3
 
 // batchFull: a group reply has enough to go on, so it stops waiting for more.
 func batchFull(cyc *cycle, eff behavior.Effective) bool {
-	return eff.Kind == behavior.KindGroup && len(cyc.pending) >= replyBatch
+	n := eff.Profile.ReplyBatchSize
+	return eff.Kind == behavior.KindGroup && n > 0 && len(cyc.pending) >= n
 }
 
 // draftFixedLocked reports whether the running draft goes out as it is, with
@@ -841,7 +846,8 @@ func (r *Runner) draftFixedLocked(fx *effects, cyc *cycle, eff behavior.Effectiv
 	if cyc.approval {
 		return false
 	}
-	if !batchFull(cyc, eff) && cyc.restarts < maxDraftRedos && r.e.clock.Now().Sub(cyc.genStart) < draftRedoWindow {
+	bp := eff.Profile
+	if !batchFull(cyc, eff) && cyc.restarts < bp.MaxDraftRestarts && r.e.clock.Now().Sub(cyc.genStart) < time.Duration(bp.DraftRestartSec)*time.Second {
 		return false
 	}
 	if !cyc.keptNoted {
@@ -890,12 +896,12 @@ func (r *Runner) followUpLocked(fx *effects, cyc *cycle) {
 		return
 	}
 	// They wrote while we were busy: we're in the chat, no notice delay.
-	r.startCycleLocked(later, imm, false)
+	r.startCycleLocked(later, imm, false).followUp = true
 	r.noticedLocked(fx)
 }
 
 // checkLater asks whether anything said during a reply is worth answering,
-// newest first, at most replyBatch messages.
+// newest first, at most maxLaterChecks messages.
 func (r *Runner) checkLater(later []pendingMsg) {
 	e := r.e
 	r.mu.Lock()
@@ -912,7 +918,7 @@ func (r *Runner) checkLater(later []pendingMsg) {
 		ids = append(ids, m.ID)
 	}
 	var d decision
-	for i := len(later) - 1; i >= max(len(later)-replyBatch, 0) && r.ctx.Err() == nil; i-- {
+	for i := len(later) - 1; i >= max(len(later)-maxLaterChecks, 0) && r.ctx.Err() == nil; i-- {
 		m := later[i]
 		if d = e.decide(r.ctx, p, bp, e.paramsOf(c), m.Text, m.Name, m.mentions, recent, e.clock.Now(), false); d.Reply {
 			break
@@ -929,7 +935,7 @@ func (r *Runner) checkLater(later []pendingMsg) {
 	var fx effects
 	r.mu.Lock()
 	if !r.stopped && r.cfg.Enabled && r.phase == phaseIdle { // else a newer reply already covers them
-		r.startCycleLocked(later, false, false)
+		r.startCycleLocked(later, false, false).followUp = true
 		r.noticedLocked(&fx)
 	}
 	r.mu.Unlock()
