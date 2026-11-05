@@ -106,13 +106,16 @@ func (pg *playground) Initiate(ctx context.Context, id string, group bool, hint 
 	}
 	chat := model.ChatAssignment{Key: "playground:" + id, Kind: kind, Name: "Playground", PersonaID: p.ID, Enabled: true, GoalOverride: s.goal}
 	hist := append([]model.Message(nil), s.history...)
-	opts := prompt.Options{LengthBias: rp.LengthBias, Opener: e.openerFor(prompt.Opener{Manual: true, Hint: strings.TrimSpace(guard.Truncate(hint, prompt.MaxOpenerHint))}, hist)}
+	opts := prompt.Options{LengthBias: rp.LengthBias, WriteEnglish: true, Opener: e.openerFor(prompt.Opener{Manual: true, Hint: strings.TrimSpace(guard.Truncate(hint, prompt.MaxOpenerHint))}, hist)}
 	start := time.Now()
 	gcfg, gturn := e.playgroundGoalTurn(ctx, p, chat, &s.goalStatus, hist, group, "", true)
 	res, err := e.expressiveReply(ctx, p, rp, hist, true, gcfg, gturn, nil, func(t prompt.GoalTurn, _ prompt.CrossTurn) llm.Request {
 		opts.Goal = t
 		return prompt.Initiate(p, chat, hist, group, opts)
 	})
+	if err == nil {
+		res = e.finishReply(ctx, p, e.finishLanguage(chat, hist, nil), res, nil)
+	}
 	out.LatencyMs = time.Since(start).Milliseconds()
 	if err != nil {
 		return out, err

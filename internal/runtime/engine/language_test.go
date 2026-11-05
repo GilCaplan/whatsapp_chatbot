@@ -1,12 +1,33 @@
 package engine
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"whatsappdoppel/internal/core/config"
 	"whatsappdoppel/internal/core/model"
 )
+
+// fakeTranslator marks what it translated, in the target's alphabet.
+type fakeTranslator struct {
+	answer string
+	err    error
+}
+
+func (f *fakeTranslator) Translate(_ context.Context, text, code string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	if f.answer != "" {
+		return f.answer, nil
+	}
+	return map[string]string{"ru": "[я] ", "he": "[א] ", "ja": "[あ] "}[code] + text, nil
+}
+func (f *fakeTranslator) Status() model.TranslatorStatus { return model.TranslatorStatus{} }
+func (f *fakeTranslator) Install([]string)               {}
 
 func lastSystem(h *harness) string {
 	reqs := replyRequests(h.llm)
@@ -27,19 +48,17 @@ func TestLanguages(t *testing.T) {
 	if d := h.decisions(dmKey)["r1"]; d.Outcome != model.DecisionSkipped || d.Reason != "language" {
 		t.Errorf("log = %+v", d)
 	}
-	// Hebrew: answered in Hebrew.
+	// Hebrew: written in English, sent in Hebrew.
 	h.msg(dmKey, "h1", "מה קורה? איך היה היום")
 	h.advance(15 * time.Second)
-	h.waitSent(1)
-	if sys := lastSystem(h); !strings.Contains(sys, "REPLY LANGUAGE: write this message in Hebrew") {
-		t.Errorf("hebrew prompt: %q", sys)
+	if s := h.waitSent(1); !strings.HasPrefix(s[0].text, "[א] ") {
+		t.Errorf("hebrew: %q", s[0].text)
 	}
 	// Unclear ("ok"): follows the conversation (Hebrew so far).
 	h.msg(dmKey, "o1", "ok")
 	h.advance(15 * time.Second)
-	h.waitSent(2)
-	if sys := lastSystem(h); !strings.Contains(sys, "in Hebrew") {
-		t.Errorf("unclear prompt: %q", sys)
+	if s := h.waitSent(2); !strings.HasPrefix(s[1].text, "[א] ") {
+		t.Errorf("unclear: %q", s[1].text)
 	}
 	// The contact's own choice wins over matching.
 	if _, err := h.st.UpdateChat(dmKey, func(c *model.ChatAssignment) {
@@ -51,9 +70,8 @@ func TestLanguages(t *testing.T) {
 	h.e.Reload()
 	h.msg(dmKey, "h2", "תגיד, איך היה בעבודה היום")
 	h.advance(15 * time.Second)
-	h.waitSent(3)
-	if sys := lastSystem(h); !strings.Contains(sys, "in English") {
-		t.Errorf("person choice: %q", sys)
+	if s := h.waitSent(3); strings.HasPrefix(s[2].text, "[") {
+		t.Errorf("person choice: %q", s[2].text)
 	}
 	// Others answered: Russian gets a reply now.
 	h.msg(dmKey, "r2", "привет, как дела?")
@@ -100,56 +118,135 @@ func russianChat(c model.ChatAssignment) model.ChatAssignment {
 	return c
 }
 
-// A language chosen in the settings holds against a Hebrew chat: it is the last
-// rule, it is repeated on the turn, and a short reply in the wrong language is
-// stopped even though reply checks are off (the default Classic system).
-func TestFixedLanguage(t *testing.T) {
-	h := newHarness(t, nil, russianChat(dmChat()))
-	h.llm.Push("לא, תגידי לנו.", "Нет, скажи нам.")
-	h.msg(dmKey, "m1", "מה קורה? איך היה היום")
-	h.advance(15 * time.Second)
-	sent := h.waitSent(1)
-	if sent[0].text != "Нет, скажи нам." {
-		t.Fatalf("sent %q", sent[0].text)
+// The language settings never reach the prompt: it is the same text whatever
+// the chat speaks, and the reply goes through the translator.
+func TestPromptIgnoresTheLanguageSetting(t *testing.T) {
+	prompts := map[string]string{}
+	for _, reply := range []string{"", model.LangMatch, "ru", "he", "ja"} {
+		c := dmChat()
+		c.Language = &model.LanguagePrefs{Others: model.LangAnswer, Reply: reply}
+		h := newHarness(t, nil, c)
+		h.msg(dmKey, "m1", "מה קורה? איך היה היום")
+		h.advance(15 * time.Second)
+		h.waitSent(1)
+		sys := lastSystem(h)
+		if !strings.HasSuffix(sys, "2. Respond in English.") {
+			t.Fatalf("the English rule isn't last: %q", sys[len(sys)-120:])
+		}
+		req := replyRequests(h.llm)[0]
+		if last := req.Messages[len(req.Messages)-1].Content; !strings.Contains(last, "in English.)") {
+			t.Errorf("no cue on the turn: %q", last)
+		}
+		prompts[sys] = reply
 	}
-	reqs := replyRequests(h.llm)
-	if len(reqs) != 2 {
-		t.Fatalf("requests = %d", len(reqs))
-	}
-	first := reqs[0]
-	if i := strings.LastIndex(first.System, "MOST IMPORTANT RULE"); i < 0 || strings.Contains(first.System[i:], "GUIDANCE") {
-		t.Errorf("the rule is not last: %q", first.System)
-	}
-	if strings.Contains(first.System, "REPLY LANGUAGE: write this message") {
-		t.Errorf("two language rules: %q", first.System)
-	}
-	if last := first.Messages[len(first.Messages)-1].Content; !strings.Contains(last, "in Russian only") {
-		t.Errorf("no cue on the turn: %q", last)
-	}
-	if !strings.Contains(reqs[1].System, "instead of Russian") {
-		t.Errorf("the rewrite isn't told why: %q", reqs[1].System)
+	if len(prompts) != 1 {
+		t.Fatalf("%d different prompts", len(prompts))
 	}
 }
 
-func TestFixedLanguageStaysQuietRatherThanBreakIt(t *testing.T) {
+func TestReplyIsTranslatedAndItsSourceKept(t *testing.T) {
 	h := newHarness(t, nil, russianChat(dmChat()))
-	h.llm.Push("לא, תגידי לנו.", "ממש לא יודע.")
+	h.llm.Push("Darling, that lighting is dreadful.")
 	h.msg(dmKey, "m1", "מה קורה? איך היה היום")
+	h.advance(15 * time.Second)
+	if s := h.waitSent(1); s[0].text != "[я] Darling, that lighting is dreadful." {
+		t.Fatalf("sent %q", s[0].text)
+	}
+	own := h.history(dmKey)[1]
+	if own.Source != "Darling, that lighting is dreadful." {
+		t.Fatalf("source = %+v", own)
+	}
+	// It reads its own words back in English.
+	h.msg(dmKey, "m2", "מה עוד?")
+	h.advance(15 * time.Second)
+	h.waitSent(2)
+	reqs := replyRequests(h.llm)
+	if got := reqs[1].Messages[1]; got.Content != "Darling, that lighting is dreadful." {
+		t.Errorf("history shows %+v", got)
+	}
+}
+
+// A reply in the chat's language already is left alone, and English settings
+// never call the translator.
+func TestNoTranslationWhenNotNeeded(t *testing.T) {
+	h := newHarness(t, nil, russianChat(dmChat()))
+	h.llm.Push("Нет, скажи нам об этом.")
+	h.msg(dmKey, "m1", "hello there how are you")
+	h.advance(15 * time.Second)
+	if s := h.waitSent(1); s[0].text != "Нет, скажи нам об этом." {
+		t.Fatalf("sent %q", s[0].text)
+	}
+	h2 := newHarness(t, nil, dmChat())
+	h2.msg(dmKey, "m1", "hello there how are you")
+	h2.advance(15 * time.Second)
+	if s := h2.waitSent(1); strings.HasPrefix(s[0].text, "[") {
+		t.Fatalf("sent %q", s[0].text)
+	}
+}
+
+// What code stops in a reply, with a rewrite first.
+func TestFilterStopsAReply(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.llm.Push("I want to commit suicide", "The lighting is lovely tonight")
+	h.msg(dmKey, "m1", "how are you today")
+	h.advance(15 * time.Second)
+	if s := h.waitSent(1); s[0].text != "The lighting is lovely tonight" {
+		t.Fatalf("sent %q", s[0].text)
+	}
+	h2 := newHarness(t, nil, dmChat())
+	h2.llm.Push("nigga please", "still nigga please")
+	h2.msg(dmKey, "m1", "how are you today")
+	h2.advance(15 * time.Second)
+	if len(h2.wa.Sent()) != 0 || h2.lastReason(model.ActDecisionSkip) != "reply_check" {
+		t.Fatalf("sent %d, reason %v", len(h2.wa.Sent()), h2.lastReason(model.ActDecisionSkip))
+	}
+}
+
+func TestFilterTakesOutCurseWordsAndCanBeOff(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.llm.Push("You're a fucking genius")
+	h.msg(dmKey, "m1", "how are you today")
+	h.advance(15 * time.Second)
+	if s := h.waitSent(1); s[0].text != "You're a genius" {
+		t.Fatalf("sent %q", s[0].text)
+	}
+	h2 := newHarness(t, func(s *config.Settings) { s.Safety.Filter.Enabled = false }, dmChat())
+	h2.llm.Push("You're a fucking genius")
+	h2.msg(dmKey, "m1", "how are you today")
+	h2.advance(15 * time.Second)
+	if s := h2.waitSent(1); s[0].text != "You're a fucking genius" {
+		t.Fatalf("sent %q", s[0].text)
+	}
+}
+
+// The filter also reads the translation: a clean draft can come back dirty.
+func TestFilterReadsTheTranslation(t *testing.T) {
+	h := newHarness(t, nil, russianChat(dmChat()))
+	h.tr.answer = "ты ниггер"
+	h.llm.Push("You are lovely, darling")
+	h.msg(dmKey, "m1", "hello there how are you")
 	h.advance(15 * time.Second)
 	if len(h.wa.Sent()) != 0 || h.lastReason(model.ActDecisionSkip) != "reply_check" {
-		t.Fatalf("sent %d, reason %v", len(h.wa.Sent()), h.lastReason(model.ActDecisionSkip))
+		t.Fatalf("sent %+v", h.wa.Sent())
 	}
 }
 
-// A language that only follows the chat stays a light rule: no check while
-// reply checks are off.
-func TestMatchedLanguageKeepsTheLightRule(t *testing.T) {
-	h := newHarness(t, nil, dmChat())
-	h.llm.Push("ok sure thing")
-	h.msg(dmKey, "m1", "מה קורה? איך היה היום")
+// Without the add-on the AI model translates, and its answer is checked.
+func TestTranslationFallsBackToTheModel(t *testing.T) {
+	h := newHarness(t, nil, russianChat(dmChat()))
+	h.tr.err = errors.New("not ready")
+	h.llm.Push("You are lovely, darling", "Ты прекрасна, дорогая моя.")
+	h.msg(dmKey, "m1", "hello there how are you")
 	h.advance(15 * time.Second)
-	h.waitSent(1)
-	if sys := lastSystem(h); strings.Contains(sys, "MOST IMPORTANT RULE") {
-		t.Errorf("prompt: %q", sys)
+	if s := h.waitSent(1); s[0].text != "Ты прекрасна, дорогая моя." {
+		t.Fatalf("sent %q", s[0].text)
+	}
+	h2 := newHarness(t, nil, russianChat(dmChat()))
+	h2.tr.err = errors.New("not ready")
+	h2.llm.Push("You are lovely, darling", "still in english, sorry about that")
+	h2.msg(dmKey, "m1", "hello there how are you")
+	h2.advance(15 * time.Second)
+	if len(h2.wa.Sent()) != 0 {
+		t.Fatalf("sent %+v", h2.wa.Sent())
 	}
 }

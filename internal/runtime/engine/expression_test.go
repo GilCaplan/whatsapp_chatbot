@@ -36,7 +36,7 @@ func TestExpressionEmojiNoneOnAutoReply(t *testing.T) {
 	if a := h.acts(model.ActSent); a[0].Meta["emojiRemoved"] != 2 {
 		t.Errorf("meta = %+v", a[0].Meta)
 	}
-	if sys := replyRequests(h.llm)[0].System; !strings.Contains(sys, "- Emoji: Never use emoji.") || !strings.HasSuffix(sys, " No emoji.") {
+	if sys := replyRequests(h.llm)[0].System; !strings.Contains(sys, "- Emoji: Never use emoji.") || !strings.Contains(sys, " No emoji.") {
 		t.Errorf("prompt does not say none:\n%s", sys[len(sys)-200:])
 	}
 }
@@ -50,7 +50,7 @@ func TestExpressionNoEmojiOnSeriousNews(t *testing.T) {
 	if s := h.waitSent(1); s[0].text != "oh darling, I'm so sorry call me tonight?" {
 		t.Fatalf("sent %q", s[0].text)
 	}
-	if sys := replyRequests(h.llm)[0].System; !strings.HasSuffix(sys, "no emoji and no jokes.") {
+	if sys := replyRequests(h.llm)[0].System; !strings.Contains(sys, "no emoji and no jokes.") {
 		t.Errorf("serious turn hint missing: %q", sys[len(sys)-120:])
 	}
 }

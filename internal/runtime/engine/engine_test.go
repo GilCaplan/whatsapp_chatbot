@@ -217,6 +217,7 @@ type harness struct {
 	st  *store.Store
 	cfg *config.Manager
 	hub *events.Hub
+	tr  *fakeTranslator
 }
 
 const (
@@ -300,9 +301,11 @@ func newHarnessDeps(t *testing.T, mut func(*config.Settings), deps Deps, chats .
 	clk := NewFakeClock(time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC))
 	rng := &swapSampler{s: behavior.Fixed{}} // minimum delays, no random hits unless a test asks
 	deps.Config, deps.Store, deps.Hub, deps.WA, deps.LLM, deps.Clock, deps.Sampler = cfg, st, hub, wa, reg, clk, rng
+	tr := &fakeTranslator{}
+	deps.Translator = tr
 	e := New(deps)
 	t.Cleanup(e.Stop)
-	return &harness{t: t, rng: rng, e: e, clk: clk, wa: wa, llm: fake, st: st, cfg: cfg, hub: hub}
+	return &harness{t: t, rng: rng, e: e, clk: clk, wa: wa, llm: fake, st: st, cfg: cfg, hub: hub, tr: tr}
 }
 
 func eventually(t *testing.T, what string, cond func() bool) {
@@ -487,7 +490,7 @@ func TestTriggerPrefixRepliesImmediately(t *testing.T) {
 	}
 	reqs := replyRequests(h.llm)
 	last := reqs[0].Messages[len(reqs[0].Messages)-1]
-	if last.Role != llm.RoleUser || last.Content != "hi there" {
+	if last.Role != llm.RoleUser || !strings.HasPrefix(last.Content, "hi there") {
 		t.Errorf("trigger should be stripped and sent as the user turn, got %+v", last)
 	}
 	if reqs[0].Messages[0].Role != llm.RoleAssistant {
@@ -736,8 +739,9 @@ func TestGroupDecisions(t *testing.T) {
 	h.rng.set(behavior.Fixed{})
 
 	// Only replied-to messages enter history; they are prefixed with the sender in the prompt.
+	// The third one filled the batch, so the reply has gone out before the fourth.
 	hist := h.history(groupKey)
-	if len(hist) != 4 {
+	if len(hist) != 5 {
 		t.Fatalf("history = %+v", hist)
 	}
 	h.clk.Advance(9 * time.Second)

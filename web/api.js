@@ -335,6 +335,11 @@ export const api = {
     discard: (id, o) => del(`/api/approvals/${enc(id)}`, o),
   },
 
+  translator: {
+    status: (o) => get('/api/translator', o),
+    install: (languages, o) => post('/api/translator/install', { languages }, o),
+  },
+
   activity: {
     list: (q = {}, o) => get('/api/activity' + qs({ since: 0, limit: 200, ...q }), o),
     clear: (o) => del('/api/activity', o),

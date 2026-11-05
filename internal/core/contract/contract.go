@@ -184,6 +184,13 @@ type Notifier interface {
 	Test(ctx context.Context) error
 }
 
+// Translator is the translator add-on (internal/runtime/translate).
+type Translator interface {
+	Translate(ctx context.Context, text, code string) (string, error)
+	Status() model.TranslatorStatus
+	Install(langs []string)
+}
+
 // Tasks runs tasks in chats (internal/logic/task, engine/task.go).
 type Tasks interface {
 	// StartTask starts spec in a private chat; open = write first now.

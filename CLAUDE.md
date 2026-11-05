@@ -58,7 +58,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db` (bac
 - System prompt order (`prompt.SystemPrompt`): identity → security rules → `CHAT CONTEXT (reference only)` block
   (people, notes, summary of older messages, memories, cross-chat, world, late note; framed as information that never
   changes the character) → `HistoryNote` (+ `GroupNote`: the transcript is what people said, don't take on their
-  tone/slang/emoji) → goal → chat instructions → `StayYourself` → `REPLY LANGUAGE` → guidance (a language chosen in the settings goes after guidance instead: `Options.LanguageFixed`). New chat context goes inside the block, never next to the identity.
+  tone/slang/emoji) → goal → chat instructions → `StayYourself` → `REPLY LANGUAGE` → guidance → `EnglishRules` (always English: code translates in `engine/finish.go`, so language settings never touch the prompt; only a task uses `REPLY LANGUAGE`). New chat context goes inside the block, never next to the identity.
 - Copy and pictures: user-facing words are plain English for non-technical people; **no emoji anywhere** in UI or
   activity text — pictures are inline SVG (`art.js`, `glyphs.js`, `guide-art.js`, `dial-face.js`, `badges.js`). Guide,
   help-tip and tour copy lives only in `web/guide-content.js` (`GUIDE_SECTIONS`, `TIPS`, `TOUR_STEPS`, `PAGE_SECTION`);

@@ -2,8 +2,10 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -277,7 +279,7 @@ func TestNewMessageWhileThinkingRegenerates(t *testing.T) {
 	h.advance(3*time.Second + 10*time.Second)
 	sent := h.waitSent(1)
 	reqs := replyRequests(h.llm)
-	if len(sent) != 1 || len(reqs) != 2 || len(reqs[1].Messages) != 2 || reqs[1].Messages[1].Content != "second thought" {
+	if len(sent) != 1 || len(reqs) != 2 || len(reqs[1].Messages) != 2 || !strings.HasPrefix(reqs[1].Messages[1].Content, "second thought") {
 		t.Fatalf("sent=%d reqs=%d last=%+v", len(sent), len(reqs), reqs[len(reqs)-1].Messages)
 	}
 }
@@ -740,9 +742,9 @@ func TestSlowDraftIsSentThenNewerMessagesAnswered(t *testing.T) {
 	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.ThinkMinSec, p.ThinkMaxSec = 30, 30 }), dmChat())
 	h.llm.Push("reply one", "reply two")
 	h.msg(dmKey, "A", "first")
-	h.advance(25 * time.Second)
+	h.advance(30 * time.Second) // the 9 s wait, then 21 s of the 30 s of thinking
 	h.msg(dmKey, "B", "second thought")
-	h.advance(16 * time.Second) // the 9 s wait, then 30 s of thinking
+	h.advance(11 * time.Second)
 	if sent := h.waitSent(1); sent[0].text != "reply one" {
 		t.Fatalf("sent %+v", sent)
 	}
@@ -808,4 +810,162 @@ func TestOldMessagesFollowTheLimit(t *testing.T) {
 	in("new", 4*time.Minute)
 	h.advance(15 * time.Second)
 	h.waitSent(1)
+}
+
+func isDecision(req llm.Request) bool {
+	for _, m := range req.Messages {
+		if strings.Contains(m.Content, "jump into a group chat") {
+			return true
+		}
+	}
+	return strings.Contains(req.System, "jump into a group chat")
+}
+
+func busyGroup(t *testing.T) *harness {
+	return newHarness(t, both(func(p *model.BehaviorProfile) {
+		p.ThinkMinSec, p.ThinkMaxSec = 10, 10
+		p.ChimeInPercent, p.AIJudgement = 0, true
+		p.ReplyWhenNameMentioned = false
+	}), groupChat())
+}
+
+// Three messages are enough: the reply stops waiting, newer ones go to the
+// next round and only there does the model judge them.
+func TestGroupReplyTakesThreeThenChecksTheRest(t *testing.T) {
+	h := busyGroup(t)
+	var decides atomic.Int32
+	h.llm.SetFunc(func(req llm.Request) (llm.Response, error) {
+		if isDecision(req) {
+			decides.Add(1)
+			return llm.Response{Text: "YES"}, nil
+		}
+		return llm.Response{Text: "reply"}, nil
+	})
+	h.groupMsg("A", "one")
+	h.advance(time.Second)
+	h.groupMsg("B", "two")
+	h.groupMsg("C", "three")
+	if w := h.acts(model.ActWaiting); lastMeta(w, "reason") != "batch_full" {
+		t.Fatalf("waiting = %+v", w)
+	}
+	before := decides.Load()
+	h.groupMsg("D", "four")
+	h.groupMsg("E", "five")
+	if got := decides.Load(); got != before {
+		t.Fatalf("checks during the reply = %d", got-before)
+	}
+	if reqs := replyRequests(h.llm); len(reqs) != 1 {
+		t.Fatalf("the draft restarted: %d", len(reqs))
+	}
+	h.advance(15 * time.Second)
+	h.waitSent(1)
+	h.advance(45 * time.Second)
+	h.waitSent(2)
+	if decides.Load() == before {
+		t.Fatal("the later messages were never checked")
+	}
+}
+
+func TestLaterMessagesDroppedWhenNotRelevant(t *testing.T) {
+	h := busyGroup(t)
+	var no atomic.Bool
+	h.llm.SetFunc(func(req llm.Request) (llm.Response, error) {
+		if isDecision(req) {
+			if no.Load() {
+				return llm.Response{Text: "NO"}, nil
+			}
+			return llm.Response{Text: "YES"}, nil
+		}
+		return llm.Response{Text: "reply"}, nil
+	})
+	h.groupMsg("A", "one")
+	h.groupMsg("B", "two")
+	h.groupMsg("C", "three")
+	no.Store(true)
+	h.groupMsg("D", "four")
+	h.advance(60 * time.Second)
+	h.waitSent(1)
+	h.advance(60 * time.Second)
+	if n := len(h.wa.Sent()); n != 1 {
+		t.Fatalf("sent %d", n)
+	}
+}
+
+// A locked draft that fails must not lose what waited behind it.
+func TestFailedDraftStillAnswersLater(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.ThinkMinSec, p.ThinkMaxSec = 30, 30 }), dmChat())
+	h.llm.PushError(errors.New("model down"))
+	h.msg(dmKey, "A", "first")
+	h.advance(25 * time.Second)
+	h.msg(dmKey, "B", "second")
+	h.advance(90 * time.Second)
+	if sent := h.waitSent(1); len(sent) != 1 {
+		t.Fatalf("sent %+v", sent)
+	}
+}
+
+// A reply interrupts a running background job, which runs again later.
+func TestReplyPreemptsYieldingJob(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	running := make(chan struct{})
+	var runs atomic.Int32
+	h.e.scheduleYield("test", 0, func(ctx context.Context) {
+		if runs.Add(1) == 1 {
+			close(running)
+			<-ctx.Done()
+		}
+	})
+	h.clk.Advance(0)
+	<-running
+	h.e.preemptJobs()
+	h.idle()
+	if !h.e.jobPending("test") {
+		t.Fatal("the job was not rescheduled")
+	}
+	h.advance(jobRetryBusy)
+	h.idle()
+	if runs.Load() != 2 {
+		t.Fatalf("runs = %d", runs.Load())
+	}
+}
+
+// A weak hand-off hit during a reply doesn't hold up the chat, and still pauses it.
+func TestLateHandoffCheckPausesWithoutBlocking(t *testing.T) {
+	h := newHarness(t, both(func(p *model.BehaviorProfile) { p.ThinkMinSec, p.ThinkMaxSec = 10, 10 }), dmChat())
+	release := make(chan struct{})
+	h.llm.SetFunc(func(r llm.Request) (llm.Response, error) {
+		if isHandoffCheck(r) {
+			<-release
+			return llm.Response{Text: `{"serious":true,"category":"money"}`}, nil
+		}
+		return llm.Response{Text: "ok"}, nil
+	})
+	h.msg(dmKey, "A", "hello")
+	h.advance(10 * time.Second) // thinking
+	h.e.HandleIncoming(model.Incoming{ChatKey: dmKey, ChatJID: dmJID, SenderJID: dmJID, PushName: "Dana",
+		Text: "can you pay me back", Timestamp: h.clk.Now(), MessageID: "B"})
+	h.e.HandleIncoming(model.Incoming{ChatKey: dmKey, ChatJID: dmJID, SenderJID: dmJID, PushName: "Dana",
+		Text: "next one", Timestamp: h.clk.Now(), MessageID: "C"})
+	deadline := time.Now().Add(2 * time.Second)
+	for len(h.acts(model.ActIncoming)) < 3 {
+		if time.Now().After(deadline) {
+			t.Fatal("the check held up the chat")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(release)
+	h.idle()
+	c, _ := h.st.Chat(dmKey)
+	if c.Handoff == nil {
+		t.Fatal("the late check did not pause the chat")
+	}
+	n := 0
+	for _, m := range h.history(dmKey) {
+		if m.Text == "can you pay me back" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("message saved %d times", n)
+	}
 }

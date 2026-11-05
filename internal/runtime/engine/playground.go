@@ -147,7 +147,7 @@ func (pg *playground) Send(ctx context.Context, id, text string, group bool) (mo
 
 	start := time.Now()
 	if group {
-		d := e.decide(ctx, p, rp, e.appParams(), g.Text, who.Name, nil, s.history[:len(s.history)-1], e.clock.Now())
+		d := e.decide(ctx, p, rp, e.appParams(), g.Text, who.Name, nil, s.history[:len(s.history)-1], e.clock.Now(), false)
 		out.Decision = &model.Decision{WouldReply: d.Reply, Reason: d.Reason}
 		if !d.Reply {
 			out.LatencyMs = time.Since(start).Milliseconds()
@@ -168,9 +168,16 @@ func (pg *playground) Send(ctx context.Context, id, text string, group bool) (mo
 		opts.Goal, opts.CrossTurn = t, x
 		return prompt.Compose(p, chat, hist, group, opts)
 	})
+	if err == nil {
+		res = e.finishReply(ctx, p, e.finishLanguage(chat, hist, nil), res, nil)
+	}
 	out.LatencyMs = time.Since(start).Milliseconds()
 	if err != nil {
 		return out, err
+	}
+	if res.Quiet {
+		out.Blocked, out.BlockReason = true, strings.Join(res.Checks, "; ")
+		return out, nil
 	}
 	var tagged []mention.Entry
 	res.Text, tagged = e.applyMentions(res.Text, dir, rp, pendingMsg{SenderJID: who.JID, Name: who.Name}, hist, false)

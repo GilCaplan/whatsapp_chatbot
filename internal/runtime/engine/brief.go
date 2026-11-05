@@ -58,7 +58,7 @@ func (e *Engine) briefTick(c model.ChatAssignment) {
 		return
 	}
 	key := c.Key
-	e.schedule(briefJob(key), briefIdle, func(ctx context.Context) {
+	e.scheduleYield(briefJob(key), briefIdle, func(ctx context.Context) {
 		cc, ok := e.store.Chat(key)
 		if !ok || !e.isCrossSource(cc) {
 			return

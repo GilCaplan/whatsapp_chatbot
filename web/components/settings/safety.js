@@ -8,6 +8,7 @@ import { store } from '../../store.js';
 import { toggle, fieldRow } from '../../ui.js';
 import { debounce, rowsFor } from '../../util.js';
 import { helpTip } from '../common/help-tip.js';
+import { wordChips } from '../common/word-chips.js';
 import { HANDOFF_CATS, catGlyph, renderReveal } from '../chat/handoff-meta.js';
 
 const MAX_TEMPLATE = 600;
@@ -33,12 +34,28 @@ export function safetySection(h) {
   const on = HANDOFF_CATS.filter((c) => ho[c.id]).length;
   const persona = (store.state.personas[0] && store.state.personas[0].name) || 'Leo';
   const me = (store.state.wa && store.state.wa.me && store.state.wa.me.pushName) || '';
+  const filter = (s.safety && s.safety.filter) || {};
+  const words = filter.words || [];
   return html`<section class="card section" id="sec-safety" data-section="safety">
     ${h.sectionHead('safety', 'Safety', 'When a message is about money, health, meeting up or asks if it is a bot, the persona pauses and lets you take over.', 'linear-gradient(135deg,#ef4444,#a855f7)')}
     ${fieldRow({
       label: html`Hand over sensitive messages to me ${helpTip('handoff')}`,
       help: 'The persona goes quiet in that chat, keeps reading, and Doppel shows "Needs you" until you tap Resume.',
       control: toggle(ho.enabled, (v) => saveHandoff({ enabled: v }), { label: 'Hand-off' }),
+    })}
+    ${fieldRow({
+      label: html`Filter what the persona writes ${helpTip('filter')}`,
+      help: 'Done by code on every reply, also after translating: curse words are taken out; a slur or talk of self-harm stops the reply.',
+      control: toggle(filter.enabled, (v) => h.save({ safety: { filter: { enabled: v } } }, 'safety'), { label: 'Content filter' }),
+    })}
+    ${filter.enabled ? html`<div class="field-row field-row-stack">
+      <div><div class="field-label">Your own words to take out</div><div class="field-help">Any word or phrase, in any language.</div></div>
+      ${wordChips({ words, onChange: (w) => h.save({ safety: { filter: { words: w } } }, 'safety'), label: 'Words to take out', tone: 'red', max: 100, placeholder: 'Type a word and press Enter' })}
+    </div>` : ''}
+    ${fieldRow({
+      label: html`Keep it in character ${helpTip('character')}`,
+      help: 'When a reply says something about itself, it is compared with the persona. A claim about someone else\'s life is written again, or not sent.',
+      control: toggle(s.safety && s.safety.character, (v) => h.save({ safety: { character: v } }, 'safety'), { label: 'Keep it in character' }),
     })}
     ${ho.enabled ? html`<div class="field-row field-row-stack">
       <div><div class="field-label">Topics that pause the persona <span class="chip chip-sm">${on} of ${HANDOFF_CATS.length}</span></div>

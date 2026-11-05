@@ -117,10 +117,18 @@ type RevealSettings struct {
 	Template string `json:"template"` // {persona} and {me} are filled in; ≤ MaxRevealTemplate characters
 }
 
-// SafetySettings groups hand-off and reveal.
+// FilterSettings: the content filter on everything the persona writes.
+type FilterSettings struct {
+	Enabled bool     `json:"enabled"`
+	Words   []string `json:"words"` // your own words to take out
+}
+
+// SafetySettings groups hand-off, reveal and what code stops in replies.
 type SafetySettings struct {
-	Handoff HandoffSettings `json:"handoff"`
-	Reveal  RevealSettings  `json:"reveal"`
+	Handoff   HandoffSettings `json:"handoff"`
+	Reveal    RevealSettings  `json:"reveal"`
+	Filter    FilterSettings  `json:"filter"`
+	Character bool            `json:"character"` // hold what it says about itself against the persona
 }
 
 // MemorySettings: learn about the people in chats (per chat: ChatAssignment.Memory).
@@ -295,6 +303,7 @@ func Defaults() Settings {
 		Safety: SafetySettings{
 			Handoff: HandoffSettings{Enabled: true, Money: true, Health: true, Meeting: true, Distress: true, Bot: true, Legal: true, AICheck: true},
 			Reveal:  RevealSettings{Template: DefaultRevealTemplate},
+			Filter:  FilterSettings{Enabled: true, Words: []string{}}, Character: true,
 		},
 		Memory: MemorySettings{Enabled: true, Cross: CrossSettings{
 			Enabled: true, GroupMode: model.CrossDiscreet, DMMode: model.CrossOpen,

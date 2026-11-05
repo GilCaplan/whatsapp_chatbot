@@ -251,10 +251,10 @@ A normal reply narrates: `incoming` → `noticing` → `seen` → `waiting` → 
 |---|---|---|
 | `noticing` | "Hasn't looked at the chat yet — will see it in 14s" | `delaySeconds` |
 | `seen` | "Seen (2 messages)" / "Looked at the chat (2 messages) — read receipts off" | `count`, `readReceipts` |
-| `waiting` | "Waiting 8s for more messages", "More messages — waiting 5s", "Burst cap reached — replying now", "New message while thinking — starting over" | `waitSeconds`, `resetCount`, `reason` (`burst_cap`, `new_messages`, `cooldown`) |
+| `waiting` | "Waiting 8s for more messages", "More messages — waiting 5s", "Burst cap reached — replying now", "3 messages in — replying to those now", "New message while thinking — starting over" | `waitSeconds`, `resetCount`, `reason` (`burst_cap`, `batch_full`, `new_messages`, `cooldown`) |
 | `thinking` | "Thinking for 6s" · distraction: "Got distracted — back in about 2 minutes" · plan ahead: "Planned the next move" · cross-chat: "Keeping in mind 2 things from your private chat with Dana — discreet" | `delaySeconds`, `distracted` (true for the distraction event); plan ahead: `stage:"plan"`, `plan` (the private next move), `latencyMs`; cross-chat: `stage:"cross"`, `crossContext` (below; never the notes themselves) |
 | `generating` | "Writing a reply…" (trigger prefix and approval mode, which skip "thinking") | `model`, `messages` |
-| `progress` | A step of writing a reply, for the Log tab's Live progress view ("Asking llama3.1:8b to write the reply") | `stage` (read, planning, write, written, checked, rewrite, keep), `latencyMs`, `promptChars`, `model` |
+| `progress` | A step of writing a reply, for the Log tab's Live progress view ("Asking llama3.1:8b to write the reply") | `stage` (read, planning, write, written, checked, rewrite, keep, filter, character, translate, translated), `latencyMs`, `promptChars`, `model`, `score`, `by` |
 | `typing` | "Typing for 12s (84 characters, part 1 of 2)" (single bubble: "Typing for 12s (84 characters)") | `typingSeconds`, `chars`, `part`, `parts`, `approvalId` (approved replies) |
 | `sent` | the message text | `provider`, `model`, `latencyMs`, `jid`, `part`, `parts`, `quoted`, `proactive`, `manual`, `goalRewritten` (the first draft gave the goal away and was rewritten), `crossContext` `{mode, people, items, sources}` (context from other chats was used), `crossRewritten` (a draft gave away something from another chat and was rewritten), `crossDropped` (in the end it was written without other chats), `mentions` (display names tagged in this bubble) |
 | `goal.reached` | "Goal reached — Josh said apple" / "Goal reached — find out what Dana is doing this weekend" / "Goal reached — Dana sent a photo" | `goal`, `how` (`said_word`, `ai`, `media`), `evidence`, `afterReached`, `missionId?` |
@@ -321,6 +321,8 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 | Method & path | Body | Response |
 |---|---|---|
 | `GET /api/behavior/presets` | – | `{presets:[{id, label, description, private: BehaviorProfile, group: BehaviorProfile}], ranges:{field:{min,max}}, enums:{field:[...]}, defaults:{private, group}, dials:{speed\|chattiness\|boldness: DialDef}, dialOrder:["speed","chattiness","boldness"]}` |
+| `GET /api/translator` | – | `TranslatorStatus {installed, installing, step?, error?, packs:[code], fetching?:[code]}` |
+| `POST /api/translator/install` | `{languages?:[code]}` | 202 status: sets up the add-on in the background, then fetches the languages; 400 `invalid_language` |
 | `POST /api/behavior/sample` | `{kind:"dm\|group" ("private" accepted), profile: BehaviorProfile (partial ok: missing fields = defaults for kind; clamped, never 400), text?, samples?:1–10 (default 5), approval?:bool}` | `{samples:[{totalSec, phases:[{name, sec, startSec}], bubbles:[{text, typingSec}], quoted}], summary:{minTotalSec, medianTotalSec, maxTotalSec, splitShare, modelSec}}` (`modelSec`: how long the AI model has taken lately to plan and write a reply, on top of these timers; 0 = none measured yet) |
 
 - Presets (`id`): `natural` (default for both kinds), `instant`, `busy`, `slow`, `nightowl`; `custom` is the label

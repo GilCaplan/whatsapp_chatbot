@@ -54,6 +54,7 @@ const PROGRESS_TYPES = ['progress', 'thinking', 'generating', 'waiting', 'typing
 const PROGRESS_LIMIT = 80;
 const PROGRESS_ICONS = {
   read: 'chats', planning: 'target', plan: 'target', write: 'wand', written: 'check', checked: 'shield', rewrite: 'warning', keep: 'send',
+  filter: 'shield', character: 'personas', translate: 'globe', translated: 'globe',
 };
 
 const STEP_ICONS = {

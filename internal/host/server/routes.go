@@ -166,6 +166,8 @@ func (s *Server) routes() http.Handler {
 
 	// Notifications (handlers_notify.go)
 	mux.HandleFunc("POST /api/system/notify-test", s.handleNotifyTest)
+	mux.HandleFunc("GET /api/translator", s.handleTranslator)
+	mux.HandleFunc("POST /api/translator/install", s.handleTranslatorInstall)
 
 	// Unknown API paths get a JSON 404; everything else is the UI.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {

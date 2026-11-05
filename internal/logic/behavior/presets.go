@@ -193,7 +193,7 @@ func presetTable() []PresetDef {
 	for _, p := range []*model.BehaviorProfile{&op, &og} {
 		p.Preset = PresetNightOwl
 		p.ThinkMinSec, p.ThinkMaxSec = 2, 8
-		p.DistractedPercent, p.DistractedMinSec, p.DistractedMaxSec = 10, 30, 120
+		p.DistractedPercent, p.DistractedMinSec, p.DistractedMaxSec = 0, 0, 0
 		p.Availability = model.Availability{
 			Enabled:       true,
 			Week:          everyDay("18:00", "02:30"),
@@ -202,7 +202,8 @@ func presetTable() []PresetDef {
 		}
 	}
 	op.NoticeMinSec, op.NoticeMaxSec = 2, 15
-	og.NoticeMinSec, og.NoticeMaxSec = 5, 60
+	og.NoticeMinSec, og.NoticeMaxSec = 3, 10
+	og.WaitForMoreSec, og.BurstCapSec = 6, 20
 
 	return []PresetDef{
 		{ID: PresetNatural, Label: "Natural", Description: "Replies like a friend who has their phone nearby: a short pause, sometimes a few bubbles.", Private: np, Group: ng},

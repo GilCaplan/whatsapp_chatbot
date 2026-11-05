@@ -90,11 +90,14 @@ func (e *Engine) ratingsTick() {
 		if !c.Enabled || !isGroupChat(c) || e.ctx.Err() != nil {
 			continue
 		}
-		e.withJobSlot(e.ctx, func() {
-			if _, err := e.rateChat(e.ctx, c, false); err != nil && !errors.Is(err, ErrNothingToRate) && e.ctx.Err() == nil {
+		if e.yieldingSlot(e.ctx, func(ctx context.Context) {
+			if _, err := e.rateChat(ctx, c, false); err != nil && !errors.Is(err, ErrNothingToRate) && ctx.Err() == nil {
 				e.act(model.ActError, c, "", "Couldn't rate the people here: "+err.Error(), nil)
 			}
-		})
+		}) {
+			e.armRatings(ratingRetry)
+			return
+		}
 	}
 	e.armRatings(0)
 }

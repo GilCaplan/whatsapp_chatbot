@@ -21,6 +21,7 @@ import { safetySection } from '../components/settings/safety.js';
 import { languageControls } from '../components/persona/language-controls.js';
 import { calendarsSection } from '../components/settings/calendars.js';
 import { tasksSection } from '../components/settings/tasks.js';
+import { translatorSection } from '../components/settings/translator.js';
 import { memorySection } from '../components/settings/memory.js';
 import { cloneRows } from '../components/settings/clone-rows.js';
 import { SKINS, skinById, resolveMode, systemDark } from '../skins.js';
@@ -31,6 +32,7 @@ const SECTIONS = [
   { id: 'behaviour', label: 'Behaviour', icon: 'sliders' },
   { id: 'notifications', label: 'Notifications', icon: 'megaphone' },
   { id: 'safety', label: 'Safety', icon: 'shield' },
+  { id: 'translator', label: 'Translator', icon: 'globe' },
   { id: 'calendars', label: 'Calendars', icon: 'calendar' },
   { id: 'tasks', label: 'Tasks', icon: 'check-double' },
   { id: 'memory', label: 'Memory & recap', icon: 'pin' },
@@ -641,6 +643,7 @@ export default function Settings(ctx) {
         ${behaviourSection()}
         ${notificationsSection(sectionCtx)}
         ${safetySection(sectionCtx)}
+        ${translatorSection(sectionCtx)}
         ${calendarsSection(sectionCtx)}
         ${tasksSection(sectionCtx)}
         ${memorySection(sectionCtx)}

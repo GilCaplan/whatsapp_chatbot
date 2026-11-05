@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"cmp"
 	"context"
 	"strings"
 	"time"
@@ -83,7 +84,7 @@ func codeCheck(ck replyCheck, text string) (fails, soft []string) {
 				continue
 			}
 			n++
-			mw := normWords(m.Text)
+			mw := normWords(cmp.Or(m.Source, m.Text))
 			switch j := jaccard(words, mw); {
 			case len(mw) >= 3 && j >= 0.7:
 				fails = append(fails, "it nearly repeated one of its last replies")

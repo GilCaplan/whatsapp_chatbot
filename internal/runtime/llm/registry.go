@@ -294,3 +294,17 @@ func newJobID() string {
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+// Embed returns the vector of text from the local model; it fails when there is
+// none (callers skip what needs it).
+func (r *Registry) Embed(ctx context.Context, text string) ([]float64, error) {
+	p, err := r.Get("ollama")
+	if err != nil {
+		return nil, err
+	}
+	em, ok := p.(Embedder)
+	if !ok {
+		return nil, errors.New("no embedding model")
+	}
+	return em.Embed(ctx, EmbedModel, text)
+}

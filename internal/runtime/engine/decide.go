@@ -34,6 +34,10 @@ type decision struct {
 	Meta   map[string]any
 }
 
+// reasonCheckLater: only the AI could say, and it is held until the running
+// reply has gone out (Runner.checkLater).
+const reasonCheckLater = "check_later"
+
 // decisionText is the plain-English activity text for a group decision
 // (the reason code stays in meta.reason).
 func decisionText(reason, name string) string {
@@ -79,7 +83,7 @@ func decisionText(reason, name string) string {
 // "rules_first" settles the clear cases in code (joinRules) and asks the AI
 // only when unsure, "rules_only" rolls the chance when unsure. recent is the
 // history before the message, sender its sender's name and now its arrival time.
-func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorProfile, cp model.ContextParams, text, sender string, mentions []string, recent []model.Message, now time.Time) decision {
+func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorProfile, cp model.ContextParams, text, sender string, mentions []string, recent []model.Message, now time.Time, holdAI bool) decision {
 	if bp.ReplyWhenNameMentioned && guard.ContainsName(text, p.Name) {
 		return decision{true, ReasonNameMentioned, map[string]any{"reason": ReasonNameMentioned}}
 	}
@@ -137,6 +141,9 @@ func (e *Engine) decide(ctx context.Context, p model.Persona, bp model.BehaviorP
 		return decision{false, ReasonChimeOut, meta}
 	}
 
+	if holdAI {
+		return decision{true, reasonCheckLater, meta}
+	}
 	prov, mdl, err := e.llm.Resolve(p.LLM)
 	if err == nil {
 		req := prompt.Decision(p, text)
@@ -198,6 +205,8 @@ type genResult struct {
 	Cross          *crossUse
 	CrossRewritten bool
 	CrossDropped   bool
+	// Source: the English of a reply that was translated (finish.go).
+	Source string
 	// Opener: written by prompt.Initiate (check-in / manual start), see opener.go.
 	Opener bool
 	// Expression rules (expression.go): asked again because far too long,

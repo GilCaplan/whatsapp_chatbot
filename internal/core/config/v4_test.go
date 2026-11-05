@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"whatsappdoppel/internal/core/model"
@@ -47,7 +48,7 @@ func TestV3ConfigGetsV4FieldsAndBlocks(t *testing.T) {
 		t.Errorf("group = %s %d", g.Preset, g.TypoPercent)
 	}
 	d := Defaults()
-	if s.Notifications != d.Notifications || s.Safety != d.Safety || s.Memory != d.Memory || s.Recap != d.Recap || s.SelfClone != d.SelfClone {
+	if s.Notifications != d.Notifications || !reflect.DeepEqual(s.Safety, d.Safety) || s.Memory != d.Memory || s.Recap != d.Recap || s.SelfClone != d.SelfClone {
 		t.Errorf("v4 blocks not defaulted: %+v %+v %+v %+v %+v", s.Notifications, s.Safety, s.Memory, s.Recap, s.SelfClone)
 	}
 

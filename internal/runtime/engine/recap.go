@@ -102,8 +102,12 @@ func (e *Engine) recapTick() {
 	ctx, cancel := context.WithTimeout(e.ctx, recapMaxChats*recapTimeout)
 	// Share the background slot with memory extraction so a local model never
 	// runs two background calls at once.
-	e.withJobSlot(ctx, func() { _, _ = e.runRecaps(ctx, "", false) })
+	interrupted := e.yieldingSlot(ctx, func(ctx context.Context) { _, _ = e.runRecaps(ctx, "", false) })
 	cancel()
+	if interrupted {
+		e.armRecap(recapRetry)
+		return
+	}
 	e.armRecap(0)
 }
 
@@ -155,7 +159,9 @@ func (e *Engine) runRecaps(ctx context.Context, chatKey string, onDemand bool) (
 			if firstErr == nil {
 				firstErr = err
 			}
-			e.act(model.ActError, c, "", "Couldn't write the daily recap: "+err.Error(), map[string]any{"recap": true})
+			if ctx.Err() == nil {
+				e.act(model.ActError, c, "", "Couldn't write the daily recap: "+err.Error(), map[string]any{"recap": true})
+			}
 			continue
 		}
 		if ok {

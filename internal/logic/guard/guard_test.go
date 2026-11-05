@@ -164,3 +164,60 @@ func TestContainsName(t *testing.T) {
 		t.Error("unicode name")
 	}
 }
+
+func TestFilter(t *testing.T) {
+	cases := []struct {
+		in, text, block string
+	}{
+		{in: "That sofa is stunning", text: "That sofa is stunning"},
+		{in: "You're a fucking genius", text: "You're a genius"},
+		{in: "Shit, that is a bold choice", text: "That is a bold choice"},
+		{in: "Fuck", block: BlockEmpty},
+		{in: "fuuuck you, darling", text: "You, darling"},
+		{in: "what the sh1t is that lamp", text: "What the is that lamp"},
+		{in: "Ты сука, но милая", text: "Ты, но милая"},
+		{in: "אתה בן זונה מצחיק", text: "אתה בן מצחיק"},
+		{in: "nigga please", block: BlockSlur},
+		{in: "N1GGER", block: BlockSlur},
+		{in: "n i g g e r", block: BlockSlur},
+		{in: "кто этот ниггер", block: BlockSlur},
+		{in: "איזה כושי", block: BlockSlur},
+		{in: "I want to commit suicide", block: BlockSelfHarm},
+		{in: "I won 3 gold medals and committed suicide", block: BlockSelfHarm},
+		{in: "honestly I want to die", block: BlockSelfHarm},
+		{in: "just kill yourself", block: BlockSelfHarm},
+		{in: "אני רוצה למות", block: BlockSelfHarm},
+		{in: "זכיתי ב-3 מדליות זהב, והתאבדתי", block: BlockSelfHarm},
+		{in: "я хочу умереть", block: BlockSelfHarm},
+		// Words that only look like it.
+		{in: "Niger is a country, the class passed", text: "Niger is a country, the class passed"},
+		{in: "I am assessing the Scunthorpe cocktail", text: "I am assessing the Scunthorpe cocktail"},
+		{in: "Тебе нравится эта лампа?", text: "Тебе нравится эта лампа?"},
+		{in: "@Dick the lighting is dreadful", text: "@Dick the lighting is dreadful"},
+		{in: "זה הכוס שלי", text: "זה הכוס שלי"},
+	}
+	for _, c := range cases {
+		got := Filter(c.in, nil)
+		if got.Block != c.block || (c.block == "" && got.Text != c.text) {
+			t.Errorf("Filter(%q) = %+v", c.in, got)
+		}
+	}
+	if got := Filter("the beige sofa is so last season", []string{"beige", "last season"}); got.Text != "The sofa is so" {
+		t.Errorf("your own words: %+v", got)
+	}
+}
+
+func TestFirstPersonClaim(t *testing.T) {
+	yes := []string{"I'm an Olympic athlete, I won 3 gold medals", "I need to finish implementing the pipeline", "My team shipped it last night, finally"}
+	no := []string{"No, tell us.", "I agree", "That lighting is a crime against humanity.", "Mykonos was stunning, the rest can suffer"}
+	for _, s := range yes {
+		if !FirstPersonClaim(s) {
+			t.Errorf("claim missed: %q", s)
+		}
+	}
+	for _, s := range no {
+		if FirstPersonClaim(s) {
+			t.Errorf("not a claim: %q", s)
+		}
+	}
+}

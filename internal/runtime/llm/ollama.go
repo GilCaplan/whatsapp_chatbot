@@ -19,6 +19,7 @@ type Ollama struct {
 	base   string
 	numCtx int
 	hc     *http.Client
+	gate   gate // one call at a time, replies first
 }
 
 func NewOllama(baseURL string, numCtx int, hc *http.Client) *Ollama {
@@ -53,6 +54,10 @@ type ollamaChatResp struct {
 }
 
 func (o *Ollama) Chat(ctx context.Context, req Request) (Response, error) {
+	if err := o.gate.acquire(ctx); err != nil {
+		return Response{}, err
+	}
+	defer o.gate.release()
 	if req.Model == "" {
 		req.Model = DefaultOllamaModel
 	}
@@ -261,4 +266,20 @@ func ollamaErrMsg(body []byte) string {
 		return e.Error
 	}
 	return snippet(string(body), 300)
+}
+
+// Embed returns the vector of text (not an LLM call: the same text always gives
+// the same vector).
+func (o *Ollama) Embed(ctx context.Context, mdl, text string) ([]float64, error) {
+	raw, err := o.post(ctx, "/api/embed", map[string]any{"model": mdl, "input": text})
+	if err != nil {
+		return nil, err
+	}
+	var r struct {
+		Embeddings [][]float64 `json:"embeddings"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil || len(r.Embeddings) == 0 {
+		return nil, fmt.Errorf("ollama: no embedding: %w", err)
+	}
+	return r.Embeddings[0], nil
 }

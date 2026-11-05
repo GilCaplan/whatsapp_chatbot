@@ -31,6 +31,7 @@ import (
 	"whatsappdoppel/internal/runtime/engine"
 	"whatsappdoppel/internal/runtime/llm"
 	"whatsappdoppel/internal/runtime/notify"
+	"whatsappdoppel/internal/runtime/translate"
 	"whatsappdoppel/internal/runtime/wa"
 	"whatsappdoppel/web"
 )
@@ -127,7 +128,9 @@ func Run(opts Options) error {
 		llmReg.UseFake(llm.NewFake())
 	}
 
-	eng := engine.New(engine.Deps{Config: cfg, Store: st, Hub: hub, WA: waSvc, LLM: llmReg, Calendar: calendar.New(nil)})
+	translator := translate.New(paths.Dir)
+	defer translator.Close()
+	eng := engine.New(engine.Deps{Config: cfg, Store: st, Hub: hub, WA: waSvc, LLM: llmReg, Calendar: calendar.New(nil), Translator: translator})
 	waSvc.SetMessageHandler(eng.HandleIncoming)
 	waSvc.SetGroupHandler(eng.HandleGroupChange)
 
@@ -163,6 +166,7 @@ func Run(opts Options) error {
 		Playground: eng.Playground(),
 		Builder:    eng.Builder(),
 		Tasks:      eng,
+		Translator: translator,
 		Notifier:   notifier,
 		OpenFolder: platform.OpenFolder,
 		Seed:       persona.Seed,

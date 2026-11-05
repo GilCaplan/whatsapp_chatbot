@@ -142,6 +142,10 @@ type Options struct {
 	// ReplyLanguage is the language to write in (English name, e.g. "Hebrew";
 	// "" = no rule); see language.go.
 	ReplyLanguage string
+	// WriteEnglish: the normal reply. It is written in English and code
+	// translates it afterwards, so no language setting reaches the prompt.
+	// (A task's exact message uses ReplyLanguage instead.)
+	WriteEnglish bool
 	// LanguageFixed: ReplyLanguage was chosen in the settings, it doesn't just
 	// follow the chat. It replaces the profile's Language line, comes last in
 	// the system prompt and is repeated on the last turn.
@@ -172,6 +176,9 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 	fixedLang := o.LanguageFixed && o.ReplyLanguage != ""
 	if fixedLang {
 		p.Language = o.ReplyLanguage + " only in this chat"
+	}
+	if o.WriteEnglish && !strings.Contains(p.Language, "English") {
+		p.Language = "English"
 	}
 	var out []model.PromptSection
 	add := func(key, label, group, text string) {
@@ -222,12 +229,15 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 	}
 	add("instructions", "Your instructions for this chat", "", InstructionsSection(o.Instructions))
 	add("stay", "Stay yourself", "", StayYourself(p.Name))
-	if !fixedLang {
+	if !fixedLang && !o.WriteEnglish {
 		add("language", "Reply language", "", LanguageSection(o.ReplyLanguage))
 	}
 	add("guidance", "Guidance for this reply", "", "\n\nGUIDANCE: "+Guidance(p.MessageLength, lastMsg, o.LengthBias)+emojiTurn(p.Emoji, ClassifyTone(lastMsg)))
 	if fixedLang {
 		add("language", "Reply language", "", FixedLanguageSection(o.ReplyLanguage))
+	}
+	if o.WriteEnglish {
+		add("language", "Who you are and how you write", "", EnglishRules(p))
 	}
 	return out
 }
@@ -303,7 +313,7 @@ func MessagesFor(history []model.Message, isGroup bool, personaName string) []ll
 func visible(history []model.Message) []model.Message {
 	clean := true
 	for _, m := range history {
-		if m.Kind == model.MsgKindFix || m.Corrected != "" {
+		if m.Kind == model.MsgKindFix || m.Kind == model.MsgKindPart || m.Corrected != "" || m.Source != "" {
 			clean = false
 			break
 		}
@@ -313,11 +323,14 @@ func visible(history []model.Message) []model.Message {
 	}
 	out := make([]model.Message, 0, len(history))
 	for _, m := range history {
-		if m.Kind == model.MsgKindFix {
+		if m.Kind == model.MsgKindFix || m.Kind == model.MsgKindPart {
 			continue
 		}
 		if m.Corrected != "" {
 			m.Text = m.Corrected
+		}
+		if m.Source != "" {
+			m.Text = m.Source // its own words, as it wrote them
 		}
 		out = append(out, m)
 	}
@@ -332,7 +345,7 @@ func Compose(p model.Persona, chat model.ChatAssignment, history []model.Message
 	}
 	return llm.Request{
 		System:      SystemPrompt(p, chat, isGroup, last, opts...),
-		Messages:    withLanguageCue(MessagesFor(history, isGroup, p.Name), opts),
+		Messages:    withLanguageCue(MessagesFor(history, isGroup, p.Name), p.Name, opts),
 		Temperature: -1,
 	}
 }
@@ -360,7 +373,7 @@ func Initiate(p model.Persona, chat model.ChatAssignment, history []model.Messag
 	msgs = append(msgs, llm.Message{Role: llm.RoleUser, Content: InitiateTurn})
 	return llm.Request{
 		System:      SystemPrompt(p, chat, isGroup, "", opts...) + initiateNote(p, chat, history, isGroup, opts...),
-		Messages:    withLanguageCue(llm.Normalize(msgs), opts),
+		Messages:    withLanguageCue(llm.Normalize(msgs), p.Name, opts),
 		Temperature: -1,
 	}
 }
