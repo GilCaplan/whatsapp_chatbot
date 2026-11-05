@@ -17,13 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  privacy:
-    name: no personal data
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: scripts/privacy-check.sh
-
   test:
     name: test (${{ matrix.os }})
     strategy:

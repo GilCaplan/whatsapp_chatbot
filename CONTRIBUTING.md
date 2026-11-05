@@ -42,6 +42,8 @@ target and runs each OS's installer end to end. If you touch anything OS-specifi
 
 ## Keeping personal data out
 
+[docs/SAFE_HABITS.md](docs/SAFE_HABITS.md) lists the mistakes to avoid, including everything below.
+
 This repository is public, and anything committed stays in its history. Your WhatsApp login, chats and
 keys live in the data folder, outside the project, so the normal setup can't commit them. `make dev-fake`
 and `make run` use `./data`, which is ignored.
