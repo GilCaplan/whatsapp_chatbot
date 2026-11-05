@@ -39,6 +39,8 @@ leaves the machine.
 - Run privacy checks on every change. A CI workflow that skips docs-only changes also skips the place where
   personal details most often slip in, so give the check its own workflow with no path filters.
 - Use a noreply commit email from the first commit, before the repository is public.
+- Compiled files keep what their source held. A PDF can carry names or IDs inside compressed streams, so a text
+  search of the repository won't find them. Decompress and check before publishing.
 - Mask secrets in every API response and UI. Keep credential files readable only by their owner.
 - Error messages and logs must not carry tokens, full URLs with secrets, message text or personal details.
   Show the hostname at most.
@@ -158,6 +160,9 @@ only where nothing else can.
 - Don't let a test double hide reality: a fake model that always obeys proves nothing about obedience.
 - Update tests that encode old behaviour on purpose, and say so. Don't weaken a test to make it pass.
 - Reproduce a bug before fixing it, and keep a regression test.
+- Keep tests and the commit in separate commands. Chained with `;`, or through a pipe such as
+  `pytest | tail && git commit`, a failing run still commits, because the exit code is the last command's.
+- Run a probe that may write data inside the test harness. An environment override may not protect real data.
 
 ## Shared checkouts and other agents
 
