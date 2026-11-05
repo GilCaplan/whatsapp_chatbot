@@ -113,11 +113,24 @@ export function createOverviewTab(ctx) {
     </section>`;
   }
 
+  // The persona writes now, from the chat so far: an opener in a quiet chat,
+  // the next line in a lively one.
+  async function quickSend(p) {
+    const name = p ? p.name : 'The persona';
+    try {
+      const r = await api.chats.initiate(key);
+      toast(r && r.approval ? `${name}'s message will wait in Approvals` : `${name} is writing`, { type: 'success' });
+      ctx.notify('historyChanged');
+    } catch { /* toasted */ }
+  }
+
   function quickActions(c, p) {
     const away = isAway(c);
     return html`<section class="drawer-section">
       <h4>${icon('bolt', 'ic-sm')}Quick actions</h4>
       <div class="quick-actions">
+        <button class="btn btn-primary btn-sm" ?disabled=${!p || !c.enabled} title=${c.enabled ? 'The persona writes a message now, from the chat so far' : 'Turn replies on in this chat first'}
+          @click=${busy(() => quickSend(p))}>${icon('send')}Send a message</button>
         <button class="btn btn-glass btn-sm" @click=${(e) => ctx.away.menu(e)}>${icon('snooze')}${away ? 'Away' : 'Set away'}${icon('chevron-down')}</button>
         <button class="btn btn-glass btn-sm" ?disabled=${!p} title="Tell them it was an AI persona, then pause this chat"
           @click=${() => openRevealSheet(c, p)}>${icon('eye')}Reveal…</button>
