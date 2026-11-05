@@ -322,8 +322,8 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 | Method & path | Body | Response |
 |---|---|---|
 | `GET /api/behavior/presets` | – | `{presets:[{id, label, description, private: BehaviorProfile, group: BehaviorProfile}], ranges:{field:{min,max}}, enums:{field:[...]}, defaults:{private, group}, dials:{speed\|chattiness\|boldness: DialDef}, dialOrder:["speed","chattiness","boldness"]}` |
-| `GET /api/translator` | – | `TranslatorStatus {installed, installing, step?, error?, packs:[code], fetching?:[code]}` |
-| `POST /api/translator/install` | `{languages?:[code]}` | 202 status: sets up the add-on in the background, then fetches the languages; 400 `invalid_language` |
+| `GET /api/translator` | – | `TranslatorStatus {installed, installing, step?, error?, packs:[code], fetching?:[code], available:[{code, sizeMB}]}` |
+| `POST /api/translator/install` | `{languages?:[code]}` | 202 status: sets up the add-on in the background if needed, then fetches the languages (also retries a failed pack); 400 `invalid_language` |
 | `POST /api/behavior/sample` | `{kind:"dm\|group" ("private" accepted), profile: BehaviorProfile (partial ok: missing fields = defaults for kind; clamped, never 400), text?, samples?:1–10 (default 5), approval?:bool}` | `{samples:[{totalSec, phases:[{name, sec, startSec}], bubbles:[{text, typingSec}], quoted}], summary:{minTotalSec, medianTotalSec, maxTotalSec, splitShare, modelSec}}` (`modelSec`: how long the AI model has taken lately to plan and write a reply, on top of these timers; 0 = none measured yet) |
 
 - Presets (`id`): `natural` (default for both kinds), `instant`, `busy`, `slow`, `nightowl`; `custom` is the label

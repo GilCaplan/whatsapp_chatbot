@@ -203,6 +203,16 @@ app hides this inside realistic "thinking" and "typing" time). Claude and OpenAI
 noticeably better replies and cost a little per message on your own key. You can choose a
 default and override it per persona.
 
+**How do replies get into other languages?**
+Personas write in English, then a small translation model turns the reply into the chat's language. It is optional: without
+it, your AI model translates, which is slower and less exact. To set it up on your computer, open Settings → Translator and
+press Install, then pick languages or let each one download the first time a chat needs it. It needs Python 3.10 or newer and
+about 200 MB, plus 65 to 195 MB per language. There are models for all 17 languages besides English: Arabic, Chinese, Dutch,
+French, German, Greek, Hebrew, Hindi, Italian, Japanese, Korean, Portuguese, Russian, Spanish, Thai, Turkish and Ukrainian.
+
+The models are not part of this project and are never uploaded with it. Each person downloads their own into their data
+folder, and each download is checked against a checksum listed in the code before it is used.
+
 **Will it reply to everyone?**
 No. It only answers in chats you assign. In groups it answers selectively: when its name comes
 up, when it's tagged, when the AI thinks it would naturally chime in, and only from the people
@@ -536,6 +546,9 @@ llm/
 translate/
   translate.go                  installs and runs the translator add-on, language packs
   server.py                     dedicated en→language models and spaCy, run as a small Python process
+  pyproject.toml                the add-on's pinned Python dependencies, read by translate.go
+  test_server.py                the add-on's text handling and line protocol, no models needed
+  packs.go                      one pinned, checksummed model per language
 
 wa/
   manager.go                    whatsmeow lifecycle: pairing, status, reconnect, logout, sending
@@ -658,6 +671,7 @@ CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, LICENSE
 | `make dev-fake` | run with a **simulated WhatsApp and a scripted AI**: no phone, no Ollama |
 | `make run` | run the real app with `./data` as the data folder and open the browser |
 | `make test` | `go test -race ./...` |
+| `make test-py` | translator add-on: pytest + ruff, no models needed |
 | `make vet` | `go vet` + gofmt check |
 | `make smoke` | end-to-end script against a throwaway fake server |
 | `make app` | (Mac) build `build/WhatsappDoppel.app` (icon, Info.plist, ad-hoc signature) |

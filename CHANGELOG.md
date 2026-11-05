@@ -7,6 +7,16 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
 Everything below is new unless noted.
 
+### Translator
+- Every language now has a pinned translation model, and Settings lets you download any of them, or all at once. Each
+  download is checked against a checksum before it is used, and a bad one leaves your existing model alone.
+- Fixed stray marks in French, Portuguese, Dutch, Greek, Thai and Chinese translations, and "twenty" appearing in Arabic
+  in place of a time or link.
+- Models stay in your data folder and can't be committed.
+
+### WhatsApp session
+- The app now keeps one backup of your session, replaced when the app updates and removed when you log out.
+
 ### Reply rules
 - Replies on a local model are much faster: planning happens after the reply, in the background,
   and a reply a little over its length is trimmed instead of written again. The reply preview now

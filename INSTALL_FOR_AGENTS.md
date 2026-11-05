@@ -84,6 +84,7 @@ install it; otherwise try B.
 | Go toolchain policy | `go env GOTOOLCHAIN` | anything except `local` (`auto` is the default) |
 | Node.js (optional, dev checks only) | `node --version` | `v18` or newer |
 | Ollama (optional) | `ollama --version` then `ollama list` | a version; a table with `NAME ID SIZE MODIFIED` |
+| Python 3.10+ (optional, translator add-on) | `python3 --version` | `Python 3.10` or newer |
 | curl (path B, macOS/Linux) | `curl --version` | `curl 7.x` or `8.x` |
 
 About the Go version: `go.mod` needs Go `1.26.0` (read it with `awk '/^go /{print $2}' go.mod`

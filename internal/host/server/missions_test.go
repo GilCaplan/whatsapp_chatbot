@@ -89,7 +89,8 @@ func TestMissionsStartAbandon(t *testing.T) {
 	for _, a := range mv.Achievements {
 		if a.Unlocked {
 			unlocked++
-			if a.ID != "first-mission" && a.ID != "smooth-operator" {
+			// Night shift depends on when this test runs.
+			if a.ID != "first-mission" && a.ID != "smooth-operator" && a.ID != "night-shift" {
 				t.Errorf("unexpected badge %s", a.ID)
 			}
 		}

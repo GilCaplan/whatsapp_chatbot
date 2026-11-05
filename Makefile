@@ -10,7 +10,7 @@ DATA       ?= ./data
 FAKE_DATA  ?= ./data/fake
 UNAME      := $(shell uname -s)
 
-.PHONY: help build run dev-fake test vet fmt app install uninstall icon smoke clean hooks privacy \
+.PHONY: help build run dev-fake test test-py vet fmt app install uninstall icon smoke clean hooks privacy \
         dist dist-mac dist-linux dist-windows mac-only
 
 help: ## Show this help
@@ -27,6 +27,12 @@ dev-fake: build ## Run with simulated WhatsApp + canned LLM (no phone, no Ollama
 
 test: ## Run all tests with the race detector (the race detector itself needs cgo)
 	go test -race ./...
+
+test-py: export PYTHONDONTWRITEBYTECODE=1
+test-py: ## Translator add-on: pytest + ruff, no models needed
+	python3 -m venv build/pyenv
+	build/pyenv/bin/python -m pip install --quiet "$$(grep -o 'pydantic==[0-9.]*' internal/runtime/translate/pyproject.toml)" pytest==9.2.0 ruff==0.17.4
+	cd internal/runtime/translate && ../../../build/pyenv/bin/python -m ruff check --no-cache . && ../../../build/pyenv/bin/python -m pytest
 
 vet: ## go vet + gofmt check
 	go vet ./...

@@ -37,8 +37,9 @@ else
   read_file() { cat "$1"; }
 fi
 
-# Files that only ever hold someone's data.
-blocked='(^|/)(whatsapp\.db.*|.*\.db|.*\.db-.*|.*\.sqlite.*|secrets\.json|instance\.json|chats\.json|personas\.json|approvals\.json|runtime\.json|calendars\.json|recaps\.json|whatsapp_contacts\.json|target_cache\.json|.*\.jsonl|.*\.log|\.env(\..*)?|.*\.pem|.*\.key|.*\.p12)$|^data/|(^|/)(history|memories|decisions|summaries|briefs|ratings)/.*\.json$'
+# Files that only ever hold someone's data, and models people download for
+# themselves (see the Translator section of the README).
+blocked='(^|/)(whatsapp\.db.*|.*\.db|.*\.db-.*|.*\.sqlite.*|secrets\.json|instance\.json|chats\.json|personas\.json|approvals\.json|runtime\.json|calendars\.json|recaps\.json|whatsapp_contacts\.json|target_cache\.json|.*\.jsonl|.*\.log|\.env(\..*)?|.*\.pem|.*\.key|.*\.p12|.*\.argosmodel|.*\.whl|model\.bin|sentencepiece\.model)$|^data/|(^|/)(translator|venv|\.venv)/|(^|/)(history|memories|decisions|summaries|briefs|ratings)/.*\.json$'
 
 keys='sk-ant-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY'
 emails='[A-Za-z0-9._%+-]+@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|proton|protonmail|walla|campus\.technion\.ac)\.[a-z.]+'

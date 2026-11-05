@@ -176,6 +176,14 @@ type TranslatorStatus struct {
 	Error      string   `json:"error,omitempty"`
 	Packs      []string `json:"packs"`              // languages ready to use
 	Fetching   []string `json:"fetching,omitempty"` // downloading now
+	// Available lists every language pack the app can download.
+	Available []TranslatorPack `json:"available"`
+}
+
+// TranslatorPack is one language the translator can download.
+type TranslatorPack struct {
+	Code   string `json:"code"`
+	SizeMB int    `json:"sizeMB"`
 }
 
 // Message kinds (Message.Kind).
