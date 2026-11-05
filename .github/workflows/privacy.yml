@@ -1,0 +1,16 @@
+# Runs on every change, docs included: CI skips docs-only changes, and docs are
+# where personal details slip in.
+name: Privacy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  privacy:
+    name: no personal data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: scripts/privacy-check.sh

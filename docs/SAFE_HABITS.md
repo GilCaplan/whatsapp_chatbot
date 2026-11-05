@@ -36,6 +36,8 @@ leaves the machine.
 - Automate the check at two levels: a pre-commit hook, which can be skipped, and CI, which cannot. Hooks are
   not active after cloning unless setup says so. A check in CI runs after a push, so the data may already be
   public on a branch.
+- Run privacy checks on every change. A CI workflow that skips docs-only changes also skips the place where
+  personal details most often slip in, so give the check its own workflow with no path filters.
 - Use a noreply commit email from the first commit, before the repository is public.
 - Mask secrets in every API response and UI. Keep credential files readable only by their owner.
 - Error messages and logs must not carry tokens, full URLs with secrets, message text or personal details.
