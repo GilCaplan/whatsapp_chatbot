@@ -7,6 +7,18 @@ All notable changes to WhatsApp Doppel. Dates are in YYYY-MM-DD.
 The command-line bot became a desktop app with a web interface, for macOS, Windows and Linux.
 Everything below is new unless noted.
 
+### Reply rules
+- A reply language you choose is now a hard rule: it comes last in the prompt, is repeated on the
+  turn being answered, replaces the persona's own language line, and code checks every reply, even
+  short ones and with reply checks off. A reply that fails twice is not sent. The chosen language
+  always counts as one it speaks.
+- Chattiness on Answers everything now answers big groups too (the Picked mode, a size limit of 0
+  and people switched off still win). The log explains the group-size rule when it applies.
+- A busy chat can't starve a reply on a slow model: a draft that took long is sent, and newer
+  messages are answered next, instead of starting over each time.
+- New Live progress view on the Log tab: every step of writing a reply as it happens. How a reply
+  unfolds now also says how long your AI model has been taking.
+
 ### Tasks
 - New Tasks page: a persona does an errand in a private chat. The first template, Find a time,
   agrees on a meeting time: what it is about, how long, which days and hours, how far ahead.

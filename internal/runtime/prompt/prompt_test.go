@@ -342,3 +342,22 @@ func TestInitiatePrompt(t *testing.T) {
 		t.Errorf("group messages: %+v", req.Messages)
 	}
 }
+
+func TestFixedLanguageReplacesTheProfileLine(t *testing.T) {
+	p := leo(t)
+	p.Language = "English only"
+	o := Options{ReplyLanguage: "Russian", LanguageFixed: true}
+	sys := SystemPrompt(p, model.ChatAssignment{}, false, "hi", o)
+	if strings.Contains(sys, "English only") || !strings.Contains(sys, "- Language: Russian only in this chat") {
+		t.Errorf("profile line: %q", sys)
+	}
+	o.Card = "Leo is a British designer who writes in English only."
+	sys = SystemPrompt(p, model.ChatAssignment{}, false, "hi", o)
+	if !strings.Contains(sys, "- Language: Russian only in this chat") {
+		t.Errorf("card: %q", sys)
+	}
+	req := Initiate(p, model.ChatAssignment{}, []model.Message{{Speaker: "them", Text: "hi"}}, false, o)
+	if last := req.Messages[len(req.Messages)-1].Content; !strings.Contains(last, "Russian only") {
+		t.Errorf("opener turn: %q", last)
+	}
+}

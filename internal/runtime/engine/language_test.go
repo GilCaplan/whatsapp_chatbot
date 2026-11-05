@@ -94,3 +94,62 @@ func TestIgnoreStickers(t *testing.T) {
 		t.Errorf("sticker not kept as context: %d messages", len(hist))
 	}
 }
+
+func russianChat(c model.ChatAssignment) model.ChatAssignment {
+	c.Language = &model.LanguagePrefs{Languages: []string{"en", "he"}, Reply: "ru"}
+	return c
+}
+
+// A language chosen in the settings holds against a Hebrew chat: it is the last
+// rule, it is repeated on the turn, and a short reply in the wrong language is
+// stopped even though reply checks are off (the default Classic system).
+func TestFixedLanguage(t *testing.T) {
+	h := newHarness(t, nil, russianChat(dmChat()))
+	h.llm.Push("לא, תגידי לנו.", "Нет, скажи нам.")
+	h.msg(dmKey, "m1", "מה קורה? איך היה היום")
+	h.advance(15 * time.Second)
+	sent := h.waitSent(1)
+	if sent[0].text != "Нет, скажи нам." {
+		t.Fatalf("sent %q", sent[0].text)
+	}
+	reqs := replyRequests(h.llm)
+	if len(reqs) != 2 {
+		t.Fatalf("requests = %d", len(reqs))
+	}
+	first := reqs[0]
+	if i := strings.LastIndex(first.System, "MOST IMPORTANT RULE"); i < 0 || strings.Contains(first.System[i:], "GUIDANCE") {
+		t.Errorf("the rule is not last: %q", first.System)
+	}
+	if strings.Contains(first.System, "REPLY LANGUAGE: write this message") {
+		t.Errorf("two language rules: %q", first.System)
+	}
+	if last := first.Messages[len(first.Messages)-1].Content; !strings.Contains(last, "in Russian only") {
+		t.Errorf("no cue on the turn: %q", last)
+	}
+	if !strings.Contains(reqs[1].System, "instead of Russian") {
+		t.Errorf("the rewrite isn't told why: %q", reqs[1].System)
+	}
+}
+
+func TestFixedLanguageStaysQuietRatherThanBreakIt(t *testing.T) {
+	h := newHarness(t, nil, russianChat(dmChat()))
+	h.llm.Push("לא, תגידי לנו.", "ממש לא יודע.")
+	h.msg(dmKey, "m1", "מה קורה? איך היה היום")
+	h.advance(15 * time.Second)
+	if len(h.wa.Sent()) != 0 || h.lastReason(model.ActDecisionSkip) != "reply_check" {
+		t.Fatalf("sent %d, reason %v", len(h.wa.Sent()), h.lastReason(model.ActDecisionSkip))
+	}
+}
+
+// A language that only follows the chat stays a light rule: no check while
+// reply checks are off.
+func TestMatchedLanguageKeepsTheLightRule(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.llm.Push("ok sure thing")
+	h.msg(dmKey, "m1", "מה קורה? איך היה היום")
+	h.advance(15 * time.Second)
+	h.waitSent(1)
+	if sys := lastSystem(h); strings.Contains(sys, "MOST IMPORTANT RULE") {
+		t.Errorf("prompt: %q", sys)
+	}
+}

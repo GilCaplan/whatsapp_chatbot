@@ -289,7 +289,7 @@ export function createPeopleSection({ key, update }) {
         <span class="people-sum-icon">${icon(everyone ? 'group' : 'user')}</span>
         <div class="grow">
           <div class="people-sum-title"><b>${size}</b> · ${how} ${helpTip('who-answers')}</div>
-          <div class="people-sum-sub">${active.length ? `Answering ${answering} of ${active.length}` : 'Nobody to show yet'}${!everyone && d.answerAnyoneWhoAddressesIt ? ' — anyone who says its name or tags it still gets an answer' : ''}${d.mode === 'auto' && d.threshold > 0 ? html` · groups up to <b>${d.threshold}</b> answer everyone` : ''}</div>
+          <div class="people-sum-sub">${active.length ? `Answering ${answering} of ${active.length}` : 'Nobody to show yet'}${!everyone && d.answerAnyoneWhoAddressesIt ? ' — anyone who says its name or tags it still gets an answer' : ''}${d.mode === 'auto' && d.threshold >= 1024 ? ' · Chattiness is on Answers everything' : d.mode === 'auto' && d.threshold > 0 ? html` · groups up to <b>${d.threshold}</b> answer everyone` : ''}</div>
         </div>
       </div>
       ${d.membersError ? html`<div class="banner warn small mt-8">${icon('warning')}<div>${d.membersError}</div></div>` : ''}

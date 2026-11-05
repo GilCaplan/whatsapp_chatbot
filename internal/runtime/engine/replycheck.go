@@ -27,7 +27,10 @@ type replyCheck struct {
 	rules   string // its instructions (the parts that aren't chat content)
 	plan    string // the private next move ("" = none)
 	lang    string // the reply language rule (English name, "" = none)
-	hist    []model.Message
+	// langFixed: the language was chosen in the settings, so it is checked at
+	// any length and even when reply checks are off.
+	langFixed bool
+	hist      []model.Message
 }
 
 // checkRules collects the prompt parts a reply must never echo: safety,
@@ -94,23 +97,39 @@ func codeCheck(ck replyCheck, text string) (fails, soft []string) {
 			break
 		}
 	}
-	if ck.lang != "" && len(words) >= 4 {
-		if code, sure := lang.Detect(text); sure && !strings.EqualFold(lang.Name(code), ck.lang) {
-			fails = append(fails, "it wrote in "+lang.Name(code)+" instead of "+ck.lang)
-		}
+	if ck.lang != "" && (ck.langFixed || len(words) >= 4) {
+		fails = append(fails, languageCheck(ck, text)...)
 	}
 	return fails, soft
+}
+
+// languageCheck fails a reply that isn't in the rule's language.
+func languageCheck(ck replyCheck, text string) []string {
+	code, sure := detectLang(text)
+	if sure && !strings.EqualFold(lang.Name(code), ck.lang) {
+		return []string{"it wrote in " + lang.Name(code) + " instead of " + ck.lang}
+	}
+	if ck.langFixed && lang.OffAlphabet(tagWord.ReplaceAllString(text, " "), lang.Code(ck.lang)) {
+		return []string{"it didn't write in " + ck.lang}
+	}
+	return nil
 }
 
 // checkedReply checks a generated reply and, on a failure, writes it again
 // with the reason; regen appends a note to the system prompt. A reply that
 // keeps failing comes back with Quiet set (never the owner's fallback line).
 func (e *Engine) checkedReply(ctx context.Context, ck replyCheck, res genResult, regen func(note string) (genResult, error)) genResult {
-	if ck.cp.ReplyCheck == model.CheckOff || res.Fallback {
+	off := ck.cp.ReplyCheck == model.CheckOff
+	if off && !(ck.langFixed && ck.lang != "") || res.Fallback {
 		return res
 	}
 	for attempt := 0; ; attempt++ {
-		fails, soft := codeCheck(ck, res.Text)
+		var fails, soft []string
+		if off {
+			fails = languageCheck(ck, res.Text)
+		} else {
+			fails, soft = codeCheck(ck, res.Text)
+		}
 		if len(fails) == 0 && (ck.cp.ReplyCheck == model.CheckJudge || (ck.cp.ReplyCheck == model.CheckCodeJudge && len(soft) > 0)) {
 			res.Judged = true
 			if ok, why := e.judge(ctx, ck, res.Text); !ok {
@@ -118,13 +137,19 @@ func (e *Engine) checkedReply(ctx context.Context, ck replyCheck, res genResult,
 			}
 		}
 		if len(fails) == 0 {
+			progress(ctx, "The reply passed the checks", map[string]any{"stage": "checked"})
 			return res
 		}
 		res.Checks = append(res.Checks, fails...)
-		if attempt >= ck.cp.CheckRetries || ctx.Err() != nil || regen == nil {
+		retries := ck.cp.CheckRetries
+		if ck.langFixed {
+			retries = max(retries, 1) // a language you chose gets a second chance before silence
+		}
+		if attempt >= retries || ctx.Err() != nil || regen == nil {
 			res.Quiet = true
 			return res
 		}
+		progress(ctx, "The check stopped this draft: "+strings.Join(fails, "; ")+". Writing it again", map[string]any{"stage": "rewrite"})
 		again, err := regen(prompt.CheckRetryNote(fails))
 		if err != nil || again.Fallback {
 			res.Quiet = true

@@ -292,11 +292,18 @@ func (e *Engine) Regenerate(ctx context.Context, id string) (model.PendingReply,
 		return prompt.Compose(per, c, ph, c.Kind == "group", opts)
 	}
 	res, err := e.replyFor(ctx, copilot, per, bp, ph, false, gcfg, gturn, cross, build)
+	if err == nil && !copilot && opts.LanguageFixed { // only the language: a regenerate is yours to judge
+		ck := replyCheck{cp: model.ContextParams{ReplyCheck: model.CheckOff}, persona: per, lang: opts.ReplyLanguage, langFixed: true, hist: hist}
+		res = e.checkedReply(ctx, ck, res, e.noteRetry(ctx, per, bp, ph, false, gcfg, gturn, cross, build))
+	}
 	if err == nil && tk != nil {
 		res = e.taskGuard(c, tk, res, e.noteRetry(ctx, per, bp, ph, false, gcfg, gturn, cross, build))
 	}
 	if err != nil {
 		return model.PendingReply{}, err
+	}
+	if res.Quiet {
+		return model.PendingReply{}, fmt.Errorf("couldn't write it in %s: %s", opts.ReplyLanguage, strings.Join(res.Checks, "; "))
 	}
 	tagged := e.applyMentionsAll(&res, dir, bp, lastFromThem(hist), hist, false)
 	res.Opener = p.Opener

@@ -138,6 +138,7 @@ func (e *Engine) planAhead(ctx context.Context, p model.Persona, cfg goals.Confi
 	req.Model = mdl
 	cctx, cancel := context.WithTimeout(ctx, timeoutPlan)
 	start := time.Now()
+	progress(ctx, "Planning the next move", map[string]any{"stage": "planning"})
 	resp, err := prov.Chat(cctx, req)
 	cancel()
 	wg.Wait()

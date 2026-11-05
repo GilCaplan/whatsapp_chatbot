@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -22,8 +23,9 @@ import (
 //	idle ─msg outside hours (queue)→ queued ─wake→ noticing …
 //
 // New messages: noticing → join; waiting → debounce reset (burst cap);
-// thinking → dirty (draft discarded, regenerate); typing → answered by the next
-// cycle right after. Your own reply cancels the cycle (pauseWhenYouReply).
+// thinking → dirty (a draft that came quickly is discarded and regenerated, a
+// slow one is sent: see keepDraftLocked); typing → answered by the next cycle
+// right after. Your own reply cancels the cycle (pauseWhenYouReply).
 type phase int
 
 const (
@@ -71,6 +73,9 @@ type cycle struct {
 	draft       *genResult
 	genErr      error
 	dirty       bool
+	drafted     int       // pending messages the running generation can see
+	restarts    int       // drafts thrown away for newer messages
+	genStart    time.Time // when the running generation started
 	persona     model.Persona
 	hist        []model.Message
 	dir         *mention.Directory // group members for encoding tags (nil in DMs)
@@ -612,11 +617,12 @@ func (r *Runner) thinkLocked(fx *effects) {
 	cyc.approval = c.ApprovalMode
 	cyc.copilot = c.Mode == model.ChatModeCopilot
 	cyc.thinkDone, cyc.genDone, cyc.draft, cyc.genErr, cyc.dirty = false, false, nil, nil, false
+	cyc.drafted, cyc.genStart = len(cyc.pending), r.e.clock.Now()
 	var think, distracted time.Duration
 	if !cyc.immediate && !cyc.approval {
 		think, distracted = behavior.PlanThink(bp, r.e.rng)
 	}
-	hist := r.historyCopyLocked()
+	hist := pendingLast(r.historyCopyLocked(), cyc.pending)
 	var answered pendingMsg
 	if n := len(cyc.pending); n > 0 {
 		answered = cyc.pending[n-1]
@@ -670,7 +676,8 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 	if !ok {
 		err = fmt.Errorf("persona %q not found", c.PersonaID)
 	} else {
-		ctx, cancel := context.WithTimeout(cyc.ctx, generateLimit)
+		ctx, cancel := context.WithTimeout(e.withProgress(cyc.ctx, c, p.Name), generateLimit)
+		progress(ctx, fmt.Sprintf("Reading the chat (%d recent)", len(hist)), map[string]any{"stage": "read", "messages": len(hist)})
 		isGroup := c.Kind == "group"
 		dir = e.directory(ctx, c, hist)
 		cp := e.paramsOf(c) // the chat's context system (ctxsys.go)
@@ -698,10 +705,10 @@ func (r *Runner) generate(cyc *cycle, c model.ChatAssignment, eff behavior.Effec
 			return prompt.Compose(p, c, ph, isGroup, opts)
 		}
 		res, err = e.replyFor(ctx, copilot, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build)
-		if err == nil && !copilot && cp.ReplyCheck != model.CheckOff { // replycheck.go
+		if err == nil && !copilot && (cp.ReplyCheck != model.CheckOff || opts.LanguageFixed) { // replycheck.go
 			o := opts
 			o.Goal = gturn
-			ck := replyCheck{cp: cp, persona: p, plan: gturn.Plan, lang: opts.ReplyLanguage, hist: hist,
+			ck := replyCheck{cp: cp, persona: p, plan: gturn.Plan, lang: opts.ReplyLanguage, langFixed: opts.LanguageFixed, hist: hist,
 				rules: checkRules(prompt.ComposeSections(p, c, ph, isGroup, o), p)}
 			res = e.checkedReply(ctx, ck, res, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build))
 		}
@@ -749,6 +756,50 @@ func (r *Runner) taskFxLocked(fx *effects, cyc *cycle, delivered bool) {
 	}
 }
 
+// pendingLast moves the messages being answered after a reply that went out
+// while they waited: they were sent before it landed, but they are the turn
+// the persona answers now.
+func pendingLast(hist []model.Message, pending []pendingMsg) []model.Message {
+	n := len(hist)
+	if n == 0 || hist[n-1].Speaker != "me" || !hist[n-1].FromBot {
+		return hist
+	}
+	waiting := func(m model.Message) bool {
+		return m.ID != "" && slices.ContainsFunc(pending, func(p pendingMsg) bool { return p.ID == m.ID })
+	}
+	if !slices.ContainsFunc(hist, waiting) {
+		return hist
+	}
+	out := make([]model.Message, 0, n)
+	var moved []model.Message
+	for _, m := range hist {
+		if waiting(m) {
+			moved = append(moved, m)
+		} else {
+			out = append(out, m)
+		}
+	}
+	return append(out, moved...)
+}
+
+// A chat that keeps talking must not starve a reply: on a slow model every
+// finished draft would meet a newer message and be thrown away, forever. A
+// draft is only redone when redoing it is cheap, and only so many times.
+const (
+	draftRedoWindow = 20 * time.Second
+	maxDraftRedos   = 2
+)
+
+// keepDraftLocked reports whether a draft that newer messages arrived behind
+// is sent anyway. Approvals, failed and quiet drafts are redone: those paths
+// end the cycle, so nothing would answer the newer messages.
+func (r *Runner) keepDraftLocked(cyc *cycle) bool {
+	if cyc.approval || cyc.genErr != nil || cyc.draft == nil || cyc.draft.Quiet {
+		return false
+	}
+	return cyc.restarts >= maxDraftRedos || r.e.clock.Now().Sub(cyc.genStart) >= draftRedoWindow
+}
+
 // maybeDeliverLocked acts once both the think time and the generation are done.
 func (r *Runner) maybeDeliverLocked(fx *effects) {
 	cyc := r.cyc
@@ -758,8 +809,16 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 	c := r.cfg
 	eff := r.effLocked()
 	bp := eff.Profile
+	if cyc.dirty && r.keepDraftLocked(cyc) {
+		// Too slow to redo: send it and answer the newer messages next.
+		cyc.later = append(cyc.later, cyc.pending[cyc.drafted:]...)
+		cyc.laterImmediate = cyc.immediate
+		cyc.pending, cyc.dirty = cyc.pending[:cyc.drafted], false
+		r.actFx(fx, model.ActProgress, "New messages came in. Sending this reply first, then answering them", map[string]any{"stage": "keep"})
+	}
 	if cyc.dirty {
 		// New messages arrived while thinking: drop the draft and think again.
+		cyc.restarts++
 		r.taskFxLocked(fx, cyc, false)
 		cyc.typingShown = false
 		fx.add(r.typingFxLocked(false))
@@ -789,7 +848,7 @@ func (r *Runner) maybeDeliverLocked(fx *effects) {
 		return
 	}
 	if d := cyc.draft; d.Quiet && !cyc.approval {
-		r.actFx(fx, model.ActDecisionSkip, "Staying quiet — the reply didn't pass the check: "+strings.Join(d.Checks, "; "),
+		r.actFx(fx, model.ActDecisionSkip, "Staying quiet — the reply didn't pass the check: "+strings.Join(slices.Compact(slices.Clone(d.Checks)), "; "),
 			withMsg(map[string]any{"reason": "reply_check", "checks": d.Checks}, cyc.msgIDs()...))
 		r.endCycleLocked(fx)
 		return

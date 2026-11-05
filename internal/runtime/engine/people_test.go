@@ -248,7 +248,7 @@ func TestSimulatePicksParticipant(t *testing.T) {
 }
 
 func TestPeopleNotSelectedInBigGroup(t *testing.T) {
-	h := newHarness(t, groupReplies(nil, nil), groupChat())
+	h := newHarness(t, groupReplies(nil, func(p *model.BehaviorProfile) { p.RespondToAllMaxMembers = 0 }), groupChat())
 	h.wa.setRoster(groupJID, bigRoster())
 	replyWith(h, "sure")
 	h.groupFrom(aviPN, "Avi", "G1", "anyone around?")
@@ -436,5 +436,48 @@ func TestPlaygroundGroupSpeakers(t *testing.T) {
 	dm, _ := pg.Send(t.Context(), id, "dm", false)
 	if dm.Speaker != "" || len(dm.Mentions) != 0 {
 		t.Errorf("dm mode: %+v", dm)
+	}
+}
+
+// Chattiness on Answers everything answers a big group; a size limit of 0, the
+// Picked mode and someone switched off still win.
+func TestAnswersEverythingInBigGroup(t *testing.T) {
+	h := newHarness(t, groupReplies(nil, nil), groupChat())
+	h.wa.setRoster(groupJID, bigRoster())
+	replyWith(h, "sure")
+	h.groupFrom(aviPN, "Avi", "G1", "anyone around?")
+	if r := h.lastReason(model.ActDecisionSkip); r != nil {
+		t.Fatalf("answers everything stayed quiet: %v", r)
+	}
+	off := false
+	if _, err := h.st.UpdateChat(groupKey, func(c *model.ChatAssignment) {
+		c.People.People = []model.PersonPrefs{{JID: noamPN, Respond: &off}}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.e.Reload()
+	h.groupFrom(noamPN, "Noam", "G2", "and me?")
+	if r := h.lastReason(model.ActDecisionSkip); r != ReasonNotSelected {
+		t.Fatalf("switched off person: %v", r)
+	}
+	if _, err := h.st.UpdateChat(groupKey, func(c *model.ChatAssignment) {
+		c.People = model.PeopleConfig{Mode: model.PeopleSelected}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	h.e.Reload()
+	h.groupFrom(aviPN, "Avi", "G3", "still there?")
+	if a := h.acts(model.ActDecisionSkip); len(a) != 2 || !strings.Contains(a[1].Text, "people you picked") {
+		t.Fatalf("picked mode: %+v", a)
+	}
+}
+
+func TestBigGroupSkipNamesTheSizeRule(t *testing.T) {
+	h := newHarness(t, groupReplies(nil, func(p *model.BehaviorProfile) { p.ChimeInPercent = 50; p.RespondToAllMaxMembers = 2 }), groupChat())
+	h.wa.setRoster(groupJID, bigRoster())
+	h.groupFrom(aviPN, "Avi", "G1", "anyone around?")
+	a := h.acts(model.ActDecisionSkip)
+	if len(a) != 1 || !strings.Contains(a[0].Text, "up to 2") || !strings.Contains(a[0].Text, "People tab") {
+		t.Fatalf("skip = %+v", a)
 	}
 }

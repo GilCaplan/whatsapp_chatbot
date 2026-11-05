@@ -142,6 +142,10 @@ type Options struct {
 	// ReplyLanguage is the language to write in (English name, e.g. "Hebrew";
 	// "" = no rule); see language.go.
 	ReplyLanguage string
+	// LanguageFixed: ReplyLanguage was chosen in the settings, it doesn't just
+	// follow the chat. It replaces the profile's Language line, comes last in
+	// the system prompt and is repeated on the last turn.
+	LanguageFixed bool
 }
 
 // Goal returns the chat's goal override, else the persona goal, else the default.
@@ -165,6 +169,10 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 	if len(opts) > 0 {
 		o = opts[0]
 	}
+	fixedLang := o.LanguageFixed && o.ReplyLanguage != ""
+	if fixedLang {
+		p.Language = o.ReplyLanguage + " only in this chat"
+	}
 	var out []model.PromptSection
 	add := func(key, label, group, text string) {
 		if text == "" {
@@ -180,6 +188,9 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 	character := Identity(p)
 	if o.Card != "" && strings.TrimSpace(p.AdvancedPrompt) == "" {
 		character = CardIdentity(p, o.Card)
+		if fixedLang { // the card was written from the profile and may name another language
+			character += "\n- Language: " + p.Language + "."
+		}
 	}
 	add("character", "Character", "", character)
 	add("secretary", "Secretary's job", "", SecretarySection(p.Secretary))
@@ -211,8 +222,13 @@ func SystemSections(p model.Persona, chat model.ChatAssignment, isGroup bool, la
 	}
 	add("instructions", "Your instructions for this chat", "", InstructionsSection(o.Instructions))
 	add("stay", "Stay yourself", "", StayYourself(p.Name))
-	add("language", "Reply language", "", LanguageSection(o.ReplyLanguage))
+	if !fixedLang {
+		add("language", "Reply language", "", LanguageSection(o.ReplyLanguage))
+	}
 	add("guidance", "Guidance for this reply", "", "\n\nGUIDANCE: "+Guidance(p.MessageLength, lastMsg, o.LengthBias)+emojiTurn(p.Emoji, ClassifyTone(lastMsg)))
+	if fixedLang {
+		add("language", "Reply language", "", FixedLanguageSection(o.ReplyLanguage))
+	}
 	return out
 }
 
@@ -316,7 +332,7 @@ func Compose(p model.Persona, chat model.ChatAssignment, history []model.Message
 	}
 	return llm.Request{
 		System:      SystemPrompt(p, chat, isGroup, last, opts...),
-		Messages:    MessagesFor(history, isGroup, p.Name),
+		Messages:    withLanguageCue(MessagesFor(history, isGroup, p.Name), opts),
 		Temperature: -1,
 	}
 }
@@ -344,7 +360,7 @@ func Initiate(p model.Persona, chat model.ChatAssignment, history []model.Messag
 	msgs = append(msgs, llm.Message{Role: llm.RoleUser, Content: InitiateTurn})
 	return llm.Request{
 		System:      SystemPrompt(p, chat, isGroup, "", opts...) + initiateNote(p, chat, history, isGroup, opts...),
-		Messages:    llm.Normalize(msgs),
+		Messages:    withLanguageCue(llm.Normalize(msgs), opts),
 		Temperature: -1,
 	}
 }

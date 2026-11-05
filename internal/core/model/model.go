@@ -252,6 +252,7 @@ const (
 	ActWaiting           = "waiting"
 	ActThinking          = "thinking" // also "distracted" (meta.distracted=true)
 	ActGenerating        = "generating"
+	ActProgress          = "progress" // a step of writing a reply (meta stage, latencyMs): the Log tab's live view
 	ActTyping            = "typing"
 	ActSent              = "sent"
 	ActDeferred          = "deferred" // outside active hours / away: reply later

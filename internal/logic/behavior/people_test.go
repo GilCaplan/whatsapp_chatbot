@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"whatsappdoppel/internal/core/model"
 )
@@ -153,5 +154,53 @@ func TestNewBehaviourFieldsAndFill(t *testing.T) {
 	partial := model.BehaviorOverrides{Preset: PresetInstant}
 	if FillOverridesFromPreset(&partial, KindGroup, "tagReplyPercent") {
 		t.Error("a label without values is not a full preset")
+	}
+}
+
+func TestGroupLimit(t *testing.T) {
+	cases := []struct {
+		limit, chime int
+		ai           bool
+		want         int
+	}{{8, 40, true, 8}, {8, 100, true, 8}, {8, 100, false, maxGroupSize}, {0, 100, false, 0}, {50, 65, false, 50}}
+	for _, c := range cases {
+		bp := model.BehaviorProfile{RespondToAllMaxMembers: c.limit, ChimeInPercent: c.chime, AIJudgement: c.ai}
+		if got := GroupLimit(bp); got != c.want {
+			t.Errorf("GroupLimit(%+v) = %d", c, got)
+		}
+	}
+}
+
+func TestDistractionUsesItsRange(t *testing.T) {
+	p := model.BehaviorProfile{ThinkMinSec: 1, ThinkMaxSec: 1, DistractedPercent: 100, DistractedMinSec: 40, DistractedMaxSec: 40}
+	if _, d := PlanThink(p, NewSampler(nil)); d != 40*time.Second {
+		t.Errorf("distracted = %v", d)
+	}
+	p.DistractedPercent = 0
+	if _, d := PlanThink(p, NewSampler(nil)); d != 0 {
+		t.Errorf("not distracted = %v", d)
+	}
+}
+
+func TestTimingCurveShapesDelays(t *testing.T) {
+	spread := func(curve string) (lo, hi time.Duration) {
+		s := NewSampler(nil)
+		lo = time.Hour
+		for range 300 {
+			d := Delay(s, 10, 100, curve)
+			if d < 10*time.Second || d > 100*time.Second {
+				t.Errorf("%s: %v is outside the range", curve, d)
+			}
+			lo, hi = min(lo, d), max(hi, d)
+		}
+		return lo, hi
+	}
+	if lo, hi := spread(CurveFixed); lo != hi {
+		t.Errorf("fixed varies: %v to %v", lo, hi)
+	}
+	for _, c := range []string{CurveUniform, CurveNormal, CurveExponential} {
+		if lo, hi := spread(c); lo == hi {
+			t.Errorf("%s doesn't vary", c)
+		}
 	}
 }

@@ -55,6 +55,7 @@ function sentences(summary, profile, kind) {
     const range = lo === hi ? `about ${lo}` : `${lo}–${hi}`;
     const median = s.medianTotalSec != null ? ` (typically ${sayDuration(s.medianTotalSec)})` : '';
     out.push({ strong: true, text: s.maxTotalSec < 2 ? 'Replies almost instantly.' : `Usually replies ${range} after the last message${median}.` });
+    if (s.modelSec > 0) out.push({ strong: true, text: `Your AI model adds about ${sayDuration(s.modelSec)} on top: that is how long it has taken lately to write a reply. This chart only shows the timing you set.` });
   }
   const extras = [];
   if (s.splitShare > 0 && p.splitMaxParts > 1) {

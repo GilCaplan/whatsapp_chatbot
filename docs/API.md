@@ -241,7 +241,7 @@ Goal settings are **not** part of the behaviour profile:
 WA `state` ∈ `disconnected | connecting | awaiting_qr | pairing | connected | logged_out | error | replaced | banned | outdated`.
 
 Activity `type` ∈ `incoming | decision.skip | decision.reply | blocked_injection | noticing | seen | waiting | thinking |
-generating | typing | sent | deferred | reacted | proactive | approval.queued | approval.sent | approval.discarded |
+generating | progress | typing | sent | deferred | reacted | proactive | approval.queued | approval.sent | approval.discarded |
 goal.reached | error | wa.status | system` and (wave 3) `handoff | handoff.resumed | reveal | memory | recap`. `text` is always plain English (never emoji; a reaction's emoji is only in `meta.emoji`).
 
 A normal reply narrates: `incoming` → `noticing` → `seen` → `waiting` → `thinking` → `typing` → `sent`
@@ -254,6 +254,7 @@ A normal reply narrates: `incoming` → `noticing` → `seen` → `waiting` → 
 | `waiting` | "Waiting 8s for more messages", "More messages — waiting 5s", "Burst cap reached — replying now", "New message while thinking — starting over" | `waitSeconds`, `resetCount`, `reason` (`burst_cap`, `new_messages`, `cooldown`) |
 | `thinking` | "Thinking for 6s" · distraction: "Got distracted — back in about 2 minutes" · plan ahead: "Planned the next move" · cross-chat: "Keeping in mind 2 things from your private chat with Dana — discreet" | `delaySeconds`, `distracted` (true for the distraction event); plan ahead: `stage:"plan"`, `plan` (the private next move), `latencyMs`; cross-chat: `stage:"cross"`, `crossContext` (below; never the notes themselves) |
 | `generating` | "Writing a reply…" (trigger prefix and approval mode, which skip "thinking") | `model`, `messages` |
+| `progress` | A step of writing a reply, for the Log tab's Live progress view ("Asking llama3.1:8b to write the reply") | `stage` (read, planning, write, written, checked, rewrite, keep), `latencyMs`, `promptChars`, `model` |
 | `typing` | "Typing for 12s (84 characters, part 1 of 2)" (single bubble: "Typing for 12s (84 characters)") | `typingSeconds`, `chars`, `part`, `parts`, `approvalId` (approved replies) |
 | `sent` | the message text | `provider`, `model`, `latencyMs`, `jid`, `part`, `parts`, `quoted`, `proactive`, `manual`, `goalRewritten` (the first draft gave the goal away and was rewritten), `crossContext` `{mode, people, items, sources}` (context from other chats was used), `crossRewritten` (a draft gave away something from another chat and was rewritten), `crossDropped` (in the end it was written without other chats), `mentions` (display names tagged in this bubble) |
 | `goal.reached` | "Goal reached — Josh said apple" / "Goal reached — find out what Dana is doing this weekend" / "Goal reached — Dana sent a photo" | `goal`, `how` (`said_word`, `ai`, `media`), `evidence`, `afterReached`, `missionId?` |
@@ -277,7 +278,8 @@ Texts never contain reason codes; the code is always in `meta.reason`.
 `decision.skip` reasons: `link`, `stale`, `mentions_other`, `llm_no`, `llm_error`, `chime_out`, `reply_chance`
 (+ `percent`, `react:true` when it reacts instead), `outside_hours`, `snoozed`, `rate_limit` (+ `limit`,
 `window:"hour|day"`), `you_replied`, `mute_word` (+ `word`), `not_selected` (+ `sender`; "Not answering Josh — this
-group only answers people you picked"), `streak_limit` (+ `limit`; "Taking a break — 6 replies in a row to Josh with
+group only answers people you picked", or, when Automatic's size limit is the cause, "Not answering Josh — this group
+has 10 members and it answers everyone only up to 8. Choose who it answers in the People tab"), `streak_limit` (+ `limit`; "Taking a break — 6 replies in a row to Josh with
 nobody else joining in").
 `decision.reply` reasons: `name_mentioned`, `mentioned_me`, `always_reply` (chime 100 % without AI judgement),
 `llm_yes`, `chime_in` (random chime-in; replaces v1 `random_override`), `llm_error_random`, `priority_person`
@@ -319,7 +321,7 @@ between 0 and 100`); `behavior.triggerPrefix` ≤ 8 characters, no spaces (`""` 
 | Method & path | Body | Response |
 |---|---|---|
 | `GET /api/behavior/presets` | – | `{presets:[{id, label, description, private: BehaviorProfile, group: BehaviorProfile}], ranges:{field:{min,max}}, enums:{field:[...]}, defaults:{private, group}, dials:{speed\|chattiness\|boldness: DialDef}, dialOrder:["speed","chattiness","boldness"]}` |
-| `POST /api/behavior/sample` | `{kind:"dm\|group" ("private" accepted), profile: BehaviorProfile (partial ok: missing fields = defaults for kind; clamped, never 400), text?, samples?:1–10 (default 5), approval?:bool}` | `{samples:[{totalSec, phases:[{name, sec, startSec}], bubbles:[{text, typingSec}], quoted}], summary:{minTotalSec, medianTotalSec, maxTotalSec, splitShare}}` |
+| `POST /api/behavior/sample` | `{kind:"dm\|group" ("private" accepted), profile: BehaviorProfile (partial ok: missing fields = defaults for kind; clamped, never 400), text?, samples?:1–10 (default 5), approval?:bool}` | `{samples:[{totalSec, phases:[{name, sec, startSec}], bubbles:[{text, typingSec}], quoted}], summary:{minTotalSec, medianTotalSec, maxTotalSec, splitShare, modelSec}}` (`modelSec`: how long the AI model has taken lately to plan and write a reply, on top of these timers; 0 = none measured yet) |
 
 - Presets (`id`): `natural` (default for both kinds), `instant`, `busy`, `slow`, `nightowl`; `custom` is the label
   for anything else. `ranges` keys are JSON names; nested ones are `availability.catchUpMaxMin`,

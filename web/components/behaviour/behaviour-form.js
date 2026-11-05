@@ -231,7 +231,7 @@ export function behaviourForm(opts) {
     return html`
       ${isGroup ? html`<div class="bf-sub">${icon('group', 'ic-sm')}In groups</div>` : ''}
       ${row({ groupOnly: true, fields: ['respondToAllMaxMembers'], label: 'Answer everyone in groups up to',
-        help: html`Smaller groups answer everyone by default. In bigger ones it only answers the people you pick in each chat's <b>People</b> list. 0 = always only the people you pick.`,
+        help: html`Smaller groups answer everyone by default. In bigger ones it only answers the people you pick in each chat's <b>People</b> list, unless Chattiness is on Answers everything. 0 = always only the people you pick.`,
         control: num('respondToAllMaxMembers', { unit: 'members', label: 'Answer everyone in groups up to' }) })}
       ${row({ groupOnly: true, fields: ['answerAnyoneWhoAddressesIt'], label: 'Still answer anyone who says its name or tags it', help: "People you didn't pick still get an answer when they talk to the persona directly.", control: sw('answerAnyoneWhoAddressesIt', 'Still answer anyone who addresses it') })}
       ${isGroup ? html`<div class="bf-sub">${icon('message', 'ic-sm')}Every chat</div>` : ''}

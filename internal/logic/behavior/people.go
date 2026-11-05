@@ -37,6 +37,19 @@ func EffectivePeopleMode(pc model.PeopleConfig, memberCount, threshold int) stri
 	return model.PeopleSelected
 }
 
+// maxGroupSize is WhatsApp's largest group (and the setting's upper limit).
+const maxGroupSize = 1024
+
+// GroupLimit is the size up to which Automatic answers everyone. Chattiness
+// on Answers everything means what it says, however big the group; 0 stays
+// "only the people you pick", as do the Picked mode and anyone switched off.
+func GroupLimit(bp model.BehaviorProfile) int {
+	if t := bp.RespondToAllMaxMembers; t == 0 || bp.ChimeInPercent < 100 || bp.AIJudgement {
+		return t
+	}
+	return maxGroupSize
+}
+
 // UserOf returns the user part of a JID ("972501234567:12@s.whatsapp.net" → "972501234567").
 func UserOf(jid string) string {
 	u, _, _ := strings.Cut(jid, "@")

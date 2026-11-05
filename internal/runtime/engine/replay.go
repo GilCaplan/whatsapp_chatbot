@@ -304,11 +304,11 @@ func (e *Engine) replayStep(ctx context.Context, c model.ChatAssignment, cp mode
 		out.Decision, out.Why = "skip", "Couldn't write a reply: "+err.Error()
 		return out, 0
 	}
-	if cp.ReplyCheck != model.CheckOff {
+	if cp.ReplyCheck != model.CheckOff || opts.LanguageFixed {
 		meter.Step("check")
 		o := opts
 		o.Goal = gp.turn
-		ck := replyCheck{cp: cp, persona: p, plan: gp.turn.Plan, lang: opts.ReplyLanguage, hist: full,
+		ck := replyCheck{cp: cp, persona: p, plan: gp.turn.Plan, lang: opts.ReplyLanguage, langFixed: opts.LanguageFixed, hist: full,
 			rules: checkRules(prompt.ComposeSections(p, c, ph, isGroup, o), p)}
 		res = e.checkedReply(mctx, ck, res, func(note string) (genResult, error) {
 			meter.Step("rewrite")

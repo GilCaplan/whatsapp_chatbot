@@ -72,7 +72,7 @@ export function languageControls(prefs, onChange, { idPrefix = 'lang' } = {}) {
     </div>
     <div class="field-row">
       <div class="grow"><div class="field-label">Reply in</div>
-        <div class="field-help">${e.reply === 'match' ? 'The language the person wrote in. Unclear messages follow the conversation.' : 'Always this language, whatever people write. You can still pick per person in the People tab.'}</div></div>
+        <div class="field-help">${e.reply === 'match' ? 'The language the person wrote in. Unclear messages follow the conversation.' : e.others === 'answer' ? 'Always this language, whatever people write. You can still pick per person in the People tab.' : 'Always this language. Messages in a language it does not speak still get no answer: set Messages in other languages to Answer to reply to those too.'}</div></div>
       <select class="select select-sm" aria-label="Reply in" @change=${(ev) => set({ reply: ev.target.value })}>
         <option value="match" ?selected=${e.reply === 'match'}>Same as the message</option>
         ${LANGS.map((l) => html`<option value=${l.code} ?selected=${e.reply === l.code}>${l.name}</option>`)}

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -280,9 +281,19 @@ func (e *Engine) generateReply(ctx context.Context, p model.Persona, req llm.Req
 	res := genResult{Provider: prov.Name(), Model: mdl}
 	start := time.Now()
 
+	chars := len([]rune(req.System))
+	for _, m := range req.Messages {
+		chars += len([]rune(m.Content))
+	}
+	progress(ctx, fmt.Sprintf("Asking %s to write the reply (a prompt of %d characters)", mdl, chars),
+		map[string]any{"stage": "write", "model": mdl, "promptChars": chars})
 	text, used, err := chatOnce(ctx, prov, req, p.Name)
 	if used != "" {
 		res.Model = used
+	}
+	if err == nil {
+		progress(ctx, "The model wrote the reply in "+fmtDur(time.Since(start)),
+			map[string]any{"stage": "written", "latencyMs": time.Since(start).Milliseconds()})
 	}
 	if err != nil && !errors.Is(err, llm.ErrEmptyReply) {
 		res.Latency = time.Since(start)
@@ -290,6 +301,7 @@ func (e *Engine) generateReply(ctx context.Context, p model.Persona, req llm.Req
 	}
 	if err != nil || guard.BrokeCharacter(text, p.Name) {
 		res.Retried = true
+		progress(ctx, "It came out of character, so it is writing it again", map[string]any{"stage": "rewrite"})
 		req.System += prompt.CharacterReminder(p.Name)
 		text, _, err = chatOnce(ctx, prov, req, p.Name)
 		if err != nil && ctx.Err() != nil {
