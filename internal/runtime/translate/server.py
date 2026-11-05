@@ -19,10 +19,11 @@ nlp = spacy.load("en_core_web_sm", disable=["lemmatizer"])
 loaded = {}
 
 PROTECT = re.compile(
-    r"https?://\S+|@[^\s,.:;!?]+|\d[\d.,:/-]*\d|\d"
+    r"https?://\S*[^\s.,;:!?)]|@[^\s,.:;!?]+|\d[\d.,:/-]*\d|\d"
     r"|[\U0001F000-\U0001FAFF☀-➿️‍]+"
 )
-SENTENCE = re.compile(r"[^\n.!?…]+[.!?…]*\s*|[.!?…]+\s*|\n+")
+# A stop only ends a sentence before a space or the end: not in "x.co", not in "well...no".
+SENTENCE = re.compile(r"(?:[^\n.!?…]|[.!?…](?=[^\s.!?…]))+[.!?…]*\s*|[.!?…]+\s*|\n+")
 TOKEN = re.compile(r"XX\d+")
 EMOJI = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]+")
 # Tagged as proper nouns but meant to be translated.
@@ -65,26 +66,33 @@ def protect(text):
         kept[token] = m.group(0)
         return token
 
-    return PROTECT.sub(stash, text), kept, len(kept)
+    return PROTECT.sub(stash, text), kept
 
 
 def restore(out, kept):
     """Puts every word back where its token landed; a lost token goes last."""
     missing = []
     for token, word in kept.items():
-        # The models sometimes shorten XX1 to X1.
-        hit = re.compile(r"X{1,3}" + token[2:] + r"(?!\d)")
+        # The models sometimes shorten XX1 to X1 or spell it in Cyrillic.
+        hit = re.compile(r"[X\u0425]{1,3}" + token[2:] + r"(?!\d)")
         if hit.search(out):
             out = hit.sub(lambda _: word, out, count=1)
         else:
             missing.append(word)
+    # Every number in the text was a token, so a number here is a mangled one.
+    for word in list(missing):
+        m = re.search(r"\d+", out)
+        if not m:
+            break
+        out = out[: m.start()] + word + out[m.end():]
+        missing.remove(word)
     return (out.rstrip() + " " + " ".join(missing)) if missing else out
 
 
-def translate_sentence(sentence, translator, sp, kept, next_token):
+def translate_sentence(sentence, translator, sp, kept):
     core = sentence.strip()
     if not any(c.isalpha() for c in TOKEN.sub("", core)):
-        return sentence
+        return TOKEN.sub(lambda m: kept.get(m.group(0), m.group(0)), sentence)
     lead = sentence[: len(sentence) - len(sentence.lstrip())]
     trail = sentence[len(sentence.rstrip()):]
     # Trailing emoji stay out of the model altogether.
@@ -95,31 +103,40 @@ def translate_sentence(sentence, translator, sp, kept, next_token):
             break
         end = " " + kept.pop(m.group(1)) + end
         core = core[: m.start()]
-    names = {}
-    for start, stop in reversed(name_spans(core)):
-        token = "XX%d" % (next_token + len(names))
-        names[token] = core[start:stop]
-        core = core[:start] + token + core[stop:]
-    here = {t: kept[t] for t in TOKEN.findall(core) if t in kept}
-    here.update(names)
+    # Each sentence numbers its own tokens from 0: the models keep small
+    # numbers intact far better than large ones.
+    here = {}
+    for t in TOKEN.findall(core):
+        if t in kept:
+            here[t] = kept[t]
+    spans = list(reversed(name_spans(core)))
+    for start, stop in spans:
+        here["N%d" % len(here)] = core[start:stop]
+        core = core[:start] + "\0%d\0" % (len(here) - 1) + core[stop:]
+    words, n = {}, 0
+
+    def renumber(m):
+        nonlocal n
+        token = "XX%d" % n
+        n += 1
+        old = m.group(0)
+        words[token] = here[old] if old in here else here["N" + old.strip("\0")]
+        return token
+
+    core = re.sub(r"XX\d+|\0\d+\0", renumber, core)
     if any(c.isalpha() for c in TOKEN.sub("", core)):
         result = translator.translate_batch(
             [sp.encode(core, out_type=str)], beam_size=4, max_decoding_length=256
         )
         core = sp.decode(result[0].hypotheses[0])
-    out = restore(core, here)
+    out = restore(core, words)
     return lead + re.sub(r"(?<=[\u05d0-\u05ea])-\s+", "-", out) + end + trail
 
 
 def translate(path, text):
     translator, sp = pack(path)
-    masked, kept, first = protect(text)
-    out = []
-    for sentence in SENTENCE.findall(masked):
-        # Names get numbers of their own, past the protected words.
-        out.append(translate_sentence(sentence, translator, sp, kept, first))
-        first += 50
-    return "".join(out)
+    masked, kept = protect(text)
+    return "".join(translate_sentence(s, translator, sp, kept) for s in SENTENCE.findall(masked))
 
 
 def main():
