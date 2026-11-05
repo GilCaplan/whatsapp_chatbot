@@ -36,6 +36,7 @@ export function createPeopleTab(ctx) {
     load: () => ratings.load(),
     onBus(type, data) {
       if (type === 'ratings.changed' && (!data || data.chatKey === ctx.key)) ratings.reloadSoon();
+      if (type === 'activity' && data && data.chatKey === ctx.key) ratings.onActivity(data);
     },
   };
 }

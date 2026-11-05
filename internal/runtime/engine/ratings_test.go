@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -61,5 +62,19 @@ func TestConnectionRatings(t *testing.T) {
 	}
 	if len(h.acts(model.ActRating)) != 1 {
 		t.Error("no rating activity")
+	}
+}
+
+func TestRateNowShowsItsSteps(t *testing.T) {
+	h := newHarness(t, nil, groupChat())
+	h.st.AppendHistory(groupKey, model.Message{ID: "m", TS: h.clk.Now(), Speaker: "them", Name: "Avi", Text: "hello"}, 0)
+	h.llm.Push(`{"people":[{"name":"Avi","score":70,"why":"kind"}]}`)
+	_, _ = h.e.RateNow(context.Background(), groupKey)
+	var stages []any
+	for _, a := range h.acts(model.ActRatingStep) {
+		stages = append(stages, a.Meta["stage"])
+	}
+	if len(stages) < 3 || stages[0] != "wait" || stages[1] != "read" || stages[2] != "ask" {
+		t.Fatalf("stages = %v", stages)
 	}
 }

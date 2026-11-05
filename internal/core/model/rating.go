@@ -27,3 +27,6 @@ type PersonScore struct {
 
 // ActRating is the activity type of a new day of ratings.
 const ActRating = "rating"
+
+// ActRatingStep is a step of a rating under way (the People tab's live view).
+const ActRatingStep = "rating.step"

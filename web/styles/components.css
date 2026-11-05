@@ -1543,6 +1543,9 @@ count-ring { display: inline-grid; flex: none; }
 .log-steps li { display: flex; align-items: flex-start; gap: 6px; }
 .log-steps .ic { flex: none; margin-top: 1px; }
 .log-step-t { flex: none; min-width: 48px; font-variant-numeric: tabular-nums; color: var(--text-3); }
+
+.log-steps.rt-steps { padding: 0 0 10px 0; }
+.log-steps.rt-steps.is-live { padding-left: 16px; }
 /* A running reply: a rail with a circle that moves down to the current step. */
 .log-steps.is-live { padding-left: 62px; position: relative; }
 .log-steps.is-live li { position: relative; }

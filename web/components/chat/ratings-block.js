@@ -11,7 +11,7 @@ import { debounce, relTime } from '../../util.js';
 import { helpTip } from '../common/help-tip.js';
 
 export function createRatingsStore(key, update) {
-  const st = { items: null, error: '', day: 0, rating: false };
+  const st = { items: null, error: '', day: 0, rating: false, steps: [] };
   async function load() {
     try {
       const r = await api.chats.ratings(key, { quiet: true });
@@ -24,7 +24,7 @@ export function createRatingsStore(key, update) {
     update();
   }
   async function rateNow() {
-    st.rating = true; update();
+    st.rating = true; st.steps = []; update();
     try {
       await api.chats.rateNow(key);
       st.day = 0;
@@ -33,7 +33,11 @@ export function createRatingsStore(key, update) {
     st.rating = false;
     load();
   }
-  return { st, load, reloadSoon: debounce(load, 500), rateNow };
+  function onActivity(ev) {
+    if (ev.type === 'rating.step') { st.steps = [...st.steps, ev].slice(-8); update(); }
+    if (ev.type === 'rating' && !st.rating) { st.steps = []; update(); }
+  }
+  return { st, load, reloadSoon: debounce(load, 500), rateNow, onActivity };
 }
 
 function dayLabel(date) {
@@ -51,6 +55,14 @@ function change(ch) {
   return html`<span class=${'rt-change ' + (ch > 0 ? 'up' : 'down')} title="Since the last rating">${ch > 0 ? '+' : '−'}${Math.abs(ch)}</span>`;
 }
 
+function stepsView(st) {
+  const failed = st.steps[st.steps.length - 1].meta?.stage === 'failed';
+  const live = st.rating && !failed;
+  const t0 = new Date(st.steps[0].ts);
+  return html`<ol class=${'log-steps rt-steps' + (live ? ' is-live' : '')}>${st.steps.map((ev, i) => html`<li class=${live && i === st.steps.length - 1 ? 'is-now' : ''}>
+    <span class="log-step-t">+${Math.round((new Date(ev.ts) - t0) / 1000)}s</span><span>${ev.text}</span></li>`)}</ol>`;
+}
+
 export function ratingsBlock(rs, c, p) {
   const st = rs.st;
   const name = p ? p.name : 'The persona';
@@ -62,6 +74,7 @@ export function ratingsBlock(rs, c, p) {
         title="Score the last 24 hours now">${icon('refresh')}Rate now</button>
     </h4>
     <div class="field-help mb-8">How connected ${name} felt to each person, 0 to 100, in its own words. Updated every day the group has at least 20 messages. Only you see this.</div>
+    ${st.steps.length ? stepsView(st) : ''}
     ${items == null ? html`<div class="skeleton" style="height:64px;border-radius:16px"></div>`
       : !items.length ? html`<div class="small muted">No ratings yet. They appear after a day with at least 20 messages, or tap Rate now.</div>`
       : html`

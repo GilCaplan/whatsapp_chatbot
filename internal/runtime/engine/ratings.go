@@ -110,10 +110,19 @@ func (e *Engine) RateNow(ctx context.Context, chatKey string) (model.RatingDay, 
 	}
 	var d model.RatingDay
 	var err error
+	e.rateStep(c, "", "Waiting for other background work to finish", "wait")
 	if !e.withJobSlot(ctx, func() { d, err = e.rateChat(ctx, c, true) }) {
 		return d, ctx.Err()
 	}
+	if err != nil && !errors.Is(err, ctx.Err()) {
+		e.rateStep(c, "", "Stopped: "+err.Error(), "failed")
+	}
 	return d, err
+}
+
+// rateStep reports a step of a rating, for the live view in the People tab.
+func (e *Engine) rateStep(c model.ChatAssignment, name, text, stage string) {
+	e.act(model.ActRatingStep, c, name, text, map[string]any{"stage": stage})
 }
 
 // rateChat writes and saves one day's ratings. Automatic runs skip quiet
@@ -143,6 +152,7 @@ func (e *Engine) rateChat(ctx context.Context, c model.ChatAssignment, onDemand 
 	if !onDemand && len(day) < ratingMinMessages {
 		return model.RatingDay{}, ErrNothingToRate
 	}
+	e.rateStep(c, p.Name, fmt.Sprintf("Reading %d %s from the last 24 hours", len(day), plural(len(day), "message", "messages")), "read")
 	// Who wrote today, by person (phone/lid user part), most active first.
 	type who struct {
 		name, jid string
@@ -181,12 +191,15 @@ func (e *Engine) rateChat(ctx context.Context, c model.ChatAssignment, onDemand 
 	}
 	req := prompt.Rating(prompt.RatingInput{Persona: p, ChatName: c.Name, People: names, Messages: day, Zone: time.Local})
 	req.Model = mdl
+	e.rateStep(c, p.Name, fmt.Sprintf("Asking %s to rate %s", mdl, strings.Join(names, ", ")), "ask")
+	start := time.Now()
 	cctx, cancel := context.WithTimeout(ctx, ratingTimeout)
 	resp, err := prov.Chat(cctx, req)
 	cancel()
 	if err != nil {
 		return model.RatingDay{}, err
 	}
+	e.rateStep(c, p.Name, "The model answered in "+fmtDur(time.Since(start))+". Checking the scores", "check")
 	rated, err := prompt.ParseRating(resp.Text)
 	if err != nil {
 		return model.RatingDay{}, errors.New("the model didn't write readable ratings")
