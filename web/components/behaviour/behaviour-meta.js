@@ -10,6 +10,7 @@ export const SCALAR_FIELDS = [
   'chimeInPercent', 'ignoreLinks', 'ignoreStickers', 'timingCurve', 'reactPercent', 'pauseWhenYouReply', 'maxRepliesPerHour', 'maxRepliesPerDay',
   'cooldownSec', 'historyMessages', 'historyChars', 'staleAfterMin',
   'respondToAllMaxMembers', 'answerAnyoneWhoAddressesIt', 'maxStreak', 'triggerWords', 'muteWords',
+  'replyBatchSize', 'draftRestartSec', 'maxDraftRestarts',
   'noticeMinSec', 'noticeMaxSec', 'markRead', 'waitForMoreSec', 'burstCapSec', 'thinkMinSec', 'thinkMaxSec',
   'distractedPercent', 'distractedMinSec', 'distractedMaxSec', 'typingIndicator', 'typingCharsPerSec',
   'typingJitterPercent', 'typingMinSec', 'typingMaxSec',
@@ -24,6 +25,7 @@ export const ALL_FIELDS = [...SCALAR_FIELDS, ...BLOCK_FIELDS];
 
 /** Fields that only mean something in group chats. */
 export const GROUP_ONLY = new Set([
+  'replyBatchSize',
   'replyWhenNameMentioned', 'replyWhenAtMentioned', 'skipWhenOthersMentioned', 'aiJudgement', 'chimeInPercent', 'quoteReplyPercent',
   'allowMentions', 'mentionMax', 'tagReplyPercent', 'respondToAllMaxMembers', 'answerAnyoneWhoAddressesIt',
 ]);
@@ -36,7 +38,7 @@ export const FALLBACK_RANGES = {
   replyPercent: [0, 100], chimeInPercent: [0, 100], reactPercent: [0, 100], distractedPercent: [0, 100],
   splitPercent: [0, 100], quoteReplyPercent: [0, 100], tagReplyPercent: [0, 100], mentionMax: [1, 5], typingJitterPercent: [0, 80],
   typoPercent: [0, 30],
-  respondToAllMaxMembers: [0, 1024], maxStreak: [0, 50],
+  respondToAllMaxMembers: [0, 1024], maxStreak: [0, 50], replyBatchSize: [0, 50], draftRestartSec: [0, 300], maxDraftRestarts: [0, 10],
   noticeMinSec: [0, 3600], noticeMaxSec: [0, 3600], distractedMinSec: [0, 3600], distractedMaxSec: [0, 3600], cooldownSec: [0, 3600],
   waitForMoreSec: [0, 600], thinkMinSec: [0, 600], thinkMaxSec: [0, 600], burstCapSec: [0, 1800],
   typingCharsPerSec: [1, 40], typingMinSec: [0, 60], typingMaxSec: [1, 180],

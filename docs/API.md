@@ -124,7 +124,7 @@ BehaviorProfile {
   respondToAllMaxMembers*† (0–1024; groups up to this size answer everyone by default, 0 = never),
   answerAnyoneWhoAddressesIt*†, maxStreak† (0–50, 0 = unlimited), triggerWords† [≤ 20 × ≤ 40 chars], muteWords† [same],
   // Timing
-  noticeMinSec, noticeMaxSec, markRead, waitForMoreSec, burstCapSec, thinkMinSec, thinkMaxSec,
+  noticeMinSec, noticeMaxSec, markRead, waitForMoreSec, burstCapSec, replyBatchSize, draftRestartSec, maxDraftRestarts, thinkMinSec, thinkMaxSec,
   distractedPercent, distractedMinSec, distractedMaxSec, typingIndicator,
   typingCharsPerSec, typingJitterPercent, typingMinSec, typingMaxSec,
   // Message shape

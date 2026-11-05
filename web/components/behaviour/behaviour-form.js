@@ -44,7 +44,7 @@ export const FORM_GROUPS = [
   { id: 'people', label: 'Who it answers', icon: 'group', c: 'linear-gradient(135deg,#fbbf24,#ea580c)', sub: 'Who gets a reply, and words that always or never get one',
     fields: ['respondToAllMaxMembers', 'answerAnyoneWhoAddressesIt', 'maxStreak', 'triggerWords', 'muteWords'] },
   { id: 'timing', label: 'Timing', icon: 'timer', c: 'linear-gradient(135deg,#a78bfa,#7c3aed)', sub: 'Noticing, reading, thinking and typing',
-    fields: ['timingCurve', 'noticeMinSec', 'noticeMaxSec', 'markRead', 'waitForMoreSec', 'burstCapSec', 'thinkMinSec', 'thinkMaxSec', 'distractedPercent', 'distractedMinSec', 'distractedMaxSec', 'typingIndicator', 'typingCharsPerSec', 'typingJitterPercent', 'typingMinSec', 'typingMaxSec'] },
+    fields: ['timingCurve', 'noticeMinSec', 'noticeMaxSec', 'markRead', 'waitForMoreSec', 'burstCapSec', 'replyBatchSize', 'draftRestartSec', 'maxDraftRestarts', 'thinkMinSec', 'thinkMaxSec', 'distractedPercent', 'distractedMinSec', 'distractedMaxSec', 'typingIndicator', 'typingCharsPerSec', 'typingJitterPercent', 'typingMinSec', 'typingMaxSec'] },
   { id: 'availability', label: 'Active hours', icon: 'calendar', c: 'linear-gradient(135deg,#818cf8,#4338ca)', sub: 'When the persona is around to answer',
     fields: ['availability'] },
   { id: 'shape', label: 'Message shape', icon: 'bubbles', c: 'linear-gradient(135deg,#2dd4bf,#0d9488)', sub: 'One bubble or several, quoting, length',
@@ -251,6 +251,9 @@ export function behaviourForm(opts) {
       ${row({ fields: ['markRead'], label: 'Show “seen” ticks', help: "Marks messages as read (blue ticks) when it looks. If read receipts are off in your WhatsApp privacy settings, nobody sees them anyway.", control: sw('markRead', 'Show seen ticks') })}
       ${row({ fields: ['waitForMoreSec'], label: 'Wait for more messages', help: 'After seeing a message, waits this long in case another follows, so a burst of messages gets one reply.', control: num('waitForMoreSec', { unit: 'sec', label: 'Wait for more messages' }) })}
       ${row({ fields: ['burstCapSec'], label: 'Never wait longer than', help: 'Even if they keep sending messages, start replying after this long.', control: num('burstCapSec', { unit: 'sec', label: 'Never wait longer than' }) })}
+      ${row({ groupOnly: true, fields: ['replyBatchSize'], label: 'Messages per reply', help: 'In a busy group it answers once this many messages are in, and looks at newer ones after sending. 0 means no limit.', control: num('replyBatchSize', { label: 'Messages per reply' }) })}
+      ${row({ fields: ['draftRestartSec'], label: 'Start over within', help: 'A new message makes it rewrite a reply it began less than this long ago. An older reply goes out first, and the new message is answered next.', control: num('draftRestartSec', { unit: 'sec', label: 'Start over within' }) })}
+      ${row({ fields: ['maxDraftRestarts'], label: 'Most restarts per reply', help: 'After this many rewrites the reply goes out, so a chat that never pauses still gets an answer.', control: num('maxDraftRestarts', { label: 'Most restarts per reply' }) })}
       ${row({ fields: ['thinkMinSec', 'thinkMaxSec'], stack: true, readout: span('thinkMinSec', 'thinkMaxSec'), label: 'Think time', help: 'A pause before typing starts, as if reading and deciding what to say. The AI writes the reply during this time.', control: pair('thinkMinSec', 'thinkMaxSec', 'Think time') })}
       ${row({ fields: ['distractedPercent', 'distractedMinSec', 'distractedMaxSec'], stack: true, readout: v.distractedPercent ? `${v.distractedPercent}% · +${span('distractedMinSec', 'distractedMaxSec')}` : 'Never', label: 'Gets distracted',
         help: 'Sometimes gets pulled away before answering and comes back a bit later.',

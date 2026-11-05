@@ -73,6 +73,8 @@ func naturalPrivate() model.BehaviorProfile {
 		RespondToAllMaxMembers:     8,
 		AnswerAnyoneWhoAddressesIt: true,
 		MaxStreak:                  0,
+		DraftRestartSec:            20,
+		MaxDraftRestarts:           2,
 		TriggerWords:               []string{},
 		MuteWords:                  []string{},
 
@@ -120,6 +122,7 @@ func naturalPrivate() model.BehaviorProfile {
 
 func naturalGroup() model.BehaviorProfile {
 	p := naturalPrivate()
+	p.ReplyBatchSize = 3
 	p.ReactPercent = 15
 	p.NoticeMinSec, p.NoticeMaxSec = 10, 90
 	p.WaitForMoreSec, p.BurstCapSec = 12, 45

@@ -359,7 +359,7 @@ func (r *Runner) process(in model.Incoming) {
 	if isGroup && speaker == "them" && !forced {
 		r.mu.Lock()
 		recent := r.historyCopyLocked()
-		replying := r.replyingLocked()
+		replying := r.replyingLocked() || (r.cyc != nil && r.cyc.restarts > 0) // a restart is about to use the model too
 		r.mu.Unlock()
 		// During a reply the AI check would only hold up the queue and compete
 		// with that reply for the model: it runs afterwards (checkLater).
