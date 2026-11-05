@@ -26,12 +26,11 @@ func TestWorldSectionGolden(t *testing.T) {
 	p.World = model.World{City: "Tel Aviv", Country: "Israel", Timezone: "Asia/Jerusalem", Routine: []model.RoutineBlock{
 		{Label: "dinner", From: "19:30", To: "21:00", Reach: model.ReachSlow},
 	}}
-	sys := SystemPrompt(p, model.ChatAssignment{}, false, "hey", Options{Now: worldNow, MacZone: tz(t, "Europe/Berlin")})
+	sys := SystemPrompt(p, model.ChatAssignment{}, false, "hey", Options{Now: worldNow})
 	golden(t, "leo_dm_world.golden", sys)
 	for _, want := range []string{
 		"RIGHT NOW: Thursday 1 October, 20:11 — evening in Tel Aviv, Israel (your local time). The weekend (Friday–Saturday here) starts tomorrow.",
 		"You're in the middle of: dinner (19:30–21:00).",
-		"probably on Europe/Berlin time, where it's 19:11.",
 		"don't announce it",
 	} {
 		if !strings.Contains(sys, want) {
@@ -39,29 +38,29 @@ func TestWorldSectionGolden(t *testing.T) {
 		}
 	}
 	// Zero Now: nothing added (existing goldens stay valid).
-	if WorldSection(p.World, time.Time{}, nil) != "" {
+	if WorldSection(p.World, time.Time{}) != "" {
 		t.Error("zero Now must render nothing")
 	}
 }
 
 func TestWorldSectionVariants(t *testing.T) {
 	berlin := tz(t, "Europe/Berlin")
-	// Same zone as the Mac: no "people are on … time" line; weekend today.
+	// Weekend today.
 	sat := time.Date(2026, 10, 3, 9, 0, 0, 0, berlin)
-	got := WorldSection(model.World{Timezone: "Europe/Berlin", Country: "Germany"}, sat, berlin)
+	got := WorldSection(model.World{Timezone: "Europe/Berlin", Country: "Germany"}, sat)
 	if !strings.Contains(got, "Saturday 3 October, 09:00 — morning in Germany") || !strings.Contains(got, "It's the weekend (Saturday–Sunday here).") || strings.Contains(got, "probably on") {
 		t.Errorf("same zone:\n%s", got)
 	}
-	// Just finished a block; a different day for the people chatting.
+	// Just finished a block.
 	w := model.World{Timezone: "Asia/Tokyo", Routine: []model.RoutineBlock{{Label: "gym", From: "06:00", To: "07:00", Reach: model.ReachUnreachable}}}
 	now := time.Date(2026, 10, 2, 7, 12, 0, 0, tz(t, "Asia/Tokyo")) // 00:12 Friday in Berlin
-	got = WorldSection(w, now, tz(t, "America/New_York"))
-	if !strings.Contains(got, "You just finished: gym (ended 12 minutes ago).") || !strings.Contains(got, "where it's 18:12 on Thursday") {
+	got = WorldSection(w, now)
+	if !strings.Contains(got, "You just finished: gym (ended 12 minutes ago).") || strings.Contains(got, "chatting with") {
 		t.Errorf("tokyo:\n%s", got)
 	}
 	// Upcoming block.
 	now = time.Date(2026, 10, 2, 5, 30, 0, 0, tz(t, "Asia/Tokyo"))
-	if got = WorldSection(w, now, nil); !strings.Contains(got, "Coming up: gym at 06:00.") || !strings.Contains(got, "late night") && !strings.Contains(got, "early morning") {
+	if got = WorldSection(w, now); !strings.Contains(got, "Coming up: gym at 06:00.") || !strings.Contains(got, "late night") && !strings.Contains(got, "early morning") {
 		t.Errorf("upcoming:\n%s", got)
 	}
 }

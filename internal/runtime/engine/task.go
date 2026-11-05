@@ -601,7 +601,7 @@ func (e *Engine) taskCommit(ctx context.Context, c model.ChatAssignment, run *mo
 	t.Times = []time.Time{at}
 	if !a.Known {
 		run.Log = append(run.Log, model.TaskEvent{At: now, Kind: "note", Text: "Couldn't read your calendar to check it once more: it waits for you"})
-	} else if run.Spec.Commit.Mode == model.CommitAutoFree {
+	} else if run.Spec.Commit.Mode == model.CommitAutoFree && run.Spec.Meeting.Calendars {
 		if err := e.taskBook(ctx, run); err == nil {
 			t.Say = task.SayConfirmed
 			t.Effects = append(t.Effects, task.DoFinishOK)
@@ -935,7 +935,7 @@ func (e *Engine) TaskTry(ctx context.Context, personaID string, spec model.TaskS
 		u := &taskUse{run: run, turn: t, titles: titles, allowed: task.Allowed(&run, t), prompt: e.taskPrompt(run, t, "")}
 		u.exempt = append([]string{run.Spec.About, run.Spec.Place, run.Spec.Title, run.Owner.About}, run.Spec.Privacy.CoverLines...)
 		build := func(note string) llm.Request {
-			req := prompt.Compose(p, chat, hist, false, prompt.Options{Task: u.prompt, Now: now, MacZone: time.Local})
+			req := prompt.Compose(p, chat, hist, false, prompt.Options{Task: u.prompt, Now: now})
 			if len(hist) == 0 {
 				req.Messages = []llm.Message{{Role: llm.RoleUser, Content: prompt.InitiateTurn}}
 			}

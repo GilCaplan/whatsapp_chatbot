@@ -128,7 +128,7 @@ func (e *Engine) promptOptions(c model.ChatAssignment, bp model.BehaviorProfile,
 	}
 	// Realism (wave 3): the time where the persona lives, and what it
 	// remembers about the people here (routine.go, memory.go).
-	o.Now, o.MacZone = e.clock.Now(), time.Local
+	o.Now = e.clock.Now()
 	o.Memories = e.memoryLines(c, hist, o.Now)
 	cross := e.crossContext(c, d, hist, o.Now) // cross.go
 	if cross.active() {
