@@ -115,7 +115,7 @@ func Run(opts Options) error {
 	if opts.FakeWA {
 		waSvc = wa.NewFake(hub)
 	} else {
-		m, err := wa.New(wa.Options{Paths: paths, Hub: hub, LegacyDBCandidates: legacyCandidates(opts),
+		m, err := wa.New(wa.Options{Paths: paths, Hub: hub, LegacyDBCandidates: legacyCandidates(opts), Version: opts.Version,
 			CollectSelf: selfSampleConsent(cfg), OnSelfMessage: selfSampleSink(cfg, st)}) // Clone yourself (selfsamples.go)
 		if err != nil {
 			return fmt.Errorf("WhatsApp: %w", err)

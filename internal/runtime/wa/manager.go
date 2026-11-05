@@ -38,6 +38,9 @@ type Options struct {
 	// LegacyDBCandidates are old bot session DBs; the first existing one is
 	// copied to Paths.WhatsAppDB() when that file doesn't exist yet.
 	LegacyDBCandidates []string
+	// Version is the app's version: the first run of a new one refreshes the
+	// session backup.
+	Version string
 	// Clone yourself (selfsamples.go): CollectSelf reports your consent;
 	// OnSelfMessage gets redacted samples of messages you typed yourself.
 	CollectSelf   func() bool
@@ -138,6 +141,9 @@ func New(opts Options) (*Manager, error) {
 	if err != nil {
 		m.migrateErr = err.Error()
 		m.status.LastError = m.migrateErr
+		m.log.Warnf("%v", err)
+	}
+	if err := backupSession(dbPath, opts.Version); err != nil {
 		m.log.Warnf("%v", err)
 	}
 
@@ -389,8 +395,12 @@ func (m *Manager) Logout(ctx context.Context) error {
 }
 
 // resetDevice swaps in a fresh, unpaired device + client, clears per-account
-// caches, reports logged_out and starts pairing. Caller holds opMu.
+// caches and the session backup, reports logged_out and starts pairing. Caller
+// holds opMu.
 func (m *Manager) resetDevice(note string) {
+	if err := removeSessionBackup(m.paths.WhatsAppDB()); err != nil {
+		m.log.Warnf("remove session backup: %v", err)
+	}
 	old := m.currentClient()
 	old.RemoveEventHandlers()
 	old.Disconnect()
