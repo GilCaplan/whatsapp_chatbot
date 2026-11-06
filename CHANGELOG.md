@@ -16,6 +16,9 @@ Everything below is new unless noted.
 - The names of the people in a chat now always stay as they are in translated replies.
 - Personas no longer comment on the language people write in ("Why is everyone using French?"), unless someone brings it up.
 
+### Privacy
+- For people working on the code: commits are now checked against the names in your own chats automatically, with nothing to set up and no list saved.
+
 ### WhatsApp session
 - The app now keeps one backup of your session, replaced when the app updates and removed when you log out.
 

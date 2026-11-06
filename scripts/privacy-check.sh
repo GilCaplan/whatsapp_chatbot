@@ -17,6 +17,31 @@ fail() { printf 'privacy: %s\n' "$*" >&2; fails=$((fails + 1)); }
 
 private_words="$(git rev-parse --git-path info/privacy-words)"
 
+# The names of the people in your own chats, read from your data folder each
+# time, so there is nothing to keep up to date and no list to leak. Only added
+# lines are checked, because a common first name may already be in the project.
+# Not in CI, which has no data folder. To let a name through, put it in
+# .git/info/privacy-allow-names, one per line.
+names_file=""
+allow_names="$(git rev-parse --git-path info/privacy-allow-names)"
+load_names() {
+  [[ -z "${CI:-}" ]] && command -v go >/dev/null 2>&1 || return 0
+  names_file="$(mktemp)"
+  trap 'rm -f "$names_file"' EXIT
+  go run -buildvcs=false . known-names 2>/dev/null > "$names_file" || : > "$names_file"
+  if [[ -s "$allow_names" ]]; then
+    grep -vxFf "$allow_names" "$names_file" > "$names_file.keep" || true
+    mv "$names_file.keep" "$names_file"
+  fi
+}
+
+check_names() { # where, text on stdin. Never prints the name: output gets copied.
+  [[ -s "$names_file" ]] || return 0
+  local hit
+  hit="$(grep -nwFf "$names_file" - | cut -d: -f1 | head -1 || true)"
+  [[ -z "$hit" ]] || fail "$1 (added line $hit) has the name of someone in your chats. Use a neutral name, or see .git/info/privacy-allow-names"
+}
+
 check_words() { # label, text on stdin
   [[ -s "$private_words" ]] || return 0
   if grep -qiFf <(grep -v '^[[:space:]]*$' "$private_words") -; then
@@ -25,13 +50,16 @@ check_words() { # label, text on stdin
 }
 
 if [[ "${1:-}" == "--message" ]]; then
+  load_names
   check_words "the commit message" < "$2"
+  check_names "the commit message" < "$2"
   exit $(( fails > 0 ))
 fi
 
 if [[ "${1:-}" == "--staged" ]]; then
   files="$(git diff --cached --name-only --diff-filter=ACMR)"
   read_file() { git show ":$1"; }
+  load_names
 else
   files="$(git ls-files)"
   read_file() { cat "$1"; }
@@ -70,6 +98,10 @@ while IFS= read -r f; do
   found="$(LC_ALL=C grep -oE "$numbers" <<<"$text" | sort -u | real_numbers || true)"
   [[ -z "$found" ]] || fail "$f: a real-looking phone number or WhatsApp id ($(head -1 <<<"$found")). Use the 1555 range for examples"
   check_words "$f" <<<"$text"
+  if [[ "${1:-}" == "--staged" ]]; then
+    added="$(git diff --cached -U0 -- "$f" | { grep '^+' || true; } | { grep -v '^+++ ' || true; })"
+    check_names "$f" <<<"$added" # not a pipe: a subshell would lose the failure
+  fi
 done <<<"$files"
 
 if [[ "${1:-}" == "--staged" ]]; then
