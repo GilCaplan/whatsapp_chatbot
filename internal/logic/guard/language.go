@@ -13,7 +13,7 @@ import (
 // talks about language doesn't go out.
 
 // languageTalk is talk about language in general, whichever one.
-var languageTalk = regexp.MustCompile(`(?i)\b(?:in|speak|speaks|speaking|write|writing|different|another|foreign|other|which|what|this|that|wrong)\s+(?:a\s+|the\s+)?languages?\b|\btranslat(?:e[sd]?|ing|ions?|ors?)\b`)
+var languageTalk = regexp.MustCompile(`(?im)\b(?:some|back to|to|into|proper|plain|actual)\s+English\s*(?:$|[.,;:!?…])|\b(?:in|speak|speaks|speaking|write|writing|different|another|foreign|other|which|what|this|that|wrong)\s+(?:a\s+|the\s+)?languages?\b|\btranslat(?:e[sd]?|ing|ions?|ors?)\b`)
 
 // usedAs: before a name, the words that make it the language rather than a
 // style or a dish ("Italian marble" has none of them and a word after it).
