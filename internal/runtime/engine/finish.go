@@ -4,9 +4,12 @@ import (
 	"context"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"whatsappdoppel/internal/core/model"
 	"whatsappdoppel/internal/logic/guard"
@@ -24,6 +27,12 @@ import (
 // embeddings) isn't the persona talking. Real lines measure about 0.47+, other
 // people's lives 0.30–0.38.
 const characterFloor = 0.40
+
+// othersWindow is how many of other people's messages can make language the topic.
+const othersWindow = 10
+
+// minNameLen is the shortest word of a member's name the translator keeps.
+const minNameLen = 3
 
 const (
 	translateTimeout = 45 * time.Second
@@ -51,15 +60,15 @@ func (e *Engine) taskLanguage(o *prompt.Options, c model.ChatAssignment, hist []
 
 // finishReply takes a written reply to what is sent. regen writes it again
 // with a note (nil = no second try).
-func (e *Engine) finishReply(ctx context.Context, p model.Persona, code string, res genResult, regen func(note string) (genResult, error)) genResult {
+func (e *Engine) finishReply(ctx context.Context, p model.Persona, code string, hist []model.Message, res genResult, regen func(note string) (genResult, error)) genResult {
 	if res.Quiet {
 		return res
 	}
 	if len(res.Drafts) > 0 {
-		return e.finishDrafts(ctx, code, res)
+		return e.finishDrafts(ctx, code, hist, res)
 	}
 	for attempt := 0; ; attempt++ {
-		text, fail := e.vet(ctx, p, res.Text)
+		text, fail := e.vet(ctx, p, res.Text, hist)
 		if fail == "" {
 			res.Text = text
 			break
@@ -79,7 +88,7 @@ func (e *Engine) finishReply(ctx context.Context, p model.Persona, code string, 
 		again.Latency += res.Latency
 		res = again
 	}
-	out, err := e.translated(ctx, p, res.Text, code)
+	out, err := e.translated(ctx, p, res.Text, code, memberNames(hist))
 	if err != "" {
 		res.Checks = append(res.Checks, err)
 		res.Quiet = true
@@ -93,14 +102,15 @@ func (e *Engine) finishReply(ctx context.Context, p model.Persona, code string, 
 
 // finishDrafts does the same for co-pilot ideas: you pick, so a bad one is just
 // left out.
-func (e *Engine) finishDrafts(ctx context.Context, code string, res genResult) genResult {
+func (e *Engine) finishDrafts(ctx context.Context, code string, hist []model.Message, res genResult) genResult {
+	keep := memberNames(hist)
 	var kept []model.Draft
 	for _, d := range res.Drafts {
 		c := e.filtered(d.Text)
-		if c.Block != "" {
+		if c.Block != "" || e.languageRemark(c.Text, hist) {
 			continue
 		}
-		if out, fail := e.translated(ctx, model.Persona{}, c.Text, code); fail == "" {
+		if out, fail := e.translated(ctx, model.Persona{}, c.Text, code, keep); fail == "" {
 			d.Text = out
 			kept = append(kept, d)
 		}
@@ -133,7 +143,7 @@ func blockText(why string) string {
 }
 
 // vet is what code checks in the English: the filter and the persona.
-func (e *Engine) vet(ctx context.Context, p model.Persona, text string) (string, string) {
+func (e *Engine) vet(ctx context.Context, p model.Persona, text string, hist []model.Message) (string, string) {
 	c := e.filtered(text)
 	if c.Block != "" {
 		return "", blockText(c.Block)
@@ -144,7 +154,73 @@ func (e *Engine) vet(ctx context.Context, p model.Persona, text string) (string,
 	if e.cfg.Get().Safety.Character && guard.FirstPersonClaim(c.Text) && !e.soundsLike(ctx, p, c.Text) {
 		return "", "it talked about a life that isn't " + p.Name + "'s"
 	}
+	if e.languageRemark(c.Text, hist) {
+		return "", "it remarked on how someone wrote instead of answering what they said"
+	}
 	return c.Text, ""
+}
+
+// languageRemark reports a reply that comments on how people write.
+func (e *Engine) languageRemark(text string, hist []model.Message) bool {
+	if !e.cfg.Get().Safety.Character {
+		return false
+	}
+	others := othersSaid(hist)
+	return guard.TalksAboutLanguage(text, languageNames(), spokenLanguages(others), others)
+}
+
+// spokenLanguages names the languages other than English these were written in.
+func spokenLanguages(others []string) []string {
+	var out []string
+	for _, t := range others {
+		code, sure := detectLang(t)
+		if name := lang.Name(code); sure && code != "en" && name != "" && !slices.Contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// memberNames is each word of the names of the people in this chat, for the
+// translator to keep: known names need no guessing. Very short ones are too
+// likely to be ordinary words, and so is one in lower case ("the boss").
+func memberNames(hist []model.Message) []string {
+	var out []string
+	for _, m := range hist {
+		if m.Speaker != "them" {
+			continue
+		}
+		for _, w := range strings.Fields(m.Name) {
+			// Taken off the edges, so "Dana🌸" is found as Dana.
+			w = strings.TrimFunc(w, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+			first, _ := utf8.DecodeRuneInString(w)
+			if utf8.RuneCountInString(w) >= minNameLen && !unicode.IsLower(first) && !slices.Contains(out, w) {
+				out = append(out, w)
+			}
+		}
+	}
+	return out
+}
+
+// languageNames is every language's name, in English and in itself.
+func languageNames() []string {
+	names := make([]string, 0, 2*len(lang.All))
+	for _, l := range lang.All {
+		names = append(names, l.Name, l.Native)
+	}
+	return names
+}
+
+// othersSaid is what other people wrote lately: a persona's own remark can't
+// make language the topic for its next one.
+func othersSaid(hist []model.Message) []string {
+	var out []string
+	for i := len(hist) - 1; i >= 0 && len(out) < othersWindow; i-- {
+		if hist[i].Speaker == "them" {
+			out = append(out, hist[i].Text)
+		}
+	}
+	return out
 }
 
 // soundsLike compares a claim with the persona's profile. No embedding model
@@ -211,7 +287,7 @@ func cosine(a, b []float64) float64 {
 }
 
 // translated turns text into code and checks the result ("" = why not).
-func (e *Engine) translated(ctx context.Context, p model.Persona, text, code string) (string, string) {
+func (e *Engine) translated(ctx context.Context, p model.Persona, text, code string, keep []string) (string, string) {
 	if code == "" || code == "en" {
 		return text, ""
 	}
@@ -226,7 +302,7 @@ func (e *Engine) translated(ctx context.Context, p model.Persona, text, code str
 	var err error
 	if e.translator != nil {
 		progress(ctx, "Translating into "+name, map[string]any{"stage": "translate"})
-		out, err = e.translator.Translate(cctx, text, code)
+		out, err = e.translator.Translate(cctx, text, code, keep)
 	}
 	if e.translator == nil || err != nil {
 		how = "ai"

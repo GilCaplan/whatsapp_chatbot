@@ -13,6 +13,8 @@ Everything below is new unless noted.
 - Fixed stray marks in French, Portuguese, Dutch, Greek, Thai and Chinese translations, and "twenty" appearing in Arabic
   in place of a time or link.
 - Models stay in your data folder and can't be committed.
+- The names of the people in a chat now always stay as they are in translated replies.
+- Personas no longer comment on the language people write in ("Why is everyone using French?"), unless someone brings it up.
 
 ### WhatsApp session
 - The app now keeps one backup of your session, replaced when the app updates and removed when you log out.

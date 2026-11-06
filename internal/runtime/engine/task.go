@@ -665,6 +665,21 @@ func (e *Engine) taskGuard(c model.ChatAssignment, u *taskUse, res genResult, re
 	return res
 }
 
+// taskRetry writes a task's reply again for a later check. The new draft faces
+// the leak check too: passing the first one says nothing about it.
+func (e *Engine) taskRetry(c model.ChatAssignment, u *taskUse, retry func(note string) (genResult, error)) func(note string) (genResult, error) {
+	if u == nil {
+		return retry
+	}
+	return func(note string) (genResult, error) {
+		res, err := retry(note)
+		if err != nil || res.Quiet {
+			return res, err
+		}
+		return e.taskGuard(c, u, res, retry), nil
+	}
+}
+
 // taskDelivered saves a turn once its message went out (or waits in
 // Approvals), then applies its effects: done, failed or handed over to you;
 // else the timer is armed again. If the run changed meanwhile, a Stop or an

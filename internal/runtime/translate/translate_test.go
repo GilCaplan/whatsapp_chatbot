@@ -78,7 +78,7 @@ func TestUnpackRefusesPathsOutsideThePack(t *testing.T) {
 
 func TestNotReadyUntilInstalled(t *testing.T) {
 	s := New(t.TempDir())
-	if _, err := s.Translate(context.Background(), "hello", "ru"); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Translate(context.Background(), "hello", "ru", nil); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("err = %v", err)
 	}
 	if st := s.Status(); st.Installed || len(st.Packs) != 0 {
@@ -99,7 +99,7 @@ func TestAddOnFromOlderPinsIsNotInstalled(t *testing.T) {
 		if s.Status().Installed {
 			t.Fatalf("ready file %q counted as installed", old)
 		}
-		if _, err := s.Translate(context.Background(), "hello", "ru"); !errors.Is(err, ErrNotReady) {
+		if _, err := s.Translate(context.Background(), "hello", "ru", nil); !errors.Is(err, ErrNotReady) {
 			t.Fatalf("err = %v", err)
 		}
 	}

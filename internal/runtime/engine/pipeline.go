@@ -758,7 +758,7 @@ func (r *Runner) generate(gctx context.Context, seq uint64, cyc *cycle, c model.
 			res = e.taskGuard(c, tk, res, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build))
 		}
 		if err == nil { // English → filtered, in character, translated (finish.go)
-			res = e.finishReply(ctx, p, e.finishLanguage(c, hist, tk), res, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build))
+			res = e.finishReply(ctx, p, e.finishLanguage(c, hist, tk), hist, res, e.taskRetry(c, tk, e.noteRetry(ctx, p, eff.Profile, ph, cyc.proactive, gcfg, gturn, cross, build)))
 		}
 		cancel()
 		res.Opener = cyc.proactive

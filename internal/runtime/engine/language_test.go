@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ type fakeTranslator struct {
 	err    error
 }
 
-func (f *fakeTranslator) Translate(_ context.Context, text, code string) (string, error) {
+func (f *fakeTranslator) Translate(_ context.Context, text, code string, keep []string) (string, error) {
 	if f.err != nil {
 		return "", f.err
 	}
@@ -248,5 +249,64 @@ func TestTranslationFallsBackToTheModel(t *testing.T) {
 	h2.advance(15 * time.Second)
 	if len(h2.wa.Sent()) != 0 {
 		t.Fatalf("sent %+v", h2.wa.Sent())
+	}
+}
+
+func TestLanguageRemarkIsRewritten(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.llm.Push("Why is everyone using French?", "Nothing wrong with that, darling")
+	h.msg(dmKey, "m1", "how are you today")
+	h.advance(15 * time.Second)
+	if s := h.waitSent(1); s[0].text != "Nothing wrong with that, darling" {
+		t.Fatalf("sent %q", s[0].text)
+	}
+	h2 := newHarness(t, nil, dmChat())
+	h2.llm.Push("Why is everyone using French?", "So much French today.")
+	h2.msg(dmKey, "m1", "how are you today")
+	h2.advance(15 * time.Second)
+	if len(h2.wa.Sent()) != 0 || h2.lastReason(model.ActDecisionSkip) != "reply_check" {
+		t.Fatalf("sent %d, reason %v", len(h2.wa.Sent()), h2.lastReason(model.ActDecisionSkip))
+	}
+}
+
+func TestLanguageIsFineWhenTheyAsk(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.llm.Push("I don't speak Hebrew, darling")
+	h.msg(dmKey, "m1", "do you speak Hebrew?")
+	h.advance(15 * time.Second)
+	if s := h.waitSent(1); s[0].text != "I don't speak Hebrew, darling" {
+		t.Fatalf("sent %q", s[0].text)
+	}
+}
+
+func TestLanguageRemarkLeavesTheIdeas(t *testing.T) {
+	h := newHarness(t, nil, copilotChat())
+	h.llm.Push(draftsJSON("Why is everyone using French?", "sure thing", "sounds good"))
+	h.msg(dmKey, "m1", "dinner tonight?")
+	h.advance(9 * time.Second)
+	eventually(t, "pending", func() bool { return len(h.st.Approvals()) == 1 })
+	if d := h.st.Approvals()[0].Drafts; len(d) != 2 || d[0].Text != "sure thing" {
+		t.Fatalf("drafts = %+v", d)
+	}
+}
+
+func TestMemberNames(t *testing.T) {
+	got := memberNames([]model.Message{
+		{Speaker: "them", Name: "Sam Levi 300"},
+		{Speaker: "them", Name: "Sam"},
+		{Speaker: "them", Name: "Bo"},
+		{Speaker: "them", Name: "the boss"},
+		{Speaker: "them", Name: "Rose🌸"},
+		{Speaker: "me", Name: "Not Me"},
+	})
+	if !slices.Equal(got, []string{"Sam", "Levi", "300", "Rose"}) {
+		t.Fatalf("names = %v", got)
+	}
+}
+
+func TestSpokenLanguages(t *testing.T) {
+	got := spokenLanguages([]string{"מה שלומכם היום חברים", "ok", "how are you all doing today my friends", "מה קורה אצלכם היום"})
+	if !slices.Equal(got, []string{"Hebrew"}) {
+		t.Fatalf("spoken = %v", got)
 	}
 }

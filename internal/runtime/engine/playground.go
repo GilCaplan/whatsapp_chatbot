@@ -169,7 +169,7 @@ func (pg *playground) Send(ctx context.Context, id, text string, group bool) (mo
 		return prompt.Compose(p, chat, hist, group, opts)
 	})
 	if err == nil {
-		res = e.finishReply(ctx, p, e.finishLanguage(chat, hist, nil), res, nil)
+		res = e.finishReply(ctx, p, e.finishLanguage(chat, hist, nil), hist, res, nil)
 	}
 	out.LatencyMs = time.Since(start).Milliseconds()
 	if err != nil {

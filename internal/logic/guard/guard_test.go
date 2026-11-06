@@ -221,3 +221,80 @@ func TestFirstPersonClaim(t *testing.T) {
 		}
 	}
 }
+
+func TestTalksAboutLanguage(t *testing.T) {
+	names := []string{"English", "Hebrew", "עברית", "Russian", "French", "Italian", "German", "Japanese", "Turkish"}
+	for _, reply := range []string{
+		"Why is everyone using French?",
+		"Why is everyone using French around here?",
+		"@Dana Why is everyone using French?",
+		"Can we speak English please",
+		"Why is everyone writing in Russian?",
+		"So much French today.",
+		"Is this in a different language?",
+		"I need a translator for this chat",
+		"You know I don't speak Hebrew, darling.",
+		"Why is everyone using French 😂",
+		"Why is there so much Hebrew in this chat?",
+		"Can we get some translators in here",
+		"Why is everyone using French\nanyway",
+	} {
+		if !TalksAboutLanguage(reply, names, nil, nil) {
+			t.Errorf("let through %q", reply)
+		}
+	}
+	for _, reply := range []string{
+		"Sam is being kind to Alex, how nice.",
+		"Nothing beats Italian marble.",
+		"French doors would open that room up.",
+		"We are using French doors in the hall.",
+		"The Japanese approach to light is unmatched.",
+		"That German kitchen is overpriced.",
+		"Turkish coffee, darling, always.",
+		"Her body language said it all.",
+		"Language is my favourite subject", // no word marks it as talk about this chat
+		"The Italian around here is great.",
+		"Shall we get the Japanese again?",
+		"We really do speak the same language, darling.",
+		"Boring.",
+	} {
+		if TalksAboutLanguage(reply, names, nil, nil) {
+			t.Errorf("stopped %q", reply)
+		}
+	}
+}
+
+func TestLanguageIsFineWhenSomeoneElseBringsItUp(t *testing.T) {
+	names := []string{"Hebrew", "עברית"}
+	reply := "You know I don't speak Hebrew, darling."
+	for _, said := range []string{
+		"do you speak Hebrew?", "אתה מדבר עברית?", "מדברת בעברית?", "what language is that", "can you translate this",
+		"אתה מדבר אנגלית?", "באיזו שפה זה?", "Ты говоришь по-русски?",
+	} {
+		if TalksAboutLanguage(reply, names, nil, []string{"unrelated", said}) {
+			t.Errorf("%q should make it the topic", said)
+		}
+	}
+	for _, said := range []string{"how are you", "we fly to Germany tomorrow"} {
+		if !TalksAboutLanguage(reply, append(names, "German"), nil, []string{said}) {
+			t.Errorf("%q made it the topic", said)
+		}
+	}
+}
+
+func TestNamingALanguageOthersAreWriting(t *testing.T) {
+	names := []string{"French", "Italian"}
+	spoken := []string{"French"}
+	if !TalksAboutLanguage("Enough of the French poetry, Sam.", names, spoken, nil) {
+		t.Error("let the adjective through while they write French")
+	}
+	if TalksAboutLanguage("Enough of the French poetry, Sam.", names, nil, nil) {
+		t.Error("stopped it in a chat that isn't in French")
+	}
+	if TalksAboutLanguage("Nothing beats Italian marble.", names, spoken, nil) {
+		t.Error("stopped another language's adjective")
+	}
+	if TalksAboutLanguage("Enough of the French poetry, Sam.", names, spoken, []string{"do you speak french"}) {
+		t.Error("stopped it after someone asked")
+	}
+}

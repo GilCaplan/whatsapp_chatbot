@@ -84,10 +84,10 @@ How each feature is wired (read the one you are changing). Shared rules stay in 
   never unpacked, `packDownloads` run at once, failed packs wait `packRetry` (Settings retries), and `ready` holds the checksum, so a pack from an older
   pin is fetched again. `pyproject.toml` (embedded) holds the pip pins, and the add-on's own `ready` holds a stamp of them, so an install from older pins shows as not installed and Install rebuilds its venv; only the spaCy model has a hash, not pip's own dependencies. `pydantic` checks each request line (`Request`, input hidden from errors) and the pipe is forced to UTF-8. Models
   are downloaded by each user into the data folder: `.gitignore` and `privacy-check.sh` both refuse them. Links, tags, numbers, emoji and proper nouns (POS PROPN, not dates) become `XXn` tokens the model copies into
-  place, and code restores them, so placement comes from the translation itself. Same input, same output.
+  place, and code restores them, so placement comes from the translation itself. `keep` (`engine.memberNames`) lists the chat's members, masked even when the tagger misses them. Same input, same output.
 - Content filter: `guard.Filter` (word lists per language, leetspeak, stretched and spaced spellings). Character:
   `guard.FirstPersonClaim` gates a cosine check against the persona's profile (`nomic-embed-text`, floor 0.40); no
-  embedding model means no verdict.
+  embedding model means no verdict. `guard.TalksAboutLanguage` (same setting) stops a reply or co-pilot idea that remarks on how people write, unless someone else's last 10 messages made language the topic. Naming a language those messages are written in counts even as an adjective (`spokenLanguages`).
 - The system prompt is built from labelled parts (`prompt.SystemSections`; `SystemPrompt` joins them). A chat's
   `promptEdits` replace the editable parts (`model.EditablePromptSections`: character, safety, history, stay) in that
   chat only; delays are drawn with `behavior.Delay` along the profile's `timingCurve`.

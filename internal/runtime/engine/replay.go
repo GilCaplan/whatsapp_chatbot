@@ -322,7 +322,7 @@ func (e *Engine) replayStep(ctx context.Context, c model.ChatAssignment, cp mode
 		out.Checks = res.Checks
 	}
 	if !res.Quiet {
-		res = e.finishReply(mctx, p, e.replyLanguage(c, full), res, nil)
+		res = e.finishReply(mctx, p, e.replyLanguage(c, full), full, res, nil)
 		out.Checks = res.Checks
 	}
 	if res.Quiet {

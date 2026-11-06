@@ -27,11 +27,11 @@ class FakeTranslator:
         return [SimpleNamespace(hypotheses=[list(self.reply)])]
 
 
-def run(sentence, reply, monkeypatch, names=()):
+def run(sentence, reply, monkeypatch, names=(), keep=()):
     monkeypatch.setattr(server, "name_spans", lambda text: [(text.index(n), text.index(n) + len(n)) for n in names])
     translator = FakeTranslator(reply)
     masked, kept = server.protect(sentence)
-    return server.translate_sentence(masked, translator, FakeSP(), kept), translator
+    return server.translate_sentence(masked, translator, FakeSP(), kept, keep), translator
 
 
 @pytest.mark.parametrize(
@@ -121,6 +121,27 @@ def test_names_never_reach_the_model(monkeypatch):
     assert set(out.split()) == {"Dana", "Paris", "est"}
 
 
+def test_a_member_name_is_kept_though_the_tagger_missed_it(monkeypatch):
+    out, translator = run("I saw Rose today", ["\u2581vu", "\u2581XX0"], monkeypatch, keep=["Rose"])
+    assert "Rose" not in translator.seen
+    assert out == "vu Rose"
+
+
+def test_member_names_match_whole_words_with_their_capitals():
+    assert server.member_spans("a rose, Roseanne and @Rose", ["Rose"]) == []
+
+
+def test_a_name_that_starts_a_sentence_stays_with_the_tagger():
+    assert server.member_spans("May I come?", ["May"]) == []
+    assert server.member_spans("Ask May now", ["May"]) == [(4, 7)]
+
+
+def test_joined_makes_neighbours_and_overlaps_one():
+    text = "see Dana Levi now"
+    assert server.joined(text, [(9, 13), (4, 8), (4, 13)]) == [(4, 13)]
+    assert server.joined("a b c", [(0, 1), (4, 5)]) == [(0, 1), (4, 5)]
+
+
 def test_trailing_emoji_stay_out_of_the_model(monkeypatch):
     out, translator = run("Good morning 🎉", ["▁Bonjour"], monkeypatch)
     assert out == "Bonjour 🎉"
@@ -148,8 +169,13 @@ def test_hebrew_prefix_hyphen_is_closed_up(monkeypatch):
     assert out == "ב-Paris"
 
 
+def test_keep_reaches_the_translation(monkeypatch):
+    monkeypatch.setattr(server, "translate", lambda path, text, keep: ",".join(keep))
+    assert server.answer('{"pack": "/p", "text": "hi", "keep": ["Dana", "Rose"]}') == server.Answer(text="Dana,Rose")
+
+
 def test_a_good_request_is_answered(monkeypatch):
-    monkeypatch.setattr(server, "translate", lambda path, text: f"{path}:{text}")
+    monkeypatch.setattr(server, "translate", lambda path, text, keep: f"{path}:{text}")
     assert server.answer('{"pack": "/p", "text": "hi"}') == server.Answer(text="/p:hi")
 
 
@@ -167,7 +193,7 @@ def test_an_error_never_repeats_the_message():
 
 
 def test_a_failed_translation_is_an_error(monkeypatch):
-    def boom(path, text):
+    def boom(path, text, keep):
         raise RuntimeError("no model")
 
     monkeypatch.setattr(server, "translate", boom)
@@ -175,7 +201,7 @@ def test_a_failed_translation_is_an_error(monkeypatch):
 
 
 def test_an_error_with_no_text_is_still_an_error(monkeypatch):
-    def boom(path, text):
+    def boom(path, text, keep):
         raise MemoryError
 
     monkeypatch.setattr(server, "translate", boom)
@@ -185,7 +211,7 @@ def test_an_error_with_no_text_is_still_an_error(monkeypatch):
 def test_the_pipe_is_utf8_whatever_the_system_uses():
     """Runs the real main loop, as on a Windows code page."""
     here = os.path.dirname(os.path.abspath(__file__))
-    code = "import server; server.translate = lambda path, text: text[::-1]; server.main()"
+    code = "import server; server.translate = lambda path, text, keep: text[::-1]; server.main()"
     lines = ['{"pack": "/p", "text": "שלום"}', "nope", '{"pack": "/p", "text": "Привет"}']
     done = subprocess.run(
         [sys.executable, "-c", code],
