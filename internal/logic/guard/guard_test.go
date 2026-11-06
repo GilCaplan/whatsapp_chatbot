@@ -231,6 +231,8 @@ func TestTalksAboutLanguage(t *testing.T) {
 		"Can we speak English please",
 		"Why is everyone writing in Russian?",
 		"So much French today.",
+		"At last, some English!",
+		"Can we return to English?",
 		"Is this in a different language?",
 		"I need a translator for this chat",
 		"You know I don't speak Hebrew, darling.",
@@ -257,6 +259,8 @@ func TestTalksAboutLanguage(t *testing.T) {
 		"Shall we get the Japanese again?",
 		"We really do speak the same language, darling.",
 		"Boring.",
+		"Back to English breakfast tomorrow.",
+		"Some English gardens are lovely.",
 	} {
 		if TalksAboutLanguage(reply, names, nil, nil) {
 			t.Errorf("stopped %q", reply)
