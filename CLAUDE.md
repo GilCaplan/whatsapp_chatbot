@@ -118,7 +118,7 @@ deliberate; upgrading whatsmeow runs one-way DB migrations on `whatsapp.db`. The
 Read [docs/SAFE_HABITS.md](docs/SAFE_HABITS.md) before a change that touches personal data, permissions, LLM
 behaviour, git history or anything destructive. The repository is public. Nothing personal goes into code, tests, docs, commit messages or PRs: use the
 1555 range for example numbers and neutral names. `scripts/privacy-check.sh` runs in CI and, after
-`make hooks`, on every commit; never bypass it with `--no-verify`.
+`make hooks`, on every commit; never bypass it with `--no-verify`. On a commit it also reads the names in your own chats from your data folder (`known-names`), checks added lines and the message against them, and never prints or saves them.
 
 ## Gotchas
 

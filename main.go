@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"whatsappdoppel/internal/core/config"
+	"whatsappdoppel/internal/core/store"
 	"whatsappdoppel/internal/host/app"
 	"whatsappdoppel/internal/host/launcher"
 	"whatsappdoppel/internal/host/platform"
@@ -51,6 +52,8 @@ func main() {
 		err = runStatus(args)
 	case "quit", "stop":
 		err = runQuit(args)
+	case "known-names":
+		err = runKnownNames(args)
 	case "version", "--version":
 		fmt.Println("whatsapp-doppel", version)
 	case "help", "-h", "--help":
@@ -158,6 +161,19 @@ func runServe(args []string) error {
 		o.OpenBrowser = false
 	}
 	return app.Run(o)
+}
+
+// runKnownNames prints the names in this computer's chats, one per line, for
+// scripts/privacy-check.sh. The list is never saved anywhere.
+func runKnownNames(args []string) error {
+	paths, err := dataPaths(args, "known-names")
+	if err != nil {
+		return err
+	}
+	for _, n := range store.KnownNames(paths) {
+		fmt.Println(n)
+	}
+	return nil
 }
 
 func dataPaths(args []string, name string) (config.Paths, error) {

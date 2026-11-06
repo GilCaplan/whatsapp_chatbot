@@ -52,6 +52,7 @@ After cloning, run `make hooks` once. Every commit is then scanned for session a
 personal email addresses, home-folder paths and real-looking phone numbers, and CI runs the same check.
 Use the 1555 range for example numbers.
 
+- Names from your own chats are checked for you: on each commit the hook reads them from your data folder and checks added lines and the message. Nothing is saved, and a name stays out of the output. To let one through, add it to `.git/info/privacy-allow-names`.
 - To also block your own details, list them one per line in `.git/info/privacy-words` (your number, name,
   group names). That file can't be committed.
 - Your commits show your git email. To keep it private use GitHub's noreply address:
