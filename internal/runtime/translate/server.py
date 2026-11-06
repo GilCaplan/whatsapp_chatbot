@@ -4,8 +4,8 @@
 # becomes a token (XX0, XX1...) that it copies into the right place, and the
 # original goes back there afterwards.
 #
-# Reads one JSON request per line on stdin ({"pack": dir, "text": ...}) and
-# writes one JSON answer per line ({"text": ...} or {"error": ...}).
+# Reads one JSON request per line on stdin ({"pack": dir, "text": ..., "keep":
+# [names]}) and writes one JSON answer per line ({"text": ...} or {"error": ...}).
 import os
 import re
 import sys
@@ -22,6 +22,7 @@ class Request(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
     pack: str = Field(min_length=1)
     text: str
+    keep: list[str] = []
 
 
 class Answer(BaseModel):
@@ -73,6 +74,27 @@ def name_spans(text):
         else:
             spans.append((start, end))
     return spans
+
+
+def member_spans(text, keep):
+    """Where the chat's members' names stand: known names need no guessing. A
+    capital at the start proves nothing here either (May I come?), so that
+    one stays with name_spans."""
+    spans = []
+    for name in keep:
+        spans += [m.span() for m in re.finditer(r"(?<![\w@])%s(?!\w)" % re.escape(name), text) if m.start() > 0]
+    return spans
+
+
+def joined(text, spans):
+    """Spans in order, with overlapping and neighbouring ones made one."""
+    out = []
+    for start, end in sorted(spans):
+        if out and text[out[-1][1]:start].strip() == "":
+            out[-1] = (out[-1][0], max(end, out[-1][1]))
+        else:
+            out.append((start, end))
+    return out
 
 
 # X as other alphabets write it (Latin, Cyrillic, Greek, full width) and every
@@ -136,7 +158,7 @@ def restore(out, kept, source):
     return out.translate(str.maketrans(marks))
 
 
-def translate_sentence(sentence, translator, sp, kept):
+def translate_sentence(sentence, translator, sp, kept, keep=()):
     core = sentence.strip()
     if not any(c.isalpha() for c in TOKEN.sub("", core)):
         return unmask(sentence, kept)
@@ -156,7 +178,7 @@ def translate_sentence(sentence, translator, sp, kept):
     for t in TOKEN.findall(core):
         if t in kept:
             here[t] = kept[t]
-    spans = list(reversed(name_spans(core)))
+    spans = list(reversed(joined(core, name_spans(core) + member_spans(core, keep))))
     for start, stop in spans:
         # A name can swallow a token stuck to it, as in "iPhone15" or "Dana🎉".
         here["N%d" % len(here)] = unmask(core[start:stop], kept)
@@ -184,16 +206,16 @@ def translate_sentence(sentence, translator, sp, kept):
     return lead + re.sub(r"(?<=[\u05d0-\u05ea])-\s+", "-", out) + end + trail
 
 
-def translate(path, text):
+def translate(path, text, keep=()):
     translator, sp = pack(path)
     masked, kept = protect(text)
-    return "".join(translate_sentence(s, translator, sp, kept) for s in SENTENCE.findall(masked))
+    return "".join(translate_sentence(s, translator, sp, kept, keep) for s in SENTENCE.findall(masked))
 
 
 def answer(line):
     try:
         req = Request.model_validate_json(line)
-        return Answer(text=translate(req.pack, req.text))
+        return Answer(text=translate(req.pack, req.text, req.keep))
     except Exception as err:  # noqa: BLE001 - the app decides what to do; keep serving
         # Some errors have no text, and an empty error reads as a success.
         return Answer(error=str(err) or type(err).__name__)

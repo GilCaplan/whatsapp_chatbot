@@ -186,7 +186,9 @@ type Notifier interface {
 
 // Translator is the translator add-on (internal/runtime/translate).
 type Translator interface {
-	Translate(ctx context.Context, text, code string) (string, error)
+	// keep lists names that must come through as they are, such as the
+	// chat's members.
+	Translate(ctx context.Context, text, code string, keep []string) (string, error)
 	Status() model.TranslatorStatus
 	Install(langs []string)
 }

@@ -145,6 +145,29 @@ func TestTaskLeakFallback(t *testing.T) {
 	}
 }
 
+func TestTaskRewriteFacesTheLeakCheck(t *testing.T) {
+	h := newHarness(t, nil, dmChat())
+	h.e.Reload()
+	drafts := 0
+	h.llm.SetFunc(func(req llm.Request) (llm.Response, error) {
+		if req.JSON {
+			return llm.Response{Text: `{}`}, nil
+		}
+		drafts++
+		if drafts == 1 {
+			return llm.Response{Text: "Can you translate this for me?"}, nil
+		}
+		return llm.Response{Text: "I'm at the dentist at 03:17 so how about friday 04:45?"}, nil
+	})
+	if _, err := h.e.StartTask(context.Background(), dmKey, task.FindTime(), true); err != nil {
+		t.Fatal(err)
+	}
+	sent := h.waitSent(1)
+	if strings.Contains(sent[0].text, "03:17") || strings.Contains(sent[0].text, "dentist") {
+		t.Fatalf("a rewrite went out unchecked: %q", sent[0].text)
+	}
+}
+
 func TestSecretaryMeetingStartsTask(t *testing.T) {
 	h := newHarness(t, nil, dmChat())
 	h.setPersona("leo", func(p *model.Persona) {

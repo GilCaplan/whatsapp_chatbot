@@ -382,9 +382,16 @@ func (s *Service) Close() {
 	s.stopLocked()
 }
 
+// request is one line to the add-on (Request in server.py).
+type request struct {
+	Pack string   `json:"pack"`
+	Text string   `json:"text"`
+	Keep []string `json:"keep,omitempty"`
+}
+
 // Translate turns English text into code. A pack that isn't there yet is
 // fetched in the background and ErrNotReady comes back for now.
-func (s *Service) Translate(ctx context.Context, text, code string) (string, error) {
+func (s *Service) Translate(ctx context.Context, text, code string, keep []string) (string, error) {
 	if !s.installed() {
 		return "", ErrNotReady
 	}
@@ -397,7 +404,7 @@ func (s *Service) Translate(ctx context.Context, text, code string) (string, err
 	if err := s.startLocked(); err != nil {
 		return "", err
 	}
-	line, _ := json.Marshal(map[string]string{"pack": s.packDir(code), "text": text})
+	line, _ := json.Marshal(request{Pack: s.packDir(code), Text: text, Keep: keep})
 	type answer struct {
 		Text  string `json:"text"`
 		Error string `json:"error"`

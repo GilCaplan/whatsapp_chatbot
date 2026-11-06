@@ -114,7 +114,7 @@ func (pg *playground) Initiate(ctx context.Context, id string, group bool, hint 
 		return prompt.Initiate(p, chat, hist, group, opts)
 	})
 	if err == nil {
-		res = e.finishReply(ctx, p, e.finishLanguage(chat, hist, nil), res, nil)
+		res = e.finishReply(ctx, p, e.finishLanguage(chat, hist, nil), hist, res, nil)
 	}
 	out.LatencyMs = time.Since(start).Milliseconds()
 	if err != nil {

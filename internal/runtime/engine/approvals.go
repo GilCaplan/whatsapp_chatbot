@@ -296,7 +296,7 @@ func (e *Engine) Regenerate(ctx context.Context, id string) (model.PendingReply,
 		res = e.taskGuard(c, tk, res, e.noteRetry(ctx, per, bp, ph, false, gcfg, gturn, cross, build))
 	}
 	if err == nil {
-		res = e.finishReply(ctx, per, e.finishLanguage(c, hist, tk), res, e.noteRetry(ctx, per, bp, ph, false, gcfg, gturn, cross, build))
+		res = e.finishReply(ctx, per, e.finishLanguage(c, hist, tk), hist, res, e.taskRetry(c, tk, e.noteRetry(ctx, per, bp, ph, false, gcfg, gturn, cross, build)))
 	}
 	if err != nil {
 		return model.PendingReply{}, err
